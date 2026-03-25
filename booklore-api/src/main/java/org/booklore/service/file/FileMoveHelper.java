@@ -4,6 +4,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
+import org.booklore.model.enums.LibraryOrganizationMode;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.util.PathPatternResolver;
@@ -155,7 +156,24 @@ public class FileMoveHelper {
         if (pattern.endsWith("/") || pattern.endsWith("\\")) {
             pattern += "{currentFilename}";
         }
+        if (library.getOrganizationMode() == LibraryOrganizationMode.BOOK_PER_FOLDER
+                && !pattern.contains("{currentFilename}")
+                && countMandatoryPathSeparators(pattern) < 2) {
+            log.debug("BOOK_PER_FOLDER library '{}': pattern has no book subfolder, appending /{{currentFilename}}", library.getName());
+            pattern += "/{currentFilename}";
+        }
         return pattern;
+    }
+
+    private static int countMandatoryPathSeparators(String pattern) {
+        int count = 0;
+        int depth = 0;
+        for (char c : pattern.toCharArray()) {
+            if (c == '<') depth++;
+            else if (c == '>') depth--;
+            else if (c == '/' && depth == 0) count++;
+        }
+        return count;
     }
 
     public Path generateNewFilePath(BookEntity book, LibraryPathEntity libraryPathEntity, String pattern) {

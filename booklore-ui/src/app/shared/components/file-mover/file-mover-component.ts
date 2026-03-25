@@ -153,8 +153,8 @@ export class FileMoverComponent implements OnDestroy {
 
   applyPattern(): void {
     this.filePreviews = this.books.map(book => {
-      const fileName = book.fileName ?? '';
-      const fileSubPath = book.fileSubPath ? `${book.fileSubPath.replace(/\/+$/g, '')}/` : '';
+      const fileName = book.primaryFile?.fileName ?? '';
+      const fileSubPath = book.primaryFile?.fileSubPath ? `${book.primaryFile.fileSubPath.replace(/\/+$/g, '')}/` : '';
 
       const relativeOriginalPath = `${fileSubPath}${fileName}`;
 
@@ -247,7 +247,7 @@ export class FileMoverComponent implements OnDestroy {
 
   private updatePreviewPaths(preview: FilePreview, book: Book): void {
     const meta = book.metadata!;
-    const fileName = book.fileName ?? '';
+    const fileName = book.primaryFile?.fileName ?? '';
     const extension = fileName.match(/\.[^.]+$/)?.[0] ?? '';
     const pattern = this.getPatternForLibrary(preview.targetLibraryId);
 
@@ -281,14 +281,31 @@ export class FileMoverComponent implements OnDestroy {
   }
 
   private getPatternForLibrary(libraryId: number | null): string {
-    if (libraryId === null) {
-      return this.defaultMovePattern;
+    const libraries = this.libraryService.getLibrariesFromState();
+    const library = libraryId !== null ? libraries.find((lib: Library) => lib.id === libraryId) : undefined;
+    let pattern = library?.fileNamingPattern || this.defaultMovePattern;
+
+    if (pattern.endsWith('/') || pattern.endsWith('\\')) {
+      pattern += '{currentFilename}';
+    }
+    if (library?.organizationMode === 'BOOK_PER_FOLDER'
+      && !pattern.includes('{currentFilename}')
+      && this.countMandatorySlashes(pattern) < 2) {
+      pattern += '/{currentFilename}';
     }
 
-    const libraries = this.libraryService.getLibrariesFromState();
-    const library = libraries.find((lib: Library) => lib.id === libraryId);
+    return pattern;
+  }
 
-    return library?.fileNamingPattern || this.defaultMovePattern;
+  private countMandatorySlashes(pattern: string): number {
+    let count = 0;
+    let depth = 0;
+    for (const c of pattern) {
+      if (c === '<') depth++;
+      else if (c === '>') depth--;
+      else if (c === '/' && depth === 0) count++;
+    }
+    return count;
   }
 
   private getLibraryNameById(libraryId: number | null): string {
