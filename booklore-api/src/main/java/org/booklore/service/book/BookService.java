@@ -1,5 +1,9 @@
 package org.booklore.service.book;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.mapper.BookMapper;
@@ -7,24 +11,22 @@ import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
 import org.booklore.model.dto.response.BookStatusUpdateResponse;
-import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookFileEntity;
-import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
+import org.booklore.model.entity.*;
+import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.*;
-import org.booklore.repository.BookFileRepository;
+import org.booklore.service.FileStreamingService;
+import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
-import org.booklore.service.FileStreamingService;
 import org.booklore.util.FileService;
 import org.booklore.util.FileUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -43,8 +45,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
-import org.booklore.model.enums.AuditAction;
-import org.booklore.service.audit.AuditService;
 
 @Slf4j
 @AllArgsConstructor
@@ -71,6 +71,7 @@ public class BookService {
     private final AuditService auditService;
 
 
+    @Transactional(readOnly = true)
     public List<Book> getBookDTOs(boolean includeDescription) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         boolean isAdmin = user.getPermissions().isAdmin();
@@ -107,7 +108,7 @@ public class BookService {
                 .map(Library::getId)
                 .collect(Collectors.toSet());
     }
-
+    @Transactional(readOnly = true)
     public List<Book> getBooksByIds(Set<Long> bookIds, boolean withDescription) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         boolean isAdmin = user.getPermissions().isAdmin();
@@ -140,6 +141,7 @@ public class BookService {
         }).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public Book getBook(long bookId, boolean withDescription) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
@@ -164,6 +166,7 @@ public class BookService {
     }
 
 
+    @Transactional(readOnly = true)
     public BookViewerSettings getBookViewerSetting(long bookId, long bookFileId) {
         BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
         BookLoreUser user = authenticationService.getAuthenticatedUser();
@@ -265,7 +268,7 @@ public class BookService {
             if (Files.exists(coverPath)) {
                 return new UrlResource(coverPath.toUri());
             } else {
-                return new ClassPathResource("static/images/missing-cover.jpg");
+                return getMissingCoverResource();
             }
         } catch (MalformedURLException e) {
             throw new RuntimeException("Failed to load book cover for bookId=" + bookId, e);
@@ -283,7 +286,7 @@ public class BookService {
             if (Files.exists(thumbnailPath)) {
                 return new UrlResource(thumbnailPath.toUri());
             } else {
-                return new ClassPathResource("static/images/missing-cover.jpg");
+                return getMissingCoverResource();
             }
         } catch (MalformedURLException e) {
             throw new RuntimeException("Failed to load audiobook thumbnail for bookId=" + bookId, e);
@@ -296,10 +299,19 @@ public class BookService {
             if (Files.exists(coverPath)) {
                 return new UrlResource(coverPath.toUri());
             } else {
-                return new ClassPathResource("static/images/missing-cover.jpg");
+                return getMissingCoverResource();
             }
         } catch (MalformedURLException e) {
             throw new RuntimeException("Failed to load audiobook cover for bookId=" + bookId, e);
+        }
+    }
+
+    private Resource getMissingCoverResource() {
+        try {
+            byte[] bytes = new ClassPathResource("static/images/missing-cover.jpg").getInputStream().readAllBytes();
+            return new ByteArrayResource(bytes);
+        } catch (IOException e) {
+            throw ApiError.INTERNAL_SERVER_ERROR.createException("Failed to load missing cover image");
         }
     }
 
@@ -316,7 +328,7 @@ public class BookService {
     }
 
     public ResponseEntity<Resource> getBookContent(long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findById(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -340,7 +352,7 @@ public class BookService {
     }
 
     public void streamBookContent(long bookId, String bookType, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        BookEntity bookEntity = bookRepository.findById(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -516,4 +528,3 @@ public class BookService {
     }
 
 }
-

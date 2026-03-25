@@ -1,5 +1,8 @@
 package org.booklore.service.book;
 
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.settings.KoboSettings;
 import org.booklore.model.entity.BookEntity;
@@ -8,12 +11,9 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.appsettings.AppSettingService;
-import org.booklore.service.kobo.KepubConversionService;
 import org.booklore.service.kobo.CbxConversionService;
+import org.booklore.service.kobo.KepubConversionService;
 import org.booklore.util.FileUtils;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -52,7 +52,7 @@ public class BookDownloadService {
 
     public ResponseEntity<Resource> downloadBook(Long bookId) {
         try {
-            BookEntity bookEntity = bookRepository.findById(bookId)
+            BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
                     .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
             BookFileEntity primaryFile = bookEntity.getPrimaryBookFile();
@@ -96,7 +96,7 @@ public class BookDownloadService {
 
     public ResponseEntity<Resource> downloadBookFile(Long bookId, Long fileId) {
         try {
-            BookFileEntity bookFileEntity = bookFileRepository.findById(fileId)
+            BookFileEntity bookFileEntity = bookFileRepository.findByIdWithBookAndLibraryPath(fileId)
                     .orElseThrow(() -> ApiError.FILE_NOT_FOUND.createException(fileId));
 
             // Verify the file belongs to the specified book
@@ -138,7 +138,7 @@ public class BookDownloadService {
     }
 
     public void downloadAllBookFiles(Long bookId, HttpServletResponse response) {
-        BookEntity bookEntity = bookRepository.findById(bookId)
+        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
         List<BookFileEntity> allFiles = bookEntity.getBookFiles();
@@ -193,22 +193,22 @@ public class BookDownloadService {
                 // Handle folder-based audiobooks - add all files from the folder
                 if (bookFile.isFolderBased() && Files.isDirectory(filePath)) {
                     String folderPrefix = bookFile.getFileName() + "/";
-                    List<Path> audioFiles = Files.list(filePath)
-                            .filter(Files::isRegularFile)
-                            .sorted(Comparator.comparing(p -> p.getFileName().toString()))
-                            .toList();
+                    try (var audioFiles = Files.list(filePath)) {
+                        for (Path audioFile : audioFiles
+                                .filter(Files::isRegularFile)
+                                .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                                .toList()) {
+                            String entryName = folderPrefix + audioFile.getFileName().toString();
+                            ZipEntry zipEntry = new ZipEntry(entryName);
+                            zipEntry.setSize(Files.size(audioFile));
+                            zos.putNextEntry(zipEntry);
 
-                    for (Path audioFile : audioFiles) {
-                        String entryName = folderPrefix + audioFile.getFileName().toString();
-                        ZipEntry zipEntry = new ZipEntry(entryName);
-                        zipEntry.setSize(Files.size(audioFile));
-                        zos.putNextEntry(zipEntry);
+                            try (InputStream fis = Files.newInputStream(audioFile)) {
+                                fis.transferTo(zos);
+                            }
 
-                        try (InputStream fis = Files.newInputStream(audioFile)) {
-                            fis.transferTo(zos);
+                            zos.closeEntry();
                         }
-
-                        zos.closeEntry();
                     }
                 } else {
                     // Regular file
@@ -234,7 +234,7 @@ public class BookDownloadService {
     }
 
     public void downloadKoboBook(Long bookId, HttpServletResponse response) {
-        BookEntity bookEntity = bookRepository.findById(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
         var primaryFile = bookEntity.getPrimaryBookFile();
         if (primaryFile == null) {
@@ -322,16 +322,16 @@ public class BookDownloadService {
 
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
             // Get all files in the folder, sorted by name
-            List<Path> files = Files.list(folderPath)
-                    .filter(Files::isRegularFile)
-                    .sorted(Comparator.comparing(p -> p.getFileName().toString()))
-                    .toList();
-
-            for (Path audioFile : files) {
-                ZipEntry entry = new ZipEntry(audioFile.getFileName().toString());
-                zos.putNextEntry(entry);
-                Files.copy(audioFile, zos);
-                zos.closeEntry();
+            try (var files = Files.list(folderPath)) {
+                for (Path audioFile : files
+                        .filter(Files::isRegularFile)
+                        .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                        .toList()) {
+                    ZipEntry entry = new ZipEntry(audioFile.getFileName().toString());
+                    zos.putNextEntry(entry);
+                    Files.copy(audioFile, zos);
+                    zos.closeEntry();
+                }
             }
         }
 
