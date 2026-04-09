@@ -7,6 +7,7 @@ import org.booklore.model.dto.response.AuditLogDto;
 import org.booklore.model.entity.AuditLogEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.repository.AuditLogRepository;
+import org.booklore.repository.jooq.JooqAuditLogRepository;
 import org.booklore.util.RequestUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ import java.util.List;
 public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
+    private final JooqAuditLogRepository jooqAuditLogRepository;
     private final GeoIpService geoIpService;
 
     public void log(AuditAction action, String description) {
@@ -74,31 +76,14 @@ public class AuditService {
     }
 
     public Page<AuditLogDto> getAuditLogs(Pageable pageable) {
-        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable)
-                .map(this::toDto);
+        return jooqAuditLogRepository.findAll(pageable);
     }
 
     public Page<AuditLogDto> getAuditLogs(AuditAction action, Long userId, String username, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        return auditLogRepository.findFiltered(action, userId, username, from, to, pageable)
-                .map(this::toDto);
+        return jooqAuditLogRepository.findFiltered(action, userId, username, from, to, pageable);
     }
 
     public List<String> getDistinctUsernames() {
-        return auditLogRepository.findDistinctUsernames();
-    }
-
-    private AuditLogDto toDto(AuditLogEntity entity) {
-        return AuditLogDto.builder()
-                .id(entity.getId())
-                .userId(entity.getUserId())
-                .username(entity.getUsername())
-                .action(entity.getAction())
-                .entityType(entity.getEntityType())
-                .entityId(entity.getEntityId())
-                .description(entity.getDescription())
-                .ipAddress(entity.getIpAddress())
-                .countryCode(entity.getCountryCode())
-                .createdAt(entity.getCreatedAt())
-                .build();
+        return jooqAuditLogRepository.findDistinctUsernames();
     }
 }

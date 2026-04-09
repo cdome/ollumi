@@ -86,6 +86,8 @@ spring:
           batch_versioned_data: true  # Allow batching UPDATEs on @Version entities
         default_batch_fetch_size: 16  # Global batch fetch for all lazy collections (prevents N+1)
         generate_statistics: ${HIBERNATE_STATISTICS:false}
+  jooq:
+    sql-dialect: MARIADB
   threads:
     virtual:
       enabled: true
