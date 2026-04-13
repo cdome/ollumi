@@ -1,19 +1,21 @@
 package org.booklore.app.service;
 
-import org.booklore.config.security.service.AuthenticationService;
+import lombok.AllArgsConstructor;
 import org.booklore.app.dto.AppNotebookBookSummary;
 import org.booklore.app.dto.AppNotebookEntry;
 import org.booklore.app.dto.AppNotebookUpdateRequest;
 import org.booklore.app.dto.AppPageResponse;
+import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.UpdateAnnotationRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookNoteV2Request;
 import org.booklore.repository.AuthorRepository;
-import org.booklore.repository.NotebookEntryRepository;
+import org.booklore.repository.jooq.JooqNotebookEntryRepository;
+import org.booklore.repository.jooq.dto.NotebookBookWithCount;
+import org.booklore.repository.jooq.dto.NotebookEntryRow;
 import org.booklore.service.book.AnnotationService;
 import org.booklore.service.book.BookMarkService;
 import org.booklore.service.book.BookNoteV2Service;
-import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,14 +23,17 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
 public class AppNotebookService {
 
-    private final NotebookEntryRepository notebookEntryRepository;
+    private final JooqNotebookEntryRepository jooqNotebookEntryRepository;
     private final AuthorRepository authorRepository;
     private final AuthenticationService authenticationService;
     private final AnnotationService annotationService;
@@ -40,16 +45,16 @@ public class AppNotebookService {
         Long userId = authenticationService.getAuthenticatedUser().getId();
         Pageable pageable = PageRequest.of(page, size);
 
-        Page<NotebookEntryRepository.BookWithCountProjection> booksPage =
-                notebookEntryRepository.findBooksWithAnnotationsPaginated(userId, wrapSearch(search), pageable);
+        Page<NotebookBookWithCount> booksPage =
+                jooqNotebookEntryRepository.findBooksWithAnnotationsPaginated(userId, wrapSearch(search), pageable);
 
-        List<NotebookEntryRepository.BookWithCountProjection> content = booksPage.getContent();
+        List<NotebookBookWithCount> content = booksPage.getContent();
         if (content.isEmpty()) {
             return AppPageResponse.of(List.of(), page, size, 0);
         }
 
         Set<Long> bookIds = content.stream()
-                .map(NotebookEntryRepository.BookWithCountProjection::getBookId)
+                .map(NotebookBookWithCount::getBookId)
                 .collect(Collectors.toSet());
 
         Map<Long, List<String>> authorsByBook = authorRepository.findAuthorNamesByBookIds(bookIds)
@@ -64,7 +69,9 @@ public class AppNotebookService {
                         .bookTitle(p.getBookTitle())
                         .noteCount(p.getNoteCount())
                         .authors(authorsByBook.getOrDefault(p.getBookId(), List.of()))
-                        .coverUpdatedOn(p.getCoverUpdatedOn())
+                        .coverUpdatedOn(p.getCoverUpdatedOn() != null
+                                ? p.getCoverUpdatedOn().atZone(ZoneOffset.UTC).toInstant()
+                                : null)
                         .build())
                 .toList();
 
@@ -73,15 +80,15 @@ public class AppNotebookService {
 
     @Transactional(readOnly = true)
     public AppPageResponse<AppNotebookEntry> getEntriesForBook(Long bookId, int page, int size,
-                                                                      Set<String> types, String search, String sort) {
+                                                               Set<String> types, String search, String sort) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
         Set<String> entryTypes = (types == null || types.isEmpty())
                 ? Set.of("HIGHLIGHT", "NOTE", "BOOKMARK")
                 : types;
         Pageable pageable = PageRequest.of(page, size, toSort(sort));
 
-        Page<NotebookEntryRepository.EntryProjection> entriesPage =
-                notebookEntryRepository.findEntries(userId, entryTypes, bookId, wrapSearch(search), pageable);
+        Page<NotebookEntryRow> entriesPage =
+                jooqNotebookEntryRepository.findEntries(userId, entryTypes, bookId, wrapSearch(search), pageable);
 
         List<AppNotebookEntry> entries = entriesPage.getContent().stream()
                 .map(AppNotebookService::toMobileEntry)
@@ -180,7 +187,7 @@ public class AppNotebookService {
         return Sort.by("createdAt").descending();
     }
 
-    private static AppNotebookEntry toMobileEntry(NotebookEntryRepository.EntryProjection p) {
+    private static AppNotebookEntry toMobileEntry(NotebookEntryRow p) {
         return AppNotebookEntry.builder()
                 .id(p.getId())
                 .type(p.getType())
