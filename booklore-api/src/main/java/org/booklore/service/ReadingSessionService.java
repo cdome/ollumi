@@ -5,22 +5,24 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
-import org.booklore.model.dto.CompletionRaceSessionDto;
-import org.booklore.model.dto.request.ReadingSessionRequest;
-import org.booklore.model.dto.PageTurnerSessionDto;
-import org.booklore.model.dto.BookTimelineDto;
 import org.booklore.model.dto.ProgressPercentDto;
-import org.booklore.model.dto.ReadingSessionCountDto;
+import org.booklore.model.dto.request.ReadingSessionRequest;
 import org.booklore.model.dto.response.*;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.ReadingSessionEntity;
+import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ReadingSessionRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqReadingSessionRepository;
+import org.booklore.repository.jooq.dto.CompletionRaceSession;
+import org.booklore.repository.jooq.dto.PageTurnerSession;
+import org.booklore.repository.jooq.dto.ReadingSessionCount;
+import org.booklore.repository.jooq.dto.ReadingSessionDetail;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,12 +30,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.time.temporal.WeekFields;
@@ -47,6 +44,7 @@ public class ReadingSessionService {
 
     private final AuthenticationService authenticationService;
     private final ReadingSessionRepository readingSessionRepository;
+    private final JooqReadingSessionRepository jooqReadingSessionRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final UserBookProgressRepository userBookProgressRepository;
@@ -89,7 +87,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findSessionCountsByUserAndYear(userId, year, getTimezoneOffset())
+        return jooqReadingSessionRepository.findSessionCountsByUserAndYear(userId, year, getTimezoneOffset())
                 .stream()
                 .map(dto -> ReadingSessionHeatmapResponse.builder()
                         .date(dto.getDate())
@@ -103,7 +101,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findSessionCountsByUserAndYearAndMonth(userId, year, month, getTimezoneOffset())
+        return jooqReadingSessionRepository.findSessionCountsByUserAndYearAndMonth(userId, year, month, getTimezoneOffset())
                 .stream()
                 .map(dto -> ReadingSessionHeatmapResponse.builder()
                         .date(dto.getDate())
@@ -122,11 +120,11 @@ public class ReadingSessionService {
         LocalDateTime startOfWeek = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay();
         LocalDateTime endOfWeek = date.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)).plusDays(1).atStartOfDay();
 
-        return readingSessionRepository.findSessionTimelineByUserAndWeek(userId, startOfWeek.atZone(ZoneId.systemDefault()).toInstant(), endOfWeek.atZone(ZoneId.systemDefault()).toInstant())
+        return jooqReadingSessionRepository.findSessionTimelineByUserAndWeek(userId, startOfWeek.atZone(ZoneId.systemDefault()).toInstant(), endOfWeek.atZone(ZoneId.systemDefault()).toInstant())
                 .stream()
                 .map(dto -> ReadingSessionTimelineResponse.builder()
                         .bookId(dto.getBookId())
-                        .bookType(dto.getBookFileType())
+                        .bookType(BookFileType.valueOf(dto.getBookFileType()))
                         .bookTitle(dto.getBookTitle())
                         .startDate(dto.getStartDate())
                         .endDate(dto.getEndDate())
@@ -141,7 +139,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findReadingSpeedByUserAndYear(userId, year)
+        return jooqReadingSessionRepository.findReadingSpeedByUserAndYear(userId, year)
                 .stream()
                 .map(dto -> ReadingSpeedResponse.builder()
                         .date(dto.getDate())
@@ -156,7 +154,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findPeakReadingHoursByUser(userId, year, month, getTimezoneOffset())
+        return jooqReadingSessionRepository.findPeakReadingHoursByUser(userId, year, month, getTimezoneOffset())
                 .stream()
                 .map(dto -> PeakHoursResponse.builder()
                         .hourOfDay(dto.getHourOfDay())
@@ -173,7 +171,7 @@ public class ReadingSessionService {
 
         String[] dayNames = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
-        return readingSessionRepository.findFavoriteReadingDaysByUser(userId, year, month, getTimezoneOffset())
+        return jooqReadingSessionRepository.findFavoriteReadingDaysByUser(userId, year, month, getTimezoneOffset())
                 .stream()
                 .map(dto -> FavoriteReadingDaysResponse.builder()
                         .dayOfWeek(dto.getDayOfWeek())
@@ -189,7 +187,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findGenreStatisticsByUser(userId)
+        return jooqReadingSessionRepository.findGenreStatisticsByUser(userId)
                 .stream()
                 .map(dto -> {
                     double avgSessionsPerBook = dto.getBookCount() > 0
@@ -256,22 +254,23 @@ public class ReadingSessionService {
         }
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<ReadingSessionEntity> sessions = readingSessionRepository.findByUserIdAndBookId(userId, bookId, pageable);
+        Page<ReadingSessionDetail> sessions = jooqReadingSessionRepository.findByUserIdAndBookId(userId, bookId, pageable);
 
-        return sessions.map(session -> ReadingSessionResponse.builder()
-                .id(session.getId())
-                .bookId(session.getBook().getId())
-                .bookTitle(session.getBook().getMetadata().getTitle())
-                .bookType(session.getBookType())
-                .startTime(session.getStartTime())
-                .endTime(session.getEndTime())
-                .durationSeconds(session.getDurationSeconds())
-                .startProgress(session.getStartProgress())
-                .endProgress(session.getEndProgress())
-                .progressDelta(session.getProgressDelta())
-                .startLocation(session.getStartLocation())
-                .endLocation(session.getEndLocation())
-                .createdAt(session.getCreatedAt())
+        ZoneId zone = ZoneId.systemDefault();
+        return sessions.map(dto -> ReadingSessionResponse.builder()
+                .id(dto.getId())
+                .bookId(dto.getBookId())
+                .bookTitle(dto.getBookTitle())
+                .bookType(BookFileType.valueOf(dto.getBookType()))
+                .startTime(dto.getStartTime().atZone(zone).toInstant())
+                .endTime(dto.getEndTime().atZone(zone).toInstant())
+                .durationSeconds(dto.getDurationSeconds())
+                .startProgress(dto.getStartProgress() != null ? dto.getStartProgress().floatValue() : null)
+                .endProgress(dto.getEndProgress() != null ? dto.getEndProgress().floatValue() : null)
+                .progressDelta(dto.getProgressDelta() != null ? dto.getProgressDelta().floatValue() : null)
+                .startLocation(dto.getStartLocation())
+                .endLocation(dto.getEndLocation())
+                .createdAt(dto.getCreatedAt())
                 .build());
     }
 
@@ -298,10 +297,10 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        var sessions = readingSessionRepository.findPageTurnerSessionsByUser(userId);
+        var sessions = jooqReadingSessionRepository.findPageTurnerSessionsByUser(userId);
 
-        Map<Long, List<PageTurnerSessionDto>> sessionsByBook = sessions.stream()
-                .collect(Collectors.groupingBy(PageTurnerSessionDto::getBookId, LinkedHashMap::new, Collectors.toList()));
+        Map<Long, List<PageTurnerSession>> sessionsByBook = sessions.stream()
+                .collect(Collectors.groupingBy(PageTurnerSession::getBookId, LinkedHashMap::new, Collectors.toList()));
 
         Set<Long> bookIds = sessionsByBook.keySet();
         Map<Long, List<String>> bookCategories = new HashMap<>();
@@ -321,17 +320,17 @@ public class ReadingSessionService {
                 .filter(entry -> entry.getValue().size() >= 2)
                 .map(entry -> {
                     Long bookId = entry.getKey();
-                    List<PageTurnerSessionDto> bookSessions = entry.getValue();
-                    PageTurnerSessionDto first = bookSessions.getFirst();
+                    List<PageTurnerSession> bookSessions = entry.getValue();
+                    PageTurnerSession first = bookSessions.getFirst();
 
                     List<Double> durations = bookSessions.stream()
-                            .map(s -> s.getDurationSeconds() != null ? s.getDurationSeconds().doubleValue() : 0.0)
+                            .map(s -> (double) s.getDurationSeconds())
                             .collect(Collectors.toList());
 
                     List<Double> gaps = new ArrayList<>();
                     for (int i = 1; i < bookSessions.size(); i++) {
-                        Instant prevEnd = bookSessions.get(i - 1).getEndTime();
-                        Instant currStart = bookSessions.get(i).getStartTime();
+                        LocalDateTime prevEnd = bookSessions.get(i - 1).getEndTime();
+                        LocalDateTime currStart = bookSessions.get(i).getStartTime();
                         if (prevEnd != null && currStart != null) {
                             gaps.add((double) ChronoUnit.HOURS.between(prevEnd, currStart));
                         }
@@ -382,11 +381,11 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        var allSessions = readingSessionRepository.findCompletionRaceSessionsByUserAndYear(userId, year);
+        var allSessions = jooqReadingSessionRepository.findCompletionRaceSessionsByUserAndYear(userId, year);
 
         // Collect unique book IDs in order of appearance, take last N (most recently finished)
         LinkedHashSet<Long> allBookIds = allSessions.stream()
-                .map(CompletionRaceSessionDto::getBookId)
+                .map(CompletionRaceSession::getBookId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         Set<Long> limitedBookIds;
@@ -403,8 +402,8 @@ public class ReadingSessionService {
                 .map(dto -> CompletionRaceResponse.builder()
                         .bookId(dto.getBookId())
                         .bookTitle(dto.getBookTitle())
-                        .sessionDate(dto.getSessionDate())
-                        .endProgress(dto.getEndProgress())
+                        .sessionDate(dto.getSessionDate().atZone(ZoneId.systemDefault()).toInstant())
+                        .endProgress(dto.getEndProgress() != null ? dto.getEndProgress().floatValue() : null)
                         .build())
                 .collect(Collectors.toList());
     }
@@ -414,7 +413,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findAllSessionCountsByUser(userId, getTimezoneOffset())
+        return jooqReadingSessionRepository.findAllSessionCountsByUser(userId, getTimezoneOffset())
                 .stream()
                 .map(dto -> ReadingSessionHeatmapResponse.builder()
                         .date(dto.getDate())
@@ -502,7 +501,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        return readingSessionRepository.findSessionScatterByUserAndYear(userId, year, getTimezoneOffset())
+        return jooqReadingSessionRepository.findSessionScatterByUserAndYear(userId, year, getTimezoneOffset())
                 .stream()
                 .map(dto -> SessionScatterResponse.builder()
                         .hourOfDay(dto.getHourOfDay())
@@ -517,9 +516,9 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        List<ReadingSessionCountDto> allDates = readingSessionRepository.findAllSessionCountsByUser(userId, getTimezoneOffset());
+        List<ReadingSessionCount> allDates = jooqReadingSessionRepository.findAllSessionCountsByUser(userId, getTimezoneOffset());
         Set<LocalDate> readingDays = allDates.stream()
-                .map(ReadingSessionCountDto::getDate)
+                .map(ReadingSessionCount::getDate)
                 .collect(Collectors.toCollection(TreeSet::new));
 
         LocalDate today = LocalDate.now();
@@ -578,7 +577,7 @@ public class ReadingSessionService {
 
         ZoneId zone = ZoneId.systemDefault();
 
-        return readingSessionRepository.findBookTimelineByUserAndYear(userId, year, tzOffset)
+        return jooqReadingSessionRepository.findBookTimelineByUserAndYear(userId, year, tzOffset)
                 .stream()
                 .map(dto -> BookTimelineResponse.builder()
                         .bookId(dto.getBookId())
@@ -623,7 +622,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<ListeningHeatmapResponse> getListeningHeatmapForMonth(int year, int month) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findListeningSessionsByUserAndMonth(userId, year, month, getTimezoneOffset())
+        return jooqReadingSessionRepository.findListeningSessionsByUserAndMonth(userId, year, month, getTimezoneOffset())
                 .stream()
                 .map(dto -> ListeningHeatmapResponse.builder()
                         .date(dto.getDate())
@@ -636,7 +635,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<WeeklyListeningTrendResponse> getWeeklyListeningTrend(int weeks) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findWeeklyListeningTrend(userId, weeks, getTimezoneOffset())
+        return jooqReadingSessionRepository.findWeeklyListeningTrend(userId, weeks, getTimezoneOffset())
                 .stream()
                 .map(dto -> WeeklyListeningTrendResponse.builder()
                         .year(dto.getYear())
@@ -650,14 +649,14 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public ListeningCompletionResponse getListeningCompletion() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        var progressList = readingSessionRepository.findAudiobookProgressByUser(userId);
+        var progressList = jooqReadingSessionRepository.findAudiobookProgressByUser(userId);
 
         int totalAudiobooks = progressList.size();
         int completed = 0;
         List<ListeningCompletionResponse.AudiobookCompletionEntry> inProgress = new ArrayList<>();
 
         for (var dto : progressList) {
-            float maxProg = dto.getMaxProgress() != null ? dto.getMaxProgress() : 0f;
+            float maxProg = dto.getMaxProgress() != null ? dto.getMaxProgress().floatValue() : 0f;
             if (maxProg >= 0.98f) {
                 completed++;
             } else if (maxProg > 0f) {
@@ -689,10 +688,10 @@ public class ReadingSessionService {
         Long userId = authenticationService.getAuthenticatedUser().getId();
 
         // Get completed audiobooks by month
-        var completedByMonth = readingSessionRepository.findMonthlyCompletedAudiobooks(userId);
+        var completedByMonth = jooqReadingSessionRepository.findMonthlyCompletedAudiobooks(userId);
 
         // Get listening durations by month
-        var durationsByMonth = readingSessionRepository.findMonthlyListeningDurations(userId, getTimezoneOffset());
+        var durationsByMonth = jooqReadingSessionRepository.findMonthlyListeningDurations(userId, getTimezoneOffset());
         Map<String, Long> durationMap = new HashMap<>();
         for (var durDto : durationsByMonth) {
             durationMap.put(durDto.getYear() + "-" + durDto.getMonth(), durDto.getTotalDurationSeconds());
@@ -717,7 +716,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public ListeningFinishFunnelResponse getListeningFinishFunnel() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        var progressList = readingSessionRepository.findAudiobookProgressByUser(userId);
+        var progressList = jooqReadingSessionRepository.findAudiobookProgressByUser(userId);
 
         long totalStarted = 0;
         long reached25 = 0;
@@ -726,7 +725,7 @@ public class ReadingSessionService {
         long completed = 0;
 
         for (var dto : progressList) {
-            float maxProg = dto.getMaxProgress() != null ? dto.getMaxProgress() : 0f;
+            float maxProg = dto.getMaxProgress() != null ? dto.getMaxProgress().floatValue() : 0f;
             if (maxProg > 0f) {
                 totalStarted++;
                 if (maxProg >= 0.25f) reached25++;
@@ -748,7 +747,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<PeakHoursResponse> getListeningPeakHours(Integer year, Integer month) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findListeningPeakHoursByUser(userId, year, month, getTimezoneOffset())
+        return jooqReadingSessionRepository.findListeningPeakHoursByUser(userId, year, month, getTimezoneOffset())
                 .stream()
                 .map(dto -> PeakHoursResponse.builder()
                         .hourOfDay(dto.getHourOfDay())
@@ -761,7 +760,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<GenreStatisticsResponse> getListeningGenreStatistics() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findListeningGenreStatisticsByUser(userId)
+        return jooqReadingSessionRepository.findListeningGenreStatisticsByUser(userId)
                 .stream()
                 .map(dto -> {
                     double avgSessionsPerBook = dto.getBookCount() > 0
@@ -782,7 +781,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<ListeningAuthorResponse> getListeningAuthorStats() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findListeningAuthorStatsByUser(userId)
+        return jooqReadingSessionRepository.findListeningAuthorStatsByUser(userId)
                 .stream()
                 .map(dto -> ListeningAuthorResponse.builder()
                         .author(dto.getAuthorName())
@@ -796,7 +795,7 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<SessionScatterResponse> getListeningSessionScatter() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findListeningSessionScatterByUser(userId, getTimezoneOffset())
+        return jooqReadingSessionRepository.findListeningSessionScatterByUser(userId, getTimezoneOffset())
                 .stream()
                 .map(dto -> SessionScatterResponse.builder()
                         .hourOfDay(dto.getHourOfDay())
@@ -809,14 +808,14 @@ public class ReadingSessionService {
     @Transactional(readOnly = true)
     public List<LongestAudiobookResponse> getListeningLongestBooks() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return readingSessionRepository.findAudiobookProgressByUser(userId)
+        return jooqReadingSessionRepository.findAudiobookProgressByUser(userId)
                 .stream()
                 .sorted((a, b) -> Long.compare(
                         b.getTotalDurationSeconds() != null ? b.getTotalDurationSeconds() : 0L,
                         a.getTotalDurationSeconds() != null ? a.getTotalDurationSeconds() : 0L))
                 .limit(10)
                 .map(dto -> {
-                    float maxProg = dto.getMaxProgress() != null ? dto.getMaxProgress() : 0f;
+                    float maxProg = dto.getMaxProgress() != null ? dto.getMaxProgress().floatValue() : 0f;
                     return LongestAudiobookResponse.builder()
                             .bookId(dto.getBookId())
                             .title(dto.getTitle())
