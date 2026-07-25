@@ -1,4 +1,4 @@
-import {Component, OnDestroy} from '@angular/core';
+import { Component, OnDestroy, inject } from '@angular/core';
 import {DatePipe, NgClass} from '@angular/common';
 import {BookdropFinalizeResult} from '../../service/bookdrop.service';
 import {DynamicDialogConfig, DynamicDialogRef} from "primeng/dynamicdialog";
@@ -17,10 +17,15 @@ import {TranslocoDirective} from '@jsverse/transloco';
   styleUrl: './bookdrop-finalize-result-dialog.component.scss'
 })
 export class BookdropFinalizeResultDialogComponent implements OnDestroy {
+  ref = inject(DynamicDialogRef);
+  config = inject(DynamicDialogConfig);
+
 
   result: BookdropFinalizeResult;
 
-  constructor(public ref: DynamicDialogRef, public config: DynamicDialogConfig) {
+  constructor() {
+    const config = this.config;
+
     this.result = config.data.result;
   }
 

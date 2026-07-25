@@ -16,6 +16,7 @@ export class LocalStorageService {
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch {
+      // localStorage can be unavailable or full; stored values are non-critical
     }
   }
 

@@ -1,4 +1,4 @@
-import {Component, computed, effect, ElementRef, inject, OnDestroy, ViewChild} from '@angular/core';
+import {Component, effect, ElementRef, inject, OnDestroy, ViewChild} from '@angular/core';
 import {MenuItem} from 'primeng/api';
 import {LayoutService} from '../layout-main/service/app.layout.service';
 import {Router, RouterLink} from '@angular/router';
@@ -53,6 +53,14 @@ import {LANG_STORAGE_KEY} from '../../../../core/config/language-initializer';
   ],
 })
 export class AppTopBarComponent implements OnDestroy {
+  layoutService = inject(LayoutService);
+  private notificationService = inject(NotificationEventService);
+  private router = inject(Router);
+  private authService = inject(AuthService);
+  private metadataProgressService = inject(MetadataProgressService);
+  private bookdropFileService = inject(BookdropFileService);
+  private dialogLauncher = inject(DialogLauncherService);
+
   protected readonly userService = inject(UserService);
   protected readonly user = this.userService.currentUser;
   items!: MenuItem[];
@@ -84,16 +92,9 @@ export class AppTopBarComponent implements OnDestroy {
 
   private translocoService: TranslocoService;
 
-  constructor(
-    public layoutService: LayoutService,
-    private notificationService: NotificationEventService,
-    private router: Router,
-    private authService: AuthService,
-    private metadataProgressService: MetadataProgressService,
-    private bookdropFileService: BookdropFileService,
-    private dialogLauncher: DialogLauncherService,
-    translocoService: TranslocoService
-  ) {
+  constructor() {
+    const translocoService = inject(TranslocoService);
+
     this.translocoService = translocoService;
     this.activeLang = translocoService.getActiveLang();
     this.langMenuItems = AVAILABLE_LANGS.map(lang => ({

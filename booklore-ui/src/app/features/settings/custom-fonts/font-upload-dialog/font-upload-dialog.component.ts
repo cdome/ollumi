@@ -17,6 +17,10 @@ import {TranslocoDirective, TranslocoPipe, TranslocoService} from '@jsverse/tran
   styleUrls: ['./font-upload-dialog.component.scss']
 })
 export class FontUploadDialogComponent implements OnDestroy {
+  private customFontService = inject(CustomFontService);
+  private messageService = inject(MessageService);
+  private dialogRef = inject(DynamicDialogRef);
+
   @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
   private readonly t = inject(TranslocoService);
 
@@ -31,12 +35,6 @@ export class FontUploadDialogComponent implements OnDestroy {
   readonly maxFileSize = 5242880;
   readonly maxFonts = 10;
   readonly acceptedFormats = ['.ttf', '.otf', '.woff', '.woff2'];
-
-  constructor(
-    private customFontService: CustomFontService,
-    private messageService: MessageService,
-    private dialogRef: DynamicDialogRef
-  ) {}
 
   onUploadZoneClick(): void {
     if (this.isUploading) {

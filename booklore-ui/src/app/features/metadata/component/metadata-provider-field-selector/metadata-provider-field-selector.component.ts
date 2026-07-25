@@ -77,10 +77,10 @@ export class MetadataProviderFieldSelectorComponent implements OnInit {
   }
 
   private toFieldState(selectedFields: string[]): MetadataProviderSpecificFields {
-    const fieldState: any = {};
+    const fieldState: Record<string, boolean> = {};
     for (const field of this.allFieldNames) {
       fieldState[field] = selectedFields.includes(field);
     }
-    return fieldState;
+    return fieldState as unknown as MetadataProviderSpecificFields;
   }
 }

@@ -92,7 +92,7 @@ export class SortService {
     fileSizeKb: (book) => book.fileSizeKb || null,
     fileName: (book) => book.fileName,
     filePath: (book) => book.filePath,
-    random: (book) => Math.random(),
+    random: () => Math.random(),
     seriesName: (book) => book.metadata?.seriesName?.toLowerCase() || null,
     seriesNumber: (book) => book.metadata?.seriesNumber ?? null,
     readStatus: (book) => book.readStatus ? (SortService.READ_STATUS_RANK[book.readStatus] ?? null) : null,
@@ -137,7 +137,7 @@ export class SortService {
     const aValue = extractor(a);
     const bValue = extractor(b);
 
-    let result = this.compareValues(aValue, bValue);
+    const result = this.compareValues(aValue, bValue);
 
     return criterion.direction === SortDirection.ASCENDING ? result : -result;
   }

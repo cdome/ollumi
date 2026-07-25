@@ -1,7 +1,7 @@
 import {inject, Injectable, Injector, signal} from '@angular/core';
 import {Subject} from 'rxjs';
 import {takeUntil} from 'rxjs/operators';
-import {TocItem} from 'epubjs';
+import {FoliateTocItem as TocItem} from '../../core/foliate-view.model';
 import {BookMark, BookMarkService} from '../../../../../shared/service/book-mark.service';
 import {Annotation} from '../../../../../shared/service/annotation.service';
 import {UrlHelperService} from '../../../../../shared/service/url-helper.service';

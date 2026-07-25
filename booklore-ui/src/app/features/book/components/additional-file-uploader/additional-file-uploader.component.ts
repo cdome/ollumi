@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, effect, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
 
 import {FormsModule} from '@angular/forms';
 import {DynamicDialogConfig, DynamicDialogRef} from 'primeng/dynamicdialog';
@@ -41,6 +41,13 @@ interface UploadingFile {
   styleUrls: ['./additional-file-uploader.component.scss']
 })
 export class AdditionalFileUploaderComponent implements OnInit, OnDestroy {
+  private dialogRef = inject(DynamicDialogRef);
+  private config = inject(DynamicDialogConfig);
+  private bookFileService = inject(BookFileService);
+  private appSettingsService = inject(AppSettingsService);
+  private messageService = inject(MessageService);
+  private cdr = inject(ChangeDetectorRef);
+
   private readonly t = inject(TranslocoService);
 
   book!: Book;
@@ -56,15 +63,6 @@ export class AdditionalFileUploaderComponent implements OnInit, OnDestroy {
 
   @ViewChild(FileUpload) private fileUpload!: FileUpload;
   private destroy$ = new Subject<void>();
-
-  constructor(
-    private dialogRef: DynamicDialogRef,
-    private config: DynamicDialogConfig,
-    private bookFileService: BookFileService,
-    private appSettingsService: AppSettingsService,
-    private messageService: MessageService,
-    private cdr: ChangeDetectorRef
-  ) {}
 
   ngOnInit(): void {
     this.book = this.config.data.book;
@@ -152,7 +150,7 @@ export class AdditionalFileUploaderComponent implements OnInit, OnDestroy {
     uploadCallback();
   }
 
-  uploadFiles(event: FileUploadHandlerEvent): void {
+  uploadFiles(_event: FileUploadHandlerEvent): void {
     const filesToUpload = this.files.filter(f => f.status === 'Pending');
 
     if (filesToUpload.length === 0) return;

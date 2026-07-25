@@ -25,6 +25,9 @@ export interface ReaderState {
   providedIn: 'root'
 })
 export class ReaderStateService {
+  private bookService = inject(BookService);
+  private userService = inject(UserService);
+
   private epubCustomFontService = inject(EpubCustomFontService);
 
   private readonly BASE_FONTS = [
@@ -59,10 +62,10 @@ export class ReaderStateService {
   readonly state = this._state.asReadonly();
 
   readonly themes = themes;
-  private readonly _fonts = signal<Array<{ name: string; value: string | null }>>(this.BASE_FONTS);
+  private readonly _fonts = signal<{ name: string; value: string | null }[]>(this.BASE_FONTS);
   readonly fonts = this._fonts.asReadonly();
 
-  constructor(private bookService: BookService, private userService: UserService) {
+  constructor() {
     this.loadCustomFontsIntoList();
   }
 
@@ -111,8 +114,11 @@ export class ReaderStateService {
               newState.fontFamily = settings.fontFamily;
             }
           }
-        } else if ((settings as any).customFontId != null) {
-          newState.fontFamily = `custom:${(settings as any).customFontId}`;
+        } else {
+          const {customFontId} = settings as {customFontId?: number | string};
+          if (customFontId != null) {
+            newState.fontFamily = `custom:${customFontId}`;
+          }
         }
 
         if (settings.gap != null) newState.gap = Math.min(settings.gap, 0.5);

@@ -159,7 +159,7 @@ export class ReaderLeftSidebarService {
         }
 
         if ('subitems' in result && result.subitems) {
-          const sectionResults = result.subitems.map((item: any) => ({
+          const sectionResults = result.subitems.map(item => ({
             cfi: item.cfi,
             excerpt: item.excerpt,
             sectionLabel: result.label
@@ -178,7 +178,7 @@ export class ReaderLeftSidebarService {
         isSearching: false,
         progress: 1
       });
-    } catch (error) {
+    } catch {
       this._searchState.update(current => ({...current, isSearching: false}));
     }
   }

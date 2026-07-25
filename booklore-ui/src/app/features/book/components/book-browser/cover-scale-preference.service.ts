@@ -72,7 +72,7 @@ export class CoverScalePreferenceService {
         detail: this.t.translate('book.coverPref.toast.savedDetail', {scale: scale.toFixed(2)}),
         life: 1500
       });
-    } catch (e) {
+    } catch {
       this.messageService.add({
         severity: 'error',
         summary: this.t.translate('book.coverPref.toast.saveFailedSummary'),

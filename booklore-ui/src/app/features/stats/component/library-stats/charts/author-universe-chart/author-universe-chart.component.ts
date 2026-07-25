@@ -485,7 +485,7 @@ export class AuthorUniverseChartComponent implements OnDestroy {
     return insights;
   }
 
-  private handleExternalTooltip(context: { chart: Chart; tooltip: any }): void {
+  private handleExternalTooltip(context: { chart: Chart; tooltip: { opacity: number; caretX: number; caretY: number; dataPoints?: { raw: unknown }[] } }): void {
     const {chart, tooltip} = context;
     let tooltipEl = document.getElementById('author-chart-tooltip');
 

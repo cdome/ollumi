@@ -158,7 +158,7 @@ export class ReadingHeatmapChartComponent {
     });
 
     if (this.chartOptions?.scales?.['y']) {
-      (this.chartOptions.scales['y'] as any).max = years.length - 1;
+      (this.chartOptions.scales['y'] as {max?: number}).max = years.length - 1;
     }
 
     this.chartDataSubject.next({

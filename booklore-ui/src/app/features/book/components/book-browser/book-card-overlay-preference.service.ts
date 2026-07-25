@@ -35,7 +35,7 @@ export class BookCardOverlayPreferenceService {
 
     let show = true;
     if (prefs) {
-      const globalAny = prefs.global as any;
+      const globalAny = prefs.global as {showBookTypePill?: boolean} | undefined;
       show = prefs.global?.overlayBookType ?? globalAny?.showBookTypePill ?? true;
 
       if (this.currentContext) {
@@ -43,7 +43,7 @@ export class BookCardOverlayPreferenceService {
           o.entityType === this.currentContext?.type && o.entityId === this.currentContext?.id
         );
         if (override) {
-          const prefAny = override.preferences as any;
+          const prefAny = override.preferences as {showBookTypePill?: boolean};
           if (override.preferences.overlayBookType !== undefined) {
             show = override.preferences.overlayBookType;
           } else if (prefAny?.showBookTypePill !== undefined) {

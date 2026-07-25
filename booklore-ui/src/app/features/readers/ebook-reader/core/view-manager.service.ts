@@ -5,6 +5,7 @@ import {ReaderAnnotationService, Annotation} from '../features/annotations/annot
 import {ReaderEventService, ViewEvent, TextSelection} from './event.service';
 import {PageInfo, ThemeInfo, PageDecorator} from '../shared/header-footer.util';
 import {EpubStreamingService, EpubBookInfo} from './epub-streaming.service';
+import {FoliateRenderer, FoliateSearchOptions, FoliateSearchYield, FoliateTocItem, FoliateView} from './foliate-view.model';
 
 export type {ViewEvent, TextSelection} from './event.service';
 export type {PageInfo, ThemeInfo} from '../shared/header-footer.util';
@@ -15,6 +16,8 @@ interface TocItem {
   subitems?: TocItem[];
 }
 
+type StreamingBookFactory = (bookId: number, baseUrl: string, bookInfo: EpubBookInfo, authToken: string | null, bookType?: string) => Promise<unknown>;
+
 export interface BookMetadata {
   title?: string;
   authors?: string[];
@@ -24,7 +27,7 @@ export interface BookMetadata {
   identifier?: string;
   coverUrl?: string;
 
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 @Injectable({
@@ -34,14 +37,14 @@ export class ReaderViewManagerService {
   private annotationService = inject(ReaderAnnotationService);
   private eventService = inject(ReaderEventService);
   private epubStreamingService = inject(EpubStreamingService);
-  private view: any;
+  private view: FoliateView | null = null;
 
   public get events$(): Observable<ViewEvent> {
     return this.eventService.events$;
   }
 
   createView(container: HTMLElement): void {
-    this.view = document.createElement('foliate-view');
+    this.view = document.createElement('foliate-view') as FoliateView;
     this.view.style.width = '100%';
     this.view.style.height = '100%';
     this.view.style.display = 'block';
@@ -50,13 +53,14 @@ export class ReaderViewManagerService {
     this.eventService.initialize(this.view, {
       prev: () => this.prev(),
       next: () => this.next(),
-      getCFI: (index: number, range: Range) => this.view?.getCFI(index, range),
+      getCFI: (index: number, range: Range) => this.view?.getCFI(index, range) ?? null,
       getContents: () => this.view?.renderer?.getContents() ?? null
     });
   }
 
   loadEpub(epubPath: string): Observable<void> {
-    if (!this.view) {
+    const view = this.view;
+    if (!view) {
       return throwError(() => new Error('View not created'));
     }
 
@@ -72,7 +76,7 @@ export class ReaderViewManagerService {
         const file = new File([blob], epubPath.split('/').pop() || 'book.epub', {
           type: 'application/epub+zip'
         });
-        return from(this.view.open(file) as Promise<void>);
+        return from(view.open(file));
       }),
       map(() => undefined),
       catchError(err => throwError(() => err))
@@ -92,14 +96,14 @@ export class ReaderViewManagerService {
   }
 
   private async openStreamingBook(bookId: number, bookInfo: EpubBookInfo, bookType?: string): Promise<void> {
-    const makeStreamingBook = (window as any).makeStreamingBook;
+    const {makeStreamingBook} = window as Window & {makeStreamingBook?: StreamingBookFactory};
     if (!makeStreamingBook) {
       throw new Error('makeStreamingBook not available - Foliate script may not be loaded');
     }
     const baseUrl = this.epubStreamingService.getBaseUrl();
     const authToken = this.epubStreamingService.getAuthToken();
     const book = await makeStreamingBook(bookId, baseUrl, bookInfo, authToken, bookType);
-    await this.view.open(book);
+    await this.view?.open(book);
   }
 
   destroy(): void {
@@ -110,11 +114,12 @@ export class ReaderViewManagerService {
 
   goTo(target?: string | number | null): Observable<void> {
     const resolvedTarget = target ?? 0;
-    if (!this.view) {
+    const view = this.view;
+    if (!view) {
       return of(undefined);
     }
     return defer(() =>
-      from(this.view.goTo(resolvedTarget) as Promise<void>)
+      from(view.goTo(resolvedTarget))
     ).pipe(
       map(() => undefined)
     );
@@ -125,10 +130,11 @@ export class ReaderViewManagerService {
   }
 
   goToFraction(fraction: number): Observable<void> {
-    if (!this.view) {
+    const view = this.view;
+    if (!view) {
       return of(undefined);
     }
-    return defer(() => from(this.view.goToFraction(fraction) as Promise<void>)).pipe(
+    return defer(() => from(view.goToFraction(fraction))).pipe(
       map(() => undefined)
     );
   }
@@ -141,7 +147,7 @@ export class ReaderViewManagerService {
     this.view?.next();
   }
 
-  getRenderer(): any {
+  getRenderer(): FoliateRenderer | undefined {
     return this.view?.renderer;
   }
 
@@ -190,29 +196,28 @@ export class ReaderViewManagerService {
   }
 
   getChapters(): TocItem[] {
-    if (!this.view?.book?.toc) return [];
+    const toc = this.view?.book?.toc;
+    if (!toc) return [];
 
-    const mapToc = (items: any[]): TocItem[] =>
+    const mapToc = (items: FoliateTocItem[]): TocItem[] =>
       items.map(item => ({
         label: item.label,
         href: item.href,
         subitems: item.subitems?.length ? mapToc(item.subitems) : undefined
       }));
 
-    return mapToc(this.view.book.toc);
+    return mapToc(toc);
   }
 
   getSectionFractions(): number[] {
-    if (!this.view?.getSectionFractions) return [];
-    return this.view.getSectionFractions();
+    return this.view?.getSectionFractions?.() ?? [];
   }
 
   getMetadata(): Observable<BookMetadata> {
-    if (!this.view?.book?.metadata) {
+    const metadata = this.view?.book?.metadata;
+    if (!metadata) {
       return of({});
     }
-
-    const {metadata} = this.view.book;
 
     return this.getCoverUrl().pipe(
       map(coverUrl => ({
@@ -222,19 +227,20 @@ export class ReaderViewManagerService {
         publisher: metadata.publisher,
         description: metadata.description,
         identifier: metadata.identifier,
-        coverUrl,
+        coverUrl: coverUrl ?? undefined,
         ...metadata
       }))
     );
   }
 
   getCover(): Observable<Blob | null> {
-    if (!this.view?.book?.getCover) {
+    const getCover = this.view?.book?.getCover?.bind(this.view.book);
+    if (!getCover) {
       return of(null);
     }
     return defer(() => {
-      const coverPromise = this.view.book.getCover();
-      return coverPromise ? from(coverPromise as Promise<Blob | null>) : of(null);
+      const coverPromise = getCover();
+      return coverPromise ? from(coverPromise) : of(null);
     });
   }
 
@@ -244,7 +250,7 @@ export class ReaderViewManagerService {
     );
   }
 
-  async* search(opts: { query: string; matchCase?: boolean; matchWholeWords?: boolean }): AsyncGenerator<any> {
+  async* search(opts: FoliateSearchOptions): AsyncGenerator<FoliateSearchYield> {
     if (!this.view?.search) return;
     yield* this.view.search(opts);
   }

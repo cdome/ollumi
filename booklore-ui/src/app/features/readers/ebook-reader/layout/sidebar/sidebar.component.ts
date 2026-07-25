@@ -2,7 +2,7 @@ import {Component, DestroyRef, effect, inject, signal} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {TranslocoDirective} from '@jsverse/transloco';
-import {TocItem} from 'epubjs';
+import {FoliateTocItem as TocItem} from '../../core/foliate-view.model';
 import {ReaderSidebarService, SidebarTab} from './sidebar.service';
 import {ReaderIconComponent} from '../../shared/icon.component';
 

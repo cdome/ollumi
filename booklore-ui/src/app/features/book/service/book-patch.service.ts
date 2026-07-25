@@ -39,7 +39,7 @@ export class BookPatchService {
   private http = inject(HttpClient);
   private queryClient = inject(QueryClient);
 
-  private epubProgressSubject = new Subject<{ bookId: number; cfi: string; href: string; percentage: number; bookFileId?: number }>();
+  private epubProgressSubject = new Subject<{ bookId: number; cfi: string; href: string | null; percentage: number; bookFileId?: number }>();
 
   private epubProgress$ = this.epubProgressSubject.pipe(
     distinctUntilChanged((prev, curr) =>
@@ -54,13 +54,13 @@ export class BookPatchService {
         bookId: number;
         epubProgress: {
           cfi: string;
-          href: string;
+          href: string | null;
           percentage: number;
         };
         fileProgress?: {
           bookFileId: number;
           positionData: string;
-          positionHref: string;
+          positionHref: string | null;
           progressPercent: number;
         };
       } = {
@@ -130,7 +130,7 @@ export class BookPatchService {
     return this.http.post<void>(`${this.url}/progress`, body);
   }
 
-  saveEpubProgress(bookId: number, cfi: string, href: string, percentage: number, bookFileId?: number): void {
+  saveEpubProgress(bookId: number, cfi: string, href: string | null, percentage: number, bookFileId?: number): void {
     this.epubProgressSubject.next({bookId, cfi, href, percentage, bookFileId});
   }
 

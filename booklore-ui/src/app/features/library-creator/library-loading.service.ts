@@ -1,16 +1,14 @@
-import { Injectable, ComponentRef, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
+import { Injectable, ComponentRef, ApplicationRef, createComponent, EmbeddedViewRef, EnvironmentInjector, inject } from '@angular/core';
 import { LibraryLoadingComponent } from './library-loading/library-loading.component';
 
 @Injectable({
   providedIn: 'root'
 })
 export class LibraryLoadingService {
-  private componentRef: ComponentRef<LibraryLoadingComponent> | null = null;
+  private appRef = inject(ApplicationRef);
+  private injector = inject(EnvironmentInjector);
 
-  constructor(
-    private appRef: ApplicationRef,
-    private injector: EnvironmentInjector
-  ) {}
+  private componentRef: ComponentRef<LibraryLoadingComponent> | null = null;
 
   showBookLoadingProgress(bookTitle: string, current: number, total: number): void {
     if (this.componentRef) {
@@ -25,7 +23,7 @@ export class LibraryLoadingService {
     this.componentRef.instance.updateProgress(bookTitle, current, total);
 
     this.appRef.attachView(this.componentRef.hostView);
-    const domElem = (this.componentRef.hostView as any).rootNodes[0] as HTMLElement;
+    const domElem = (this.componentRef.hostView as EmbeddedViewRef<unknown>).rootNodes[0] as HTMLElement;
     document.body.appendChild(domElem);
     document.body.style.overflow = 'hidden';
   }

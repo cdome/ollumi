@@ -1,3 +1,5 @@
+import {FoliateRenderer} from '../core/foliate-view.model';
+
 export interface PageInfo {
   percentCompleted: number;
   sectionTimeText: string;
@@ -11,7 +13,7 @@ export interface ThemeInfo {
 export class PageDecorator {
   private static readonly DEFAULT_FONT_SIZE = '0.875rem';
 
-  static updateHeadersAndFooters(renderer: any, chapterName: string, pageInfo?: PageInfo, theme?: ThemeInfo, timeRemainingLabel?: string): void {
+  static updateHeadersAndFooters(renderer: FoliateRenderer | undefined, chapterName: string, pageInfo?: PageInfo, theme?: ThemeInfo, timeRemainingLabel?: string): void {
 
     if (!renderer) {
       return;
@@ -24,7 +26,7 @@ export class PageDecorator {
     this.updateFooters(renderer, pageInfo, isSingleColumn, theme, timeRemainingLabel);
   }
 
-  private static updateHeaders(renderer: any, chapterName: string, isSingleColumn: boolean, theme?: ThemeInfo): void {
+  private static updateHeaders(renderer: FoliateRenderer, chapterName: string, isSingleColumn: boolean, theme?: ThemeInfo): void {
     if (!renderer.heads || !Array.isArray(renderer.heads) || renderer.heads.length === 0) {
       return;
     }
@@ -40,16 +42,17 @@ export class PageDecorator {
     });
   }
 
-  private static updateFooters(renderer: any, pageInfo: PageInfo | undefined, isSingleColumn: boolean, theme?: ThemeInfo, timeRemainingLabel?: string): void {
-    if (!renderer.feet || !Array.isArray(renderer.feet) || renderer.feet.length === 0 || !pageInfo) {
+  private static updateFooters(renderer: FoliateRenderer, pageInfo: PageInfo | undefined, isSingleColumn: boolean, theme?: ThemeInfo, timeRemainingLabel?: string): void {
+    const feet = renderer.feet;
+    if (!feet || !Array.isArray(feet) || feet.length === 0 || !pageInfo) {
       return;
     }
 
     const footerStyle = this.buildStyle(theme);
 
-    renderer.feet.forEach((footElement: HTMLElement, index: number) => {
+    feet.forEach((footElement: HTMLElement, index: number) => {
       if (footElement) {
-        const footerContent = this.createFooterContent(pageInfo, isSingleColumn, index, renderer.feet.length, footerStyle, timeRemainingLabel);
+        const footerContent = this.createFooterContent(pageInfo, isSingleColumn, index, feet.length, footerStyle, timeRemainingLabel);
         footElement.replaceChildren(footerContent);
       }
     });

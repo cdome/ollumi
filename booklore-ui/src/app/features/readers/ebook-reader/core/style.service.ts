@@ -1,5 +1,6 @@
 import {inject, Injectable} from '@angular/core';
 import {ReaderState} from '../state/reader-state.service';
+import {FoliateRenderer} from './foliate-view.model';
 import {EpubCustomFontService} from '../features/fonts/custom-font.service';
 
 @Injectable({
@@ -175,10 +176,10 @@ export class ReaderStyleService {
     return !isNaN(id) && id.toString() === fontFamily ? id : null;
   }
 
-  applyStylesToRenderer(renderer: any, state: ReaderState): void {
+  applyStylesToRenderer(renderer: FoliateRenderer | undefined, state: ReaderState): void {
     if (!renderer) return;
 
-    renderer.setAttribute('max-column-count', state.maxColumnCount);
+    renderer.setAttribute('max-column-count', String(state.maxColumnCount));
     renderer.setAttribute('gap', `${state.gap * 100}%`);
     renderer.setAttribute('max-inline-size', `${state.maxInlineSize}px`);
     renderer.setAttribute('max-block-size', `${state.maxBlockSize}px`);

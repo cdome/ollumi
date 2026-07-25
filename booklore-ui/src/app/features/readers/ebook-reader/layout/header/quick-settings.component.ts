@@ -1,4 +1,4 @@
-import {Component, EventEmitter, Input, Output} from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import {DecimalPipe} from '@angular/common';
 import {TranslocoDirective} from '@jsverse/transloco';
 import {ReaderStateService} from '../../state/reader-state.service';
@@ -14,12 +14,12 @@ import {EbookViewerSetting} from '../../../../book/model/book.model';
   styleUrls: ['./quick-settings.component.scss']
 })
 export class ReaderQuickSettingsComponent {
+  private bookService = inject(BookService);
+
   @Input() stateService!: ReaderStateService;
   @Input() bookId!: number;
-  @Output() close = new EventEmitter<void>();
+  @Output() closed = new EventEmitter<void>();
   @Output() openFullSettings = new EventEmitter<void>();
-
-  constructor(private bookService: BookService) {}
 
   get state() {
     return this.stateService.state();
@@ -37,7 +37,7 @@ export class ReaderQuickSettingsComponent {
       maxColumnCount: this.state.maxColumnCount,
       gap: this.state.gap,
       fontSize: this.state.fontSize,
-      theme: typeof this.state.theme === 'object' && 'name' in this.state.theme ? this.state.theme.name : (this.state.theme as any),
+      theme: typeof this.state.theme === 'object' && 'name' in this.state.theme ? this.state.theme.name : String(this.state.theme),
       maxInlineSize: this.state.maxInlineSize,
       maxBlockSize: this.state.maxBlockSize,
       fontFamily: this.state.fontFamily,
@@ -73,11 +73,11 @@ export class ReaderQuickSettingsComponent {
   }
 
   onOpenFullSettings(): void {
-    this.close.emit();
+    this.closed.emit();
     this.openFullSettings.emit();
   }
 
   onOverlayClick(): void {
-    this.close.emit();
+    this.closed.emit();
   }
 }

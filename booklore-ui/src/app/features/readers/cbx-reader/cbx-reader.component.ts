@@ -1,8 +1,8 @@
 import {Component, effect, ElementRef, HostListener, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
 import {ActivatedRoute, Router} from '@angular/router';
 import {CommonModule} from '@angular/common';
-import {forkJoin, from, Observable, Subject} from 'rxjs';
-import {debounceTime, map, switchMap, takeUntil, timeout} from 'rxjs/operators';
+import {forkJoin, from, Subject} from 'rxjs';
+import {debounceTime, map, switchMap, takeUntil} from 'rxjs/operators';
 import {PageTitleService} from "../../../shared/service/page-title.service";
 import {CbxReaderService} from '../../book/service/cbx-reader.service';
 import {BookService} from '../../book/service/book.service';
@@ -927,16 +927,28 @@ export class CbxReaderComponent implements OnInit, OnDestroy {
 
     switch (event.key) {
       case 'ArrowRight':
-        isRtl ? this.previousPage() : this.nextPage();
+        if (isRtl) {
+          this.previousPage();
+        } else {
+          this.nextPage();
+        }
         event.preventDefault();
         break;
       case 'ArrowLeft':
-        isRtl ? this.nextPage() : this.previousPage();
+        if (isRtl) {
+          this.nextPage();
+        } else {
+          this.previousPage();
+        }
         event.preventDefault();
         break;
       case ' ':
         event.preventDefault();
-        event.shiftKey ? this.previousPage() : this.nextPage();
+        if (event.shiftKey) {
+          this.previousPage();
+        } else {
+          this.nextPage();
+        }
         break;
       case 'Home':
         event.preventDefault();
@@ -1057,8 +1069,8 @@ export class CbxReaderComponent implements OnInit, OnDestroy {
     }
   }
 
-  @HostListener('document:mouseleave', ['$event'])
-  onMouseLeave(event: MouseEvent): void {
+  @HostListener('document:mouseleave')
+  onMouseLeave(): void {
     this.visibilityManager.handleMouseLeave();
     if (this.isMagnifierActive) {
       this.hideMagnifier();
@@ -1073,7 +1085,11 @@ export class CbxReaderComponent implements OnInit, OnDestroy {
       // In RTL mode, swipe directions are reversed
       const isRtl = this.readingDirection === CbxReadingDirection.RTL;
       const shouldGoNext = isRtl ? delta > 0 : delta < 0;
-      shouldGoNext ? this.nextPage() : this.previousPage();
+      if (shouldGoNext) {
+        this.nextPage();
+      } else {
+        this.previousPage();
+      }
     }
   }
 
@@ -1170,13 +1186,13 @@ export class CbxReaderComponent implements OnInit, OnDestroy {
   private enterFullscreen(): void {
     const elem = document.documentElement;
     if (elem.requestFullscreen) {
-      elem.requestFullscreen().catch(() => {});
+      elem.requestFullscreen().catch(() => undefined);
     }
   }
 
   private exitFullscreen(): void {
     if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => undefined);
     }
   }
 

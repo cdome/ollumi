@@ -1,5 +1,5 @@
 import {DecimalPipe} from '@angular/common';
-import {Component, effect, inject, Input, OnDestroy, OnInit} from '@angular/core';
+import {Component, effect, inject, Input, OnDestroy} from '@angular/core';
 import {Button} from 'primeng/button';
 import {FormsModule} from '@angular/forms';
 import {TranslocoDirective} from '@jsverse/transloco';
@@ -8,7 +8,7 @@ import {UserSettings} from '../../user-management/user.service';
 import {Tooltip} from 'primeng/tooltip';
 import {CustomFontService} from '../../../../shared/service/custom-font.service';
 import {CustomFont} from '../../../../shared/model/custom-font.model';
-import {skip, Subject, takeUntil} from 'rxjs';
+import {Subject} from 'rxjs';
 import {addCustomFontsToDropdown} from '../../../../shared/util/custom-font.util';
 import {Skeleton} from 'primeng/skeleton';
 import {themes} from '../../../readers/ebook-reader/state/themes.constant';
@@ -26,7 +26,7 @@ import {themes} from '../../../readers/ebook-reader/state/themes.constant';
   templateUrl: './epub-reader-preferences-component.html',
   styleUrl: './epub-reader-preferences-component.scss'
 })
-export class EpubReaderPreferencesComponent implements OnInit, OnDestroy {
+export class EpubReaderPreferencesComponent implements OnDestroy {
 
   @Input() userSettings!: UserSettings;
 
@@ -59,8 +59,6 @@ export class EpubReaderPreferencesComponent implements OnInit, OnDestroy {
     }
   });
 
-  ngOnInit(): void {
-  }
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -132,7 +130,7 @@ export class EpubReaderPreferencesComponent implements OnInit, OnDestroy {
     if (typeof value === "string") {
       this.userSettings.ebookReaderSetting.fontFamily = value;
     } else {
-      this.userSettings.ebookReaderSetting.fontFamily = null as any;
+      this.userSettings.ebookReaderSetting.fontFamily = null as unknown as string;
     }
     this.readerPreferencesService.updatePreference(['ebookReaderSetting', 'fontFamily'], value);
   }

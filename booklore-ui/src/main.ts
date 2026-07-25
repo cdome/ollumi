@@ -54,7 +54,6 @@ bootstrapApplication(AppComponent, {
     {
       provide: RxStompService,
       useFactory: rxStompServiceFactory,
-      deps: [AuthService],
     },
     {
       provide: RouteReuseStrategy,

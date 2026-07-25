@@ -9,6 +9,7 @@ import {ReaderStateService} from './reader-state.service';
 import {ReaderAnnotationHttpService} from '../features/annotations/annotation.service';
 import {ReaderBookmarkService} from '../features/bookmarks/bookmark.service';
 import {BookType} from '../../../book/model/book.model';
+import {FoliateRelocateDetail} from '../core/foliate-view.model';
 
 export interface ProgressState {
   cfi: string | null;
@@ -17,7 +18,7 @@ export interface ProgressState {
   chapterHref: string | null;
   fraction: number;
   pageInfo: PageInfo | undefined;
-  progressData: any;
+  progressData: FoliateRelocateDetail | null;
 }
 
 @Injectable()
@@ -39,7 +40,7 @@ export class ReaderProgressService {
   private _currentChapterName: string | null = null;
   private _currentChapterHref: string | null = null;
   private _currentPageInfo: PageInfo | undefined;
-  private _currentProgressData: any = null;
+  private _currentProgressData: FoliateRelocateDetail | null = null;
 
   private progressSubject = new Subject<ProgressState>();
   public progress$ = this.progressSubject.asObservable();
@@ -56,7 +57,7 @@ export class ReaderProgressService {
     return this._currentChapterHref;
   }
 
-  get currentProgressData(): any {
+  get currentProgressData(): FoliateRelocateDetail | null {
     return this._currentProgressData;
   }
 
@@ -71,7 +72,7 @@ export class ReaderProgressService {
     this.hasStartedSession = false;
   }
 
-  handleRelocateEvent(detail: any): void {
+  handleRelocateEvent(detail: FoliateRelocateDetail): void {
     this._currentProgressData = detail;
 
     const cfi = detail?.cfi ?? null;
@@ -99,7 +100,7 @@ export class ReaderProgressService {
     }
 
     if (detail?.section) {
-      const percentCompleted = Math.round((detail.fraction * 100) * 10) / 10;
+      const percentCompleted = Math.round(((detail.fraction ?? 0) * 100) * 10) / 10;
       const totalMinutes = detail.time?.section ?? 0;
 
       const hours = Math.floor(totalMinutes / 60);

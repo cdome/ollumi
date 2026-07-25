@@ -20,8 +20,11 @@ jobs:
       contents: read
 
     env:
-      LINT_WARNING_THRESHOLD: 0
-      LINT_ERROR_THRESHOLD: 722
+      # Errors are a hard gate. Warnings are the tracked a11y debt
+      # (label-has-associated-control, click-events-have-key-events,
+      # interactive-supports-focus) — ratchet this down as fixes land.
+      LINT_WARNING_THRESHOLD: 431
+      LINT_ERROR_THRESHOLD: 0
       BUILD_WARNING_THRESHOLD: 24
 
     steps:

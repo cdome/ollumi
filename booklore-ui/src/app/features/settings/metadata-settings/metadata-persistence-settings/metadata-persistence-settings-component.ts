@@ -61,7 +61,7 @@ export class MetadataPersistenceSettingsComponent implements OnInit {
 
   onPersistenceToggle(key: keyof MetadataPersistenceSettings): void {
     if (key !== 'saveToOriginalFile' && key !== 'sidecarSettings') {
-      (this.metadataPersistence as any)[key] = !this.metadataPersistence[key];
+      (this.metadataPersistence as unknown as Record<string, boolean>)[key] = !this.metadataPersistence[key];
       this.settingsHelper.saveSetting(AppSettingKey.METADATA_PERSISTENCE_SETTINGS, this.metadataPersistence);
     }
   }
@@ -72,13 +72,13 @@ export class MetadataPersistenceSettingsComponent implements OnInit {
     this.settingsHelper.saveSetting(AppSettingKey.METADATA_PERSISTENCE_SETTINGS, this.metadataPersistence);
   }
 
-  onFilesizeChange(format: keyof SaveToOriginalFileSettings): void {
+  onFilesizeChange(_format: keyof SaveToOriginalFileSettings): void {
     this.settingsHelper.saveSetting(AppSettingKey.METADATA_PERSISTENCE_SETTINGS, this.metadataPersistence);
   }
 
   onSidecarToggle(key: keyof SidecarSettings): void {
     if (this.metadataPersistence.sidecarSettings) {
-      (this.metadataPersistence.sidecarSettings as any)[key] = !this.metadataPersistence.sidecarSettings[key];
+      (this.metadataPersistence.sidecarSettings as unknown as Record<string, boolean>)[key] = !this.metadataPersistence.sidecarSettings[key];
       this.settingsHelper.saveSetting(AppSettingKey.METADATA_PERSISTENCE_SETTINGS, this.metadataPersistence);
     }
   }

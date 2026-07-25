@@ -28,6 +28,12 @@ import { AppSettingsService } from '../../../../shared/service/app-settings.serv
   styleUrls: ['./book-file-attacher.component.scss']
 })
 export class BookFileAttacherComponent implements OnInit, OnDestroy {
+  private dialogRef = inject(DynamicDialogRef);
+  private config = inject(DynamicDialogConfig);
+  private bookService = inject(BookService);
+  private bookFileService = inject(BookFileService);
+  private messageService = inject(MessageService);
+
   sourceBooks: Book[] = [];
   targetBook: Book | null = null;
   moveFiles = false;
@@ -40,14 +46,6 @@ export class BookFileAttacherComponent implements OnInit, OnDestroy {
 
   private readonly t = inject(TranslocoService);
   private readonly appSettingsService = inject(AppSettingsService);
-
-  constructor(
-    private dialogRef: DynamicDialogRef,
-    private config: DynamicDialogConfig,
-    private bookService: BookService,
-    private bookFileService: BookFileService,
-    private messageService: MessageService
-  ) {}
 
   ngOnInit(): void {
     // Support both single book and multiple books

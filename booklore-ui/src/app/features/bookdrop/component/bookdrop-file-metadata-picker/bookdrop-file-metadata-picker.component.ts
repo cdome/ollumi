@@ -1,4 +1,4 @@
-import {Component, DestroyRef, effect, EventEmitter, inject, Input, OnInit, Output} from '@angular/core';
+import {Component, DestroyRef, effect, EventEmitter, inject, Input, Output} from '@angular/core';
 import {FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Button} from 'primeng/button';
 import {NgClass} from '@angular/common';
@@ -41,7 +41,7 @@ import {TranslocoDirective, TranslocoService} from '@jsverse/transloco';
   templateUrl: './bookdrop-file-metadata-picker.component.html',
   styleUrl: './bookdrop-file-metadata-picker.component.scss'
 })
-export class BookdropFileMetadataPickerComponent implements OnInit {
+export class BookdropFileMetadataPickerComponent {
 
   private readonly confirmationService = inject(ConfirmationService);
   private readonly metadataUtils = inject(MetadataUtilsService);
@@ -85,8 +85,6 @@ export class BookdropFileMetadataPickerComponent implements OnInit {
     }
   });
 
-  ngOnInit(): void {
-  }
 
   copyMissing(): void {
     this.metadataUtils.copyMissingFields(

@@ -1,4 +1,4 @@
-import {Injectable} from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {API_CONFIG} from '../../../core/config/api-config';
@@ -76,9 +76,9 @@ export type SidecarSyncStatus = 'IN_SYNC' | 'OUTDATED' | 'MISSING' | 'CONFLICT' 
   providedIn: 'root'
 })
 export class SidecarService {
-  private readonly apiUrl = `${API_CONFIG.BASE_URL}/api/v1`;
+  private http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
+  private readonly apiUrl = `${API_CONFIG.BASE_URL}/api/v1`;
 
   getSidecarContent(bookId: number): Observable<SidecarMetadata> {
     return this.http.get<SidecarMetadata>(`${this.apiUrl}/books/${bookId}/sidecar`);

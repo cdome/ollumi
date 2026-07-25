@@ -71,9 +71,9 @@ export class FilterPreferencesComponent {
   private updatePreference(path: string[], value: unknown): void {
     if (!this.currentUser) return;
 
-    let target: any = this.currentUser.userSettings;
+    let target: Record<string, unknown> = this.currentUser.userSettings as unknown as Record<string, unknown>;
     for (let i = 0; i < path.length - 1; i++) {
-      target = target[path[i]] ||= {};
+      target = (target[path[i]] ||= {}) as Record<string, unknown>;
     }
     target[path.at(-1)!] = value;
 

@@ -208,7 +208,7 @@ export class ReadStatusChartComponent {
     return data.labels.map((label: unknown, index: number) => {
       const isVisible = typeof chart.getDataVisibility === 'function'
         ? chart.getDataVisibility(index)
-        : !((chart.getDatasetMeta && (chart.getDatasetMeta(0)?.data?.[index] as any)?.hidden) || false);
+        : !((chart.getDatasetMeta && (chart.getDatasetMeta(0)?.data?.[index] as {hidden?: boolean} | undefined)?.hidden) || false);
 
       return {
         text: `${String(label)} (${dataValues[index]})`,

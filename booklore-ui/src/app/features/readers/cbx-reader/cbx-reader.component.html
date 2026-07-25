@@ -22,13 +22,13 @@
     <app-cbx-note-dialog
       [data]="noteDialogData"
       (save)="onNoteSave($event)"
-      (cancel)="onNoteCancel()"
+      (cancelled)="onNoteCancel()"
     ></app-cbx-note-dialog>
   }
 
   @if (showShortcutsHelp) {
     <app-cbx-shortcuts-help
-      (close)="onShortcutsHelpClose()"
+      (closed)="onShortcutsHelpClose()"
     ></app-cbx-shortcuts-help>
   }
 

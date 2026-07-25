@@ -17,7 +17,21 @@ import {MenuItem} from 'primeng/api';
 import {IconSelection} from '../../../service/icon-picker.service';
 import {TranslocoPipe} from '@jsverse/transloco';
 
+interface AppMenuItem extends MenuItem {
+  type?: string;
+  iconType?: 'PRIME_NG' | 'CUSTOM_SVG';
+  bookCount?: number;
+  unhealthy?: boolean;
+  hasCreate?: boolean;
+  hasDropDown?: boolean;
+  menu?: MenuItem[];
+  class?: string;
+  badgeClass?: string;
+  items?: AppMenuItem[];
+}
+
 @Component({
+  // eslint-disable-next-line @angular-eslint/component-selector -- attribute selector keeps <li> semantics valid inside <ul>
   selector: '[app-menuitem]',
   templateUrl: './app.menuitem.component.html',
   styleUrls: ['./app.menuitem.component.scss'],
@@ -44,7 +58,12 @@ import {TranslocoPipe} from '@jsverse/transloco';
   ]
 })
 export class AppMenuitemComponent implements OnInit, OnDestroy {
-  @Input() item: any;
+  router = inject(Router);
+  private menuService = inject(MenuService);
+  private dialogLauncher = inject(DialogLauncherService);
+  private bookDialogHelperService = inject(BookDialogHelperService);
+
+  @Input() item!: AppMenuItem;
   @Input() index!: number;
   @Input() @HostBinding('class.layout-root-menuitem') root!: boolean;
   @Input() parentKey!: string;
@@ -68,12 +87,7 @@ export class AppMenuitemComponent implements OnInit, OnDestroy {
   menuResetSubscription: Subscription;
   private routerSubscription: Subscription;
 
-  constructor(
-    public router: Router,
-    private menuService: MenuService,
-    private dialogLauncher: DialogLauncherService,
-    private bookDialogHelperService: BookDialogHelperService
-  ) {
+  constructor() {
     effect(() => {
       const user = this.userService.currentUser();
       if (user) {
@@ -161,7 +175,7 @@ export class AppMenuitemComponent implements OnInit, OnDestroy {
     this.menuService.onMenuStateChange({key: this.key});
   }
 
-  openDialog(item: any) {
+  openDialog(item: AppMenuItem) {
     if (item.type === 'library' && this.canManipulateLibrary) {
       this.dialogLauncher.openLibraryCreateDialog();
     }

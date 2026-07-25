@@ -7,14 +7,14 @@ import {Observable, sample} from "rxjs";
 import {MessageService} from "primeng/api";
 import {Book, BookMetadata, ComicMetadata, MetadataClearFlags, MetadataUpdateWrapper,} from "../../../../book/model/book.model";
 import {UrlHelperService} from "../../../../../shared/service/url-helper.service";
-import {ALL_COMIC_METADATA_FIELDS, AUDIOBOOK_METADATA_FIELDS, COMIC_FORM_TO_MODEL_LOCK, COMIC_TEXT_METADATA_FIELDS, COMIC_ARRAY_METADATA_FIELDS, COMIC_TEXTAREA_METADATA_FIELDS, MetadataFieldConfig, isFieldEmbeddable, hasMetadataWriter} from '../../../../../shared/metadata';
+import {ALL_COMIC_METADATA_FIELDS, AUDIOBOOK_METADATA_FIELDS, COMIC_FORM_TO_MODEL_LOCK, COMIC_TEXT_METADATA_FIELDS, COMIC_ARRAY_METADATA_FIELDS, COMIC_TEXTAREA_METADATA_FIELDS, isFieldEmbeddable, hasMetadataWriter} from '../../../../../shared/metadata';
 import {FileUpload, FileUploadErrorEvent, FileUploadEvent,} from "primeng/fileupload";
 import {HttpResponse} from "@angular/common/http";
 import {BookService} from "../../../../book/service/book.service";
 import {BookMetadataManageService} from "../../../../book/service/book-metadata-manage.service";
 import {ProgressSpinner} from "primeng/progressspinner";
 import {Tooltip} from "primeng/tooltip";
-import {filter, finalize, switchMap, take, tap} from "rxjs/operators";
+import {filter, finalize, map, take, tap} from "rxjs/operators";
 import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {MetadataRefreshType} from "../../../model/request/metadata-refresh-type.enum";
 import {AutoComplete, AutoCompleteSelectEvent} from "primeng/autocomplete";
@@ -558,7 +558,11 @@ export class MetadataEditorComponent implements OnInit {
       const isLocked = metadata[key] === true;
       const formControl = this.metadataForm.get(control);
       if (formControl) {
-        isLocked ? formControl.disable() : formControl.enable();
+        if (isLocked) {
+          formControl.disable();
+        } else {
+          formControl.enable();
+        }
       }
     }
 
@@ -567,7 +571,11 @@ export class MetadataEditorComponent implements OnInit {
       const isLocked = this.metadataForm.get(field.lockedKey)?.value === true;
       const formControl = this.metadataForm.get(field.controlName);
       if (formControl) {
-        isLocked ? formControl.disable() : formControl.enable();
+        if (isLocked) {
+          formControl.disable();
+        } else {
+          formControl.enable();
+        }
       }
     }
 
@@ -576,7 +584,11 @@ export class MetadataEditorComponent implements OnInit {
       const isLocked = this.metadataForm.get(field.lockedKey)?.value === true;
       const formControl = this.metadataForm.get(field.controlName);
       if (formControl) {
-        isLocked ? formControl.disable() : formControl.enable();
+        if (isLocked) {
+          formControl.disable();
+        } else {
+          formControl.enable();
+        }
       }
     }
   }
@@ -617,7 +629,7 @@ export class MetadataEditorComponent implements OnInit {
       )
       .pipe(
         tap({
-          next: (response: any) => {
+          next: () => {
             this.isSaving = false;
             this.messageService.add({
               severity: "info",
@@ -626,7 +638,7 @@ export class MetadataEditorComponent implements OnInit {
             });
             this.metadataForm.markAsPristine();
           },
-          error: (err: any) => {
+          error: (err: {error?: {message?: string}}) => {
             this.isSaving = false;
             this.messageService.add({
               severity: "error",
@@ -634,7 +646,8 @@ export class MetadataEditorComponent implements OnInit {
               detail: err?.error?.message || this.t.translate('metadata.editor.toast.metadataUpdateFailed'),
             });
           },
-        })
+        }),
+        map(() => undefined)
       );
   }
 
@@ -870,7 +883,7 @@ export class MetadataEditorComponent implements OnInit {
       .updateBookMetadata(this.currentBookId, metadataUpdateWrapper, false)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (response) => {
+        next: () => {
           if (shouldLockAllFields !== undefined) {
             this.messageService.add({
               severity: "success",
@@ -918,7 +931,7 @@ export class MetadataEditorComponent implements OnInit {
     }
   }
 
-  onUploadError($event: FileUploadErrorEvent) {
+  onUploadError(_event: FileUploadErrorEvent) {
     this.isUploading = false;
     this.messageService.add({
       severity: "error",
@@ -962,7 +975,7 @@ export class MetadataEditorComponent implements OnInit {
           detail: this.t.translate('metadata.editor.toast.customCoverGenerated'),
         });
       },
-      error: (err) => {
+      error: () => {
         this.messageService.add({
           severity: "error",
           summary: this.t.translate('metadata.editor.toast.errorSummary'),
@@ -1006,7 +1019,7 @@ export class MetadataEditorComponent implements OnInit {
           detail: this.t.translate('metadata.editor.toast.customAudiobookCoverGenerated'),
         });
       },
-      error: (err) => {
+      error: () => {
         this.messageService.add({
           severity: "error",
           summary: this.t.translate('metadata.editor.toast.errorSummary'),

@@ -1,4 +1,4 @@
-import {Component, EventEmitter, Inject, Input, OnInit, Output, Renderer2} from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, Renderer2, inject } from '@angular/core';
 import {DecimalPipe, DOCUMENT} from '@angular/common';
 import {TranslocoDirective} from '@jsverse/transloco';
 import {ReaderStateService} from '../state/reader-state.service';
@@ -21,11 +21,16 @@ interface AnnotationColor {
   styleUrls: ['./settings-dialog.component.scss']
 })
 export class ReaderSettingsDialogComponent implements OnInit {
+  private bookService = inject(BookService);
+  private customFontService = inject(EpubCustomFontService);
+  private renderer = inject(Renderer2);
+  private document = inject<Document>(DOCUMENT);
+
   @Input() stateService!: ReaderStateService;
   @Input() viewManager!: ReaderViewManagerService;
   @Input() bookId!: number;
 
-  @Output() close = new EventEmitter<void>();
+  @Output() closed = new EventEmitter<void>();
 
   activeTab: 'theme' | 'typography' | 'layout' = 'theme';
 
@@ -38,14 +43,6 @@ export class ReaderSettingsDialogComponent implements OnInit {
     {name: 'pink', value: '#FFB6C1', label: 'Pink'},
     {name: 'orange', value: '#FFD580', label: 'Orange'}
   ];
-
-  constructor(
-    private bookService: BookService,
-    private customFontService: EpubCustomFontService,
-    private renderer: Renderer2,
-    @Inject(DOCUMENT) private document: Document
-  ) {
-  }
 
   ngOnInit() {
     this.customFontService.injectCustomFontsStylesheet(this.renderer, this.document);
@@ -76,7 +73,7 @@ export class ReaderSettingsDialogComponent implements OnInit {
       maxColumnCount: this.state.maxColumnCount,
       gap: this.state.gap,
       fontSize: this.state.fontSize,
-      theme: typeof this.state.theme === 'object' && 'name' in this.state.theme ? this.state.theme.name : (this.state.theme as any),
+      theme: typeof this.state.theme === 'object' && 'name' in this.state.theme ? this.state.theme.name : String(this.state.theme),
       maxInlineSize: this.state.maxInlineSize,
       maxBlockSize: this.state.maxBlockSize,
       fontFamily: this.state.fontFamily,

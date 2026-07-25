@@ -35,7 +35,7 @@ export class MetadataProgressWidgetComponent implements OnInit, OnDestroy {
   private readonly t = inject(TranslocoService);
 
   private lastUpdateMap = new Map<string, number>();
-  private timeoutHandles = new Map<string, number>();
+  private timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly TASK_STALL_TIMEOUT_MS = 60 * 1000; // 1 minute
 
   ngOnInit(): void {
@@ -58,7 +58,7 @@ export class MetadataProgressWidgetComponent implements OnInit, OnDestroy {
       }
     }
 
-    for (const [taskId, task] of Object.entries(tasks)) {
+    for (const taskId of Object.keys(tasks)) {
       this.lastUpdateMap.set(taskId, now);
 
       if (this.timeoutHandles.has(taskId)) {
@@ -69,7 +69,7 @@ export class MetadataProgressWidgetComponent implements OnInit, OnDestroy {
         taskId,
         setTimeout(() => {
           this.markTaskStalled(taskId);
-        }, this.TASK_STALL_TIMEOUT_MS) as any
+        }, this.TASK_STALL_TIMEOUT_MS)
       );
     }
   }

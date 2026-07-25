@@ -79,6 +79,8 @@
           (click)="entitymenu.toggle($event); $event.stopPropagation()"
           (mouseover)="hovered = true"
           (mouseleave)="hovered = false"
+          (focus)="hovered = true"
+          (blur)="hovered = false"
           [text]="true"
           [outlined]="false"
           [rounded]="true"

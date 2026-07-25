@@ -1,4 +1,4 @@
-import {Component, effect, inject, Input, OnChanges, OnDestroy, OnInit, signal, SimpleChanges} from '@angular/core';
+import {Component, effect, inject, Input, OnChanges, OnDestroy, signal, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Button} from 'primeng/button';
 import {InputText} from 'primeng/inputtext';
@@ -31,7 +31,7 @@ import {TranslocoDirective} from '@jsverse/transloco';
   ],
   standalone: true
 })
-export class MetadataSearcherComponent implements OnInit, OnDestroy, OnChanges {
+export class MetadataSearcherComponent implements OnDestroy, OnChanges {
   form: FormGroup;
   providers: string[] = [];
   allFetchedMetadata: BookMetadata[] = [];
@@ -70,7 +70,7 @@ export class MetadataSearcherComponent implements OnInit, OnDestroy, OnChanges {
     this.currentSettings = settings;
     const providerSettings = settings.metadataProviderSettings ?? {};
     this.providers = Object.entries(providerSettings)
-      .filter(([_, value]) => !!value && typeof value === 'object' && 'enabled' in value && (value as any).enabled)
+      .filter(([_, value]) => !!value && typeof value === 'object' && 'enabled' in value && (value as {enabled?: boolean}).enabled)
       .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1));
 
     const currentProviders = this.form.get('provider')?.value || [];
@@ -82,14 +82,14 @@ export class MetadataSearcherComponent implements OnInit, OnDestroy, OnChanges {
     this.syncFormFromState();
   });
 
-  providerCounts: Map<string, number> = new Map();
-  providerLoading: Map<string, boolean> = new Map();
-  selectedProviderFilters: Set<string> = new Set(['all']);
+  providerCounts = new Map<string, number>();
+  providerLoading = new Map<string, boolean>();
+  selectedProviderFilters = new Set<string>(['all']);
   filteredMetadata: BookMetadata[] = [];
-  providerFilterOptions: Array<{ label: string; value: string }> = [];
+  providerFilterOptions: { label: string; value: string }[] = [];
 
-  private metadataByProvider: Map<string, BookMetadata[]> = new Map();
-  private providerCompletionStatus: Map<string, boolean> = new Map();
+  private metadataByProvider = new Map<string, BookMetadata[]>();
+  private providerCompletionStatus = new Map<string, boolean>();
   private pendingAutoSearch = false;
   private providerInitialized = false;
 
@@ -109,8 +109,6 @@ export class MetadataSearcherComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  ngOnInit() {
-  }
 
   private syncFormFromState(): void {
     if (!this.currentBook || !this.currentSettings) {
@@ -147,7 +145,7 @@ export class MetadataSearcherComponent implements OnInit, OnDestroy, OnChanges {
     this.selectedProviderFilters = new Set(['all']);
     this.bookId = book.id;
 
-    const formUpdate: Record<string, any> = {
+    const formUpdate: Record<string, unknown> = {
       title: book.metadata?.title ?? '',
       author: book.metadata?.authors?.[0] ?? '',
       isbn: book.metadata?.isbn13 ?? book.metadata?.isbn10 ?? ''
@@ -363,7 +361,7 @@ export class MetadataSearcherComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getProviderTabs(): Array<{ provider: string; count: number }> {
+  getProviderTabs(): { provider: string; count: number }[] {
     return Array.from(this.providerCounts.entries()).map(([provider, count]) => ({
       provider: provider.charAt(0).toUpperCase() + provider.slice(1),
       count

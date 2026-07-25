@@ -2,7 +2,7 @@ import {Component, effect, inject} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {BaseChartDirective} from 'ng2-charts';
 import {Tooltip} from 'primeng/tooltip';
-import {ChartConfiguration, ChartData} from 'chart.js';
+import {ChartConfiguration, ChartData, ChartDataset} from 'chart.js';
 import {BookService} from '../../../../../book/service/book.service';
 import {TranslocoDirective, TranslocoService} from '@jsverse/transloco';
 
@@ -157,7 +157,7 @@ export class ReadingDebtChartComponent {
           tension: 0.3,
           yAxisID: 'y1',
           order: 1
-        } as any
+        } as unknown as ChartDataset<'bar', number[]>
       ]
     };
     this.hasData = true;

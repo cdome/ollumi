@@ -1,6 +1,7 @@
 import {Injectable} from '@angular/core';
 import {defer, from, Observable, of} from 'rxjs';
 import {AnnotationStyle} from '../../../../../shared/service/annotation.service';
+import {FoliateView} from '../../core/foliate-view.model';
 
 export type {AnnotationStyle};
 
@@ -17,7 +18,7 @@ export class ReaderAnnotationService {
   private annotationStyles = new Map<string, { color: string; style: AnnotationStyle }>();
   private allAnnotations: Annotation[] = [];
 
-  addAnnotation(view: any, annotation: Annotation): Observable<{ index: number; label: string } | undefined> {
+  addAnnotation(view: FoliateView | null, annotation: Annotation): Observable<{ index: number; label: string } | undefined> {
     if (!view) return of(undefined);
 
     const style = annotation.style || 'highlight';
@@ -32,25 +33,25 @@ export class ReaderAnnotationService {
       this.allAnnotations.push(annotation);
     }
 
-    return defer(() => from(view.addAnnotation({value: annotation.value}) as Promise<{ index: number; label: string } | undefined>));
+    return defer(() => from(view.addAnnotation({value: annotation.value})));
   }
 
-  deleteAnnotation(view: any, cfi: string): Observable<void> {
+  deleteAnnotation(view: FoliateView | null, cfi: string): Observable<void> {
     if (!view) return of(undefined);
 
     this.annotationStyles.delete(cfi);
     this.allAnnotations = this.allAnnotations.filter(a => a.value !== cfi);
 
-    return defer(() => from(view.deleteAnnotation({value: cfi}) as Promise<void>));
+    return defer(() => from(view.deleteAnnotation({value: cfi})));
   }
 
-  showAnnotation(view: any, cfi: string): Observable<void> {
+  showAnnotation(view: FoliateView | null, cfi: string): Observable<void> {
     if (!view) return of(undefined);
 
-    return defer(() => from(view.showAnnotation({value: cfi}) as Promise<void>));
+    return defer(() => from(view.showAnnotation({value: cfi})));
   }
 
-  addAnnotations(view: any, annotations: Annotation[]): void {
+  addAnnotations(view: FoliateView | null, annotations: Annotation[]): void {
     annotations.forEach(annotation => {
       const style = annotation.style || 'highlight';
       const color = annotation.color || '#FACC15';

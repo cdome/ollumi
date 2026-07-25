@@ -5,12 +5,13 @@ import {catchError, map, switchMap, takeUntil, tap} from 'rxjs/operators';
 import {MessageService} from 'primeng/api';
 import {ReaderLoaderService} from './core/loader.service';
 import {ReaderViewManagerService} from './core/view-manager.service';
+import {FoliateRelocateDetail} from './core/foliate-view.model';
 import {ReaderStateService} from './state/reader-state.service';
 import {ReaderStyleService} from './core/style.service';
 import {ReaderBookmarkService} from './features/bookmarks/bookmark.service';
 import {ReaderAnnotationHttpService} from './features/annotations/annotation.service';
 import {ReaderProgressService} from './state/progress.service';
-import {ReaderSelectionService} from './features/selection/selection.service';
+import {ReaderSelectionService, SelectionDetail} from './features/selection/selection.service';
 import {ReaderSidebarService} from './layout/sidebar/sidebar.service';
 import {ReaderLeftSidebarService} from './layout/panel/panel.service';
 import {ReaderHeaderService} from './layout/header/header.service';
@@ -94,8 +95,8 @@ export class EbookReaderComponent implements OnInit, OnDestroy {
   private hasLoadedOnce = false;
   private _fileUrl: string | null = null;
   private visibilityManager!: ReaderHeaderFooterVisibilityManager;
-  private relocateTimeout: any;
-  private sectionFractionsTimeout: any;
+  private relocateTimeout?: ReturnType<typeof setTimeout>;
+  private sectionFractionsTimeout?: ReturnType<typeof setTimeout>;
 
   isLoading = true;
   showQuickSettings = false;
@@ -128,7 +129,7 @@ export class EbookReaderComponent implements OnInit, OnDestroy {
     );
   }
 
-  get currentProgressData(): any {
+  get currentProgressData(): FoliateRelocateDetail | null {
     return this.progressService.currentProgressData;
   }
 
@@ -304,7 +305,7 @@ export class EbookReaderComponent implements OnInit, OnDestroy {
           case 'relocate':
             if (this.relocateTimeout) clearTimeout(this.relocateTimeout);
             this.relocateTimeout = setTimeout(() => {
-              this.progressService.handleRelocateEvent(event.detail);
+              this.progressService.handleRelocateEvent(event.detail as FoliateRelocateDetail);
               this.updateBookmarkIndicator();
             }, 100);
 
@@ -317,7 +318,7 @@ export class EbookReaderComponent implements OnInit, OnDestroy {
             this.toggleHeaderNavbarPinned();
             break;
           case 'text-selected':
-            this.selectionService.handleTextSelected(event.detail, event.popupPosition);
+            this.selectionService.handleTextSelected(event.detail as SelectionDetail, event.popupPosition);
             break;
           case 'toggle-fullscreen':
             this.toggleFullscreen();
@@ -423,13 +424,13 @@ export class EbookReaderComponent implements OnInit, OnDestroy {
     this.visibilityManager.handleMouseMove(event.clientY);
   }
 
-  @HostListener('document:mouseleave', ['$event'])
-  onMouseLeave(event: MouseEvent): void {
+  @HostListener('document:mouseleave')
+  onMouseLeave(): void {
     this.visibilityManager.handleMouseLeave();
   }
 
-  @HostListener('window:resize', ['$event'])
-  onWindowResize(event: Event): void {
+  @HostListener('window:resize')
+  onWindowResize(): void {
     this.visibilityManager.updateWindowHeight(window.innerHeight);
   }
 
