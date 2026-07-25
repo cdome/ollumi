@@ -10,6 +10,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.progress.ReadingProgressService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class BookUpdateService {
 
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
     private final CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
     private final NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
@@ -331,7 +333,7 @@ public class BookUpdateService {
     }
 
     private Set<Long> validateBooksAndGetExistingProgress(Long userId, List<Long> bookIds) {
-        long existingBooksCount = bookRepository.countByIdIn(bookIds);
+        long existingBooksCount = jooqBookRepository.countByIds(bookIds);
         if (existingBooksCount != bookIds.size()) {
             throw ApiError.BOOK_NOT_FOUND.createException("One or more books not found");
         }

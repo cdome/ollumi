@@ -24,6 +24,7 @@ import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.MetadataFetchJobRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.parser.BookParser;
@@ -57,6 +58,7 @@ public class MetadataRefreshService {
     private final Map<MetadataProvider, BookParser> parserMap;
     private final ObjectMapper objectMapper;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final PlatformTransactionManager transactionManager;
     private final AuthenticationService authenticationService;
     private final TaskCancellationManager cancellationManager;
@@ -770,7 +772,7 @@ public class MetadataRefreshService {
         return switch (refreshType) {
             case LIBRARY -> {
                 LibraryEntity libraryEntity = libraryRepository.findById(request.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(request.getLibraryId()));
-                yield bookRepository.findBookIdsByLibraryId(libraryEntity.getId());
+                yield jooqBookRepository.findBookIdsByLibraryId(libraryEntity.getId());
             }
             case BOOKS -> request.getBookIds();
         };

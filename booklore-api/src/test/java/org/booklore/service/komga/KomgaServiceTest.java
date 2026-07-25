@@ -13,6 +13,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.reader.CbxReaderService;
@@ -37,6 +38,9 @@ class KomgaServiceTest {
 
     @Mock
     private BookRepository bookRepository;
+
+    @Mock
+    private JooqBookRepository jooqBookRepository;
 
     @Mock
     private LibraryRepository libraryRepository;
@@ -212,7 +216,7 @@ class KomgaServiceTest {
     void shouldGetAllSeriesOptimized() {
         // Given: Mock the optimized repository method
         List<String> seriesNames = List.of("Series A", "Series B", "Series C");
-        when(bookRepository.findDistinctSeriesNamesGroupedByLibraryId(anyLong(), anyString()))
+        when(jooqBookRepository.findDistinctSeriesNamesGrouped(anyString(), anyLong()))
                 .thenReturn(seriesNames);
         
         // Mock books for the first page (Series A and Series B only)

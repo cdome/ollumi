@@ -6,6 +6,7 @@ import org.booklore.model.dto.request.TaskCreateRequest;
 import org.booklore.model.dto.response.TaskCreateResponse;
 import org.booklore.model.enums.TaskType;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.task.TaskStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,9 @@ class DeletedBooksCleanupTaskTest {
 
     @Mock
     private BookRepository bookRepository;
+
+    @Mock
+    private JooqBookRepository jooqBookRepository;
 
     @InjectMocks
     private DeletedBooksCleanupTask deletedBooksCleanupTask;
@@ -89,7 +93,7 @@ class DeletedBooksCleanupTaskTest {
 
     @Test
     void getMetadata_shouldReturnCount() {
-        when(bookRepository.countAllSoftDeleted()).thenReturn(42L);
+        when(jooqBookRepository.countSoftDeleted()).thenReturn(42L);
         String metadata = deletedBooksCleanupTask.getMetadata();
         assertTrue(metadata.contains("42"));
     }

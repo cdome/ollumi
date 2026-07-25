@@ -6,8 +6,8 @@ import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +24,7 @@ public class AppLibraryController {
 
     private final AuthenticationService authenticationService;
     private final LibraryRepository libraryRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final AppBookMapper mobileBookMapper;
 
     @GetMapping
@@ -43,7 +43,7 @@ public class AppLibraryController {
 
         List<AppLibrarySummary> summaries = libraries.stream()
                 .map(library -> {
-                    long bookCount = bookRepository.countByLibraryId(library.getId());
+                    long bookCount = jooqBookRepository.countByLibraryId(library.getId());
                     return mobileBookMapper.toLibrarySummary(library, bookCount);
                 })
                 .collect(Collectors.toList());

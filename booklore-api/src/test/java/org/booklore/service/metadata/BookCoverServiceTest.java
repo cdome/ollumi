@@ -7,7 +7,8 @@ import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.projection.BookCoverUpdateProjection;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.dto.BookCoverUpdate;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
@@ -41,6 +42,7 @@ class BookCoverServiceTest {
 
     @Mock private AppProperties appProperties;
     @Mock private BookRepository bookRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private NotificationService notificationService;
     @Mock private AppSettingService appSettingService;
     @Mock private FileService fileService;
@@ -372,7 +374,7 @@ class BookCoverServiceTest {
             book.setBookFiles(new ArrayList<>());
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateCover("Test Book", "Jane Doe")).thenReturn(new byte[]{1, 2, 3});
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.generateCustomCover(1L);
 
@@ -491,7 +493,7 @@ class BookCoverServiceTest {
         void successfullyUpdatesCoverFromUrl() {
             BookEntity book = buildBook(1L, false);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
@@ -509,7 +511,7 @@ class BookCoverServiceTest {
         void successfullyUpdatesCoverFromFile() {
             BookEntity book = buildBook(1L, false);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
             MultipartFile file = mock(MultipartFile.class);
 
             service.updateCoverFromFile(1L, file);
@@ -527,7 +529,7 @@ class BookCoverServiceTest {
         void successfullyUpdatesCoverFromFile() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
             MultipartFile file = mock(MultipartFile.class);
 
             service.updateAudiobookCoverFromFile(1L, file);
@@ -555,7 +557,7 @@ class BookCoverServiceTest {
         void successfullyUpdatesCoverFromUrl() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateAudiobookCoverFromUrl(1L, "https://example.com/audiobook-cover.jpg");
 
@@ -589,7 +591,7 @@ class BookCoverServiceTest {
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.AUDIOBOOK)).thenReturn(processor);
             when(processor.generateAudiobookCover(book)).thenReturn(true);
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.regenerateAudiobookCover(1L);
 
@@ -609,7 +611,7 @@ class BookCoverServiceTest {
             book.getMetadata().setAuthors(List.of(author));
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateSquareCover("Test Audiobook", "Author Name")).thenReturn(new byte[]{1, 2});
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.generateCustomAudiobookCover(1L);
 
@@ -642,7 +644,7 @@ class BookCoverServiceTest {
             book.getMetadata().setAuthors(null);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateSquareCover("Test Audiobook", null)).thenReturn(new byte[]{1});
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.generateCustomAudiobookCover(1L);
 
@@ -754,7 +756,7 @@ class BookCoverServiceTest {
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
             when(processor.generateCover(book)).thenReturn(true);
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             try (MockedStatic<SecurityContextVirtualThread> secMock = mockStatic(SecurityContextVirtualThread.class)) {
                 secMock.when(() -> SecurityContextVirtualThread.runWithSecurityContext(any(Runnable.class)))
@@ -819,7 +821,7 @@ class BookCoverServiceTest {
             when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(withoutCover));
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
             when(processor.generateCover(withoutCover)).thenReturn(true);
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             try (MockedStatic<SecurityContextVirtualThread> secMock = mockStatic(SecurityContextVirtualThread.class)) {
                 secMock.when(() -> SecurityContextVirtualThread.runWithSecurityContext(any(Runnable.class)))
@@ -978,7 +980,7 @@ class BookCoverServiceTest {
             MetadataWriter writer = mock(MetadataWriter.class);
             when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.of(writer));
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             try (MockedStatic<FileFingerprint> fpMock = mockStatic(FileFingerprint.class)) {
                 fpMock.when(() -> FileFingerprint.generateHash(any())).thenReturn("abc123");
@@ -995,7 +997,7 @@ class BookCoverServiceTest {
             BookEntity book = buildBook(1L, false);
             book.setBookFiles(new ArrayList<>());
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
@@ -1011,19 +1013,19 @@ class BookCoverServiceTest {
             BookEntity book = buildBook(1L, false);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
 
-            BookCoverUpdateProjection projection = mock(BookCoverUpdateProjection.class);
-            when(bookRepository.findCoverUpdateInfoByIds(List.of(1L))).thenReturn(List.of(projection));
+            BookCoverUpdate update = new BookCoverUpdate(1L, null);
+            when(jooqBookRepository.findCoverUpdateInfoByIds(List.of(1L))).thenReturn(List.of(update));
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
-            verify(notificationService).sendMessage(any(), eq(List.of(projection)));
+            verify(notificationService).sendMessage(any(), eq(List.of(update)));
         }
 
         @Test
         void doesNotSendNotificationWhenNoUpdates() {
             BookEntity book = buildBook(1L, false);
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
@@ -1040,7 +1042,7 @@ class BookCoverServiceTest {
             book.getMetadata().setAuthors(new ArrayList<>());
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateCover("Test Book", null)).thenReturn(new byte[]{1});
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.generateCustomCover(1L);
 
@@ -1057,7 +1059,7 @@ class BookCoverServiceTest {
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateCover(eq("Test Book"), argThat(s -> s.contains("Alice") && s.contains("Bob"))))
                     .thenReturn(new byte[]{1});
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.generateCustomCover(1L);
 
@@ -1079,7 +1081,7 @@ class BookCoverServiceTest {
                     .build();
             book.setBookFiles(List.of(bookFile));
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
@@ -1097,7 +1099,7 @@ class BookCoverServiceTest {
                     .build();
             book.setBookFiles(List.of(audiobookFile));
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-            when(bookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
+            when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateAudiobookCoverFromUrl(1L, "https://example.com/audiobook-cover.jpg");
 

@@ -19,6 +19,7 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateService;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class ReadingProgressService {
     private final UserBookProgressRepository userBookProgressRepository;
     private final UserBookFileProgressRepository userBookFileProgressRepository;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookFileRepository bookFileRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
@@ -480,7 +482,7 @@ public class ReadingProgressService {
     }
 
     private Set<Long> validateBooksAndGetExistingProgress(Long userId, List<Long> bookIds) {
-        long existingBooksCount = bookRepository.countByIdIn(bookIds);
+        long existingBooksCount = jooqBookRepository.countByIds(bookIds);
         if (existingBooksCount != bookIds.size()) {
             throw ApiError.BOOK_NOT_FOUND.createException("One or more books not found");
         }

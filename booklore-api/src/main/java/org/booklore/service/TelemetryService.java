@@ -12,6 +12,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class TelemetryService {
     private final VersionService versionService;
     private final LibraryRepository libraryRepository;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookMarkRepository bookMarkRepository;
     private final BookNoteRepository bookNoteRepository;
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
@@ -135,7 +137,7 @@ public class TelemetryService {
     private Map<String, Long> getBookFileTypeCounts() {
         Map<String, Long> countByType = new HashMap<>();
         for (BookFileType type : BookFileType.values()) {
-            countByType.put(type.name(), bookRepository.countByBookType(type));
+            countByType.put(type.name(), jooqBookRepository.countByBookType(type));
         }
         return countByType;
     }
@@ -143,7 +145,7 @@ public class TelemetryService {
     private BookloreTelemetry.LibraryStatistics mapLibraryStatistics(LibraryEntity lib) {
         return BookloreTelemetry.LibraryStatistics.builder()
                 .totalLibraryPaths(lib.getLibraryPaths() != null ? lib.getLibraryPaths().size() : 0)
-                .bookCount(bookRepository.countByLibraryId(lib.getId()))
+                .bookCount(jooqBookRepository.countByLibraryId(lib.getId()))
                 .watchEnabled(lib.isWatch())
                 .iconType(lib.getIconType() != null ? lib.getIconType().name() : null)
                 .build();

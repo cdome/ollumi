@@ -19,6 +19,7 @@ import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.MetadataFetchJobRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.parser.BookParser;
@@ -51,6 +52,7 @@ class MetadataRefreshServiceTest {
     @Mock private Map<MetadataProvider, BookParser> parserMap;
     @Mock private ObjectMapper objectMapper;
     @Mock private BookRepository bookRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private AuthenticationService authenticationService;
     @Mock private TaskCancellationManager cancellationManager;
@@ -269,7 +271,7 @@ class MetadataRefreshServiceTest {
         library.setId(5L);
 
         when(libraryRepository.findById(5L)).thenReturn(Optional.of(library));
-        when(bookRepository.findBookIdsByLibraryId(5L)).thenReturn(Set.of(10L, 11L));
+        when(jooqBookRepository.findBookIdsByLibraryId(5L)).thenReturn(Set.of(10L, 11L));
 
         MetadataRefreshRequest request = MetadataRefreshRequest.builder()
                 .refreshType(MetadataRefreshRequest.RefreshType.LIBRARY)

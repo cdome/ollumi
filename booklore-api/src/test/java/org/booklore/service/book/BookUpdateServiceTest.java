@@ -10,6 +10,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.progress.ReadingProgressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,8 @@ class BookUpdateServiceTest {
 
     @Mock
     private BookRepository bookRepository;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
     @Mock
     private PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
     @Mock
@@ -57,6 +60,7 @@ class BookUpdateServiceTest {
         MockitoAnnotations.openMocks(this);
         bookUpdateService = new BookUpdateService(
                 bookRepository,
+                jooqBookRepository,
                 pdfViewerPreferencesRepository,
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,
@@ -178,7 +182,7 @@ class BookUpdateServiceTest {
         when(permissions.isCanBulkResetBookReadStatus()).thenReturn(true);
 
         List<Long> bookIds = Arrays.asList(1L, 2L, 3L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(3L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(3L);
         Set<Long> existing = new HashSet<>(Arrays.asList(1L, 2L));
         when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
 
@@ -203,7 +207,7 @@ class BookUpdateServiceTest {
         when(permissions.isCanBulkResetBookReadStatus()).thenReturn(false);
 
         List<Long> bookIds = Arrays.asList(1L, 2L, 3L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(3L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(3L);
 
         assertThrows(APIException.class, () -> bookUpdateService.updateReadStatus(bookIds, "READ"));
     }
@@ -219,7 +223,7 @@ class BookUpdateServiceTest {
         when(permissions.isCanBulkResetBookReadStatus()).thenReturn(false);
 
         List<Long> bookIds = Collections.singletonList(1L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(1L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(1L);
         Set<Long> existing = new HashSet<>(bookIds);
         when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
 
@@ -236,7 +240,7 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         List<Long> bookIds = Arrays.asList(1L, 2L, 3L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(3L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(3L);
         Set<Long> existing = new HashSet<>(Arrays.asList(1L, 2L));
         when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
 
@@ -257,7 +261,7 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         List<Long> bookIds = Arrays.asList(1L, 2L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(2L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(2L);
         Set<Long> existing = new HashSet<>(bookIds);
         when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
 
