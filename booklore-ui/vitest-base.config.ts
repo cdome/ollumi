@@ -17,12 +17,12 @@ export default defineConfig({
       include: ['src/app/**/*.ts'],
       exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts', 'src/app/testing/**'],
       // Ratchet floor — raise as service tests land, never lower.
-      // 2026-07 WP0.3 baseline: 23/24/14/21. WP1.1 Tier-1 specs: 27/28/18/25.
+      // WP0.3 baseline 23/24/14/21 → WP1.1 27/28/18/25 → WP1.2 29/30/21/27.
       thresholds: {
-        statements: 27,
-        branches: 28,
-        functions: 18,
-        lines: 25,
+        statements: 29,
+        branches: 30,
+        functions: 21,
+        lines: 27,
       },
     },
   },
