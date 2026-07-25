@@ -16,13 +16,14 @@ export default defineConfig({
       reporter: ['text', 'html'],
       include: ['src/app/**/*.ts'],
       exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts', 'src/app/testing/**'],
-      // Ratchet floor — raise as service tests land, never lower.
-      // WP0.3 23/24/14/21 → WP1.1 27/28/18/25 → WP1.2 29/30/21/27 → WP1.3 31/31/24/29.
+      // Ratchet floor — raise as tests land, never lower.
+      // WP0.3 23/24/14/21 → WP1.1 27/28/18/25 → WP1.2 29/30/21/27
+      // → WP1.3 31/31/24/29 → WP2.2 32/31/24/30.
       thresholds: {
-        statements: 31,
+        statements: 32,
         branches: 31,
         functions: 24,
-        lines: 29,
+        lines: 30,
       },
     },
   },

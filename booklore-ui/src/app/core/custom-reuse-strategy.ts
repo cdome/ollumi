@@ -1,4 +1,4 @@
-import {inject, Injectable} from '@angular/core';
+import {ComponentRef, inject, Injectable} from '@angular/core';
 import {ActivatedRouteSnapshot, DetachedRouteHandle, RouteReuseStrategy} from '@angular/router';
 import {BookBrowserScrollService} from '../features/book/components/book-browser/book-browser-scroll.service';
 import {BookSelectionService} from '../features/book/components/book-browser/book-selection.service';
@@ -7,6 +7,13 @@ import {BookSelectionService} from '../features/book/components/book-browser/boo
   providedIn: 'root',
 })
 export class CustomReuseStrategy implements RouteReuseStrategy {
+  // Cap on cached book-browser instances. Each stored handle retains a full
+  // component tree (books, subscriptions, DOM), so the map must be bounded and
+  // evicted handles must be destroyed — otherwise every distinct library/shelf/
+  // magic-shelf/author/series route ever visited leaks for the app's lifetime.
+  private static readonly MAX_STORED_ROUTES = 5;
+
+  // Insertion order doubles as LRU order: the least-recently-used key is first.
   private storedRoutes = new Map<string, DetachedRouteHandle>();
   private scrollService = inject(BookBrowserScrollService);
   private bookSelectionService = inject(BookSelectionService);
@@ -40,8 +47,19 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandle | null): void {
     if (handle && this.isBookBrowserRoute(route)) {
       const key = this.getRouteKey(route);
+
+      // Re-storing a key with a replacement handle: destroy the old component.
+      const existing = this.storedRoutes.get(key);
+      if (existing && existing !== handle) {
+        this.destroyHandle(existing);
+      }
+
+      // Delete-then-set moves the key to the end → marks it most-recently-used.
+      this.storedRoutes.delete(key);
       this.storedRoutes.set(key, handle);
       this.bookSelectionService.deselectAll();
+
+      this.evictOverflow();
     }
   }
 
@@ -58,6 +76,10 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     const handle = this.storedRoutes.get(key) || null;
 
     if (handle) {
+      // Reattaching this route makes it the most-recently-used entry.
+      this.storedRoutes.delete(key);
+      this.storedRoutes.set(key, handle);
+
       const savedPosition = this.scrollService.getPosition(key);
       if (savedPosition !== undefined) {
         setTimeout(() => {
@@ -75,5 +97,28 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
     return future.routeConfig === curr.routeConfig &&
       JSON.stringify(future.params) === JSON.stringify(curr.params);
+  }
+
+  private evictOverflow(): void {
+    while (this.storedRoutes.size > CustomReuseStrategy.MAX_STORED_ROUTES) {
+      const oldestKey = this.storedRoutes.keys().next().value;
+      if (oldestKey === undefined) {
+        return;
+      }
+      const handle = this.storedRoutes.get(oldestKey);
+      this.storedRoutes.delete(oldestKey);
+      this.scrollService.clearPosition(oldestKey);
+      if (handle) {
+        this.destroyHandle(handle);
+      }
+    }
+  }
+
+  // A DetachedRouteHandle from Angular's default reuse machinery carries the
+  // component's ComponentRef; destroying it runs ngOnDestroy so the cached
+  // component tree and its subscriptions are actually released.
+  private destroyHandle(handle: DetachedRouteHandle): void {
+    const componentRef = (handle as {componentRef?: ComponentRef<unknown>}).componentRef;
+    componentRef?.destroy();
   }
 }
