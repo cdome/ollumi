@@ -8,16 +8,15 @@ import org.booklore.mapper.custom.BookLoreUserTransformer;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.OpdsSortOrder;
 import org.booklore.repository.BookOpdsRepository;
+import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
-import org.booklore.util.BookUtils;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookOpdsRepository;
 import org.booklore.service.library.LibraryService;
 import org.booklore.service.restriction.ContentRestrictionService;
 import org.booklore.util.BookUtils;
@@ -39,6 +38,7 @@ import java.util.stream.Collectors;
 public class OpdsBookService {
 
     private final BookOpdsRepository bookOpdsRepository;
+    private final JooqBookOpdsRepository jooqBookOpdsRepository;
     private final BookRepository bookRepository;
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
@@ -167,7 +167,7 @@ public class OpdsBookService {
         }
 
         List<Long> libraryIds = accessibleLibraries.stream().map(Library::getId).toList();
-        List<Long> ids = bookOpdsRepository.findRandomBookIdsByLibraryIds(libraryIds);
+        List<Long> ids = jooqBookOpdsRepository.findRandomBookIdsByLibraryIds(libraryIds);
 
         if (ids.isEmpty()) {
             return List.of();
@@ -189,23 +189,14 @@ public class OpdsBookService {
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
-        List<AuthorEntity> authors;
-
         if (user.getPermissions().isAdmin()) {
-            authors = bookOpdsRepository.findDistinctAuthors();
-        } else {
-            Set<Long> libraryIds = user.getAssignedLibraries().stream()
-                    .map(Library::getId)
-                    .collect(Collectors.toSet());
-            authors = bookOpdsRepository.findDistinctAuthorsByLibraryIds(libraryIds);
+            return jooqBookOpdsRepository.findDistinctAuthorNames();
         }
 
-        return authors.stream()
-                .map(AuthorEntity::getName)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
-                .toList();
+        Set<Long> libraryIds = user.getAssignedLibraries().stream()
+                .map(Library::getId)
+                .collect(Collectors.toSet());
+        return jooqBookOpdsRepository.findDistinctAuthorNamesByLibraryIds(libraryIds);
     }
 
     public Page<Book> getBooksByAuthorName(Long userId, String authorName, int page, int size) {
@@ -220,7 +211,7 @@ public class OpdsBookService {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
         if (user.getPermissions().isAdmin()) {
-            Page<Long> idPage = bookOpdsRepository.findBookIdsByAuthorName(authorName, pageable);
+            Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByAuthorName(authorName, pageable);
             if (idPage.isEmpty()) {
                 return new PageImpl<>(List.of(), pageable, 0);
             }
@@ -232,7 +223,7 @@ public class OpdsBookService {
                 .map(Library::getId)
                 .collect(Collectors.toSet());
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByAuthorNameAndLibraryIds(authorName, libraryIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByAuthorNameAndLibraryIds(authorName, libraryIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -252,14 +243,14 @@ public class OpdsBookService {
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
-            return bookOpdsRepository.findDistinctSeries();
+            return jooqBookOpdsRepository.findDistinctSeries();
         }
 
         Set<Long> libraryIds = user.getAssignedLibraries().stream()
                 .map(Library::getId)
                 .collect(Collectors.toSet());
 
-        return bookOpdsRepository.findDistinctSeriesByLibraryIds(libraryIds);
+        return jooqBookOpdsRepository.findDistinctSeriesByLibraryIds(libraryIds);
     }
 
     public Page<Book> getBooksBySeriesName(Long userId, String seriesName, int page, int size) {
@@ -274,7 +265,7 @@ public class OpdsBookService {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
         if (user.getPermissions().isAdmin()) {
-            Page<Long> idPage = bookOpdsRepository.findBookIdsBySeriesName(seriesName, pageable);
+            Page<Long> idPage = jooqBookOpdsRepository.findBookIdsBySeriesName(seriesName, pageable);
             if (idPage.isEmpty()) {
                 return new PageImpl<>(List.of(), pageable, 0);
             }
@@ -286,7 +277,7 @@ public class OpdsBookService {
                 .map(Library::getId)
                 .collect(Collectors.toSet());
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsBySeriesNameAndLibraryIds(seriesName, libraryIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsBySeriesNameAndLibraryIds(seriesName, libraryIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -299,7 +290,7 @@ public class OpdsBookService {
     private Page<Book> getAllBooksPageInternal(int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIds(pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIds(pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -311,7 +302,7 @@ public class OpdsBookService {
     private Page<Book> getRecentBooksPageInternal(int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findRecentBookIds(pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIds(pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -323,7 +314,7 @@ public class OpdsBookService {
     private Page<Book> getBooksByLibraryIdsPageInternal(Set<Long> libraryIds, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByLibraryIds(libraryIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByLibraryIds(libraryIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -335,7 +326,7 @@ public class OpdsBookService {
     private Page<Book> getRecentBooksByLibraryIdsPageInternal(Set<Long> libraryIds, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findRecentBookIdsByLibraryIds(libraryIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByLibraryIds(libraryIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -347,7 +338,7 @@ public class OpdsBookService {
     private Page<Book> getBooksByShelfIdPageInternal(Long shelfId, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByShelfId(shelfId, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByShelfId(shelfId, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -359,7 +350,7 @@ public class OpdsBookService {
     private Page<Book> getBooksByShelfIdsPageInternal(Set<Long> shelfIds, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByShelfIds(shelfIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByShelfIds(shelfIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -371,7 +362,7 @@ public class OpdsBookService {
     private Page<Book> searchByMetadataPageInternal(String text, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByMetadataSearch(text, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByMetadataSearch(text, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -383,7 +374,7 @@ public class OpdsBookService {
     private Page<Book> searchByMetadataInLibrariesPageInternal(String text, Set<Long> libraryIds, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByMetadataSearchAndLibraryIds(text, libraryIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByMetadataSearchAndLibraryIds(text, libraryIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
@@ -395,7 +386,7 @@ public class OpdsBookService {
     private Page<Book> searchByMetadataInShelvesPageInternal(String text, Set<Long> shelfIds, int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-        Page<Long> idPage = bookOpdsRepository.findBookIdsByMetadataSearchAndShelfIds(text, shelfIds, pageable);
+        Page<Long> idPage = jooqBookOpdsRepository.findBookIdsByMetadataSearchAndShelfIds(text, shelfIds, pageable);
         if (idPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
