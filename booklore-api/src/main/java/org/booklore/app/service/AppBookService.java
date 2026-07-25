@@ -75,7 +75,7 @@ public class AppBookService {
         int pageNum = page != null && page >= 0 ? page : 0;
         int pageSize = size != null && size > 0 ? Math.min(size, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
 
-        Sort sort = buildSort(sortBy, sortDir);
+        Sort sort = AppBookSortResolver.resolve(sortBy, sortDir);
         Pageable pageable = PageRequest.of(pageNum, pageSize, sort);
 
         Specification<BookEntity> spec = buildSpecification(
@@ -635,20 +635,6 @@ public class AppBookService {
         return AppBookSpecification.combine(specs.toArray(new Specification[0]));
     }
 
-    private Sort buildSort(String sortBy, String sortDir) {
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir)
-                ? Sort.Direction.ASC
-                : Sort.Direction.DESC;
-
-        String field = switch (sortBy != null ? sortBy.toLowerCase() : "") {
-            case "title" -> "metadata.title";
-            case "seriesname", "series" -> "metadata.seriesName";
-            case "lastreadtime" -> "addedOn";
-            default -> "addedOn";
-        };
-
-        return Sort.by(direction, field);
-    }
 
     private int validatePageNumber(Integer page) {
         return page != null && page >= 0 ? page : 0;
