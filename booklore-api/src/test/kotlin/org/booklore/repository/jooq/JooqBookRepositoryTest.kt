@@ -12,8 +12,10 @@ import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 class JooqBookRepositoryTest : AbstractIntegrationTest() {
 
@@ -257,6 +259,50 @@ class JooqBookRepositoryTest : AbstractIntegrationTest() {
             .containsExactly(book3Id)
         assertThat(repository.findBookIdsBySeriesNameUngrouped("orphan-book.pdf", lib1Id))
             .containsExactly(book4Id)
+    }
+
+    // =============================================================
+    // Writes: soft-delete cleanup and library moves
+    // =============================================================
+
+    @Test
+    fun `deleteAllSoftDeleted removes soft-deleted books and cascades to children`() {
+        val removed = repository.deleteAllSoftDeleted()
+
+        assertThat(removed).isEqualTo(1)
+        assertThat(repository.countSoftDeleted()).isZero()
+        // non-deleted books untouched
+        assertThat(dsl.fetchCount(BOOK)).isEqualTo(5)
+        // children of the deleted book are gone via FK cascade
+        assertThat(dsl.fetchCount(BOOK_FILE, BOOK_FILE.BOOK_ID.eq(deletedBookId))).isZero()
+    }
+
+    @Test
+    fun `deleteSoftDeletedBefore removes only books deleted before the cutoff`() {
+        val oldDeletedId = insertBook(lib1Id, path1Id, deleted = true)
+        dsl.update(BOOK).set(BOOK.DELETED_AT, LocalDateTime.now().minusDays(30))
+            .where(BOOK.ID.eq(oldDeletedId)).execute()
+        val recentDeletedId = insertBook(lib1Id, path1Id, deleted = true)
+        dsl.update(BOOK).set(BOOK.DELETED_AT, LocalDateTime.now().minusDays(1))
+            .where(BOOK.ID.eq(recentDeletedId)).execute()
+
+        val removed = repository.deleteSoftDeletedBefore(Instant.now().minus(7, ChronoUnit.DAYS))
+
+        assertThat(removed).isEqualTo(1)
+        val remainingIds = dsl.select(BOOK.ID).from(BOOK).fetch(BOOK.ID)
+        assertThat(remainingIds).doesNotContain(oldDeletedId)
+        // recent deletion and the fixture's deleted book (deleted_at is null) survive
+        assertThat(remainingIds).contains(recentDeletedId, deletedBookId)
+    }
+
+    @Test
+    fun `updateLibrary moves a book to another library and path`() {
+        repository.updateLibrary(book1Id, lib2Id, path2Id)
+
+        val row = dsl.select(BOOK.LIBRARY_ID, BOOK.LIBRARY_PATH_ID)
+            .from(BOOK).where(BOOK.ID.eq(book1Id)).fetchOne()!!
+        assertThat(row[BOOK.LIBRARY_ID]).isEqualTo(lib2Id)
+        assertThat(row[BOOK.LIBRARY_PATH_ID]).isEqualTo(path2Id)
     }
 
     // =============================================================

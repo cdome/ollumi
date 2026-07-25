@@ -16,6 +16,7 @@ import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
@@ -38,6 +39,7 @@ public class FileMoveService {
 
     private final AppProperties appProperties;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookAdditionalFileRepository bookFileRepository;
     private final LibraryRepository libraryRepository;
     private final FileMoveHelper fileMoveHelper;
@@ -199,7 +201,7 @@ public class FileMoveService {
                         bookFileRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
                     }
 
-                    bookRepository.updateLibrary(bookEntity.getId(), targetLibrary.getId(), libraryPathEntity);
+                    jooqBookRepository.updateLibrary(bookEntity.getId(), targetLibrary.getId(), libraryPathEntity.getId());
                 });
             } catch (Exception e) {
                 log.error("Database update failed after files were moved. Attempting to rollback file moves for book ID {}", bookId, e);

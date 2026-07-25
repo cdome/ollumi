@@ -10,6 +10,8 @@ import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL.*
 import org.springframework.stereotype.Repository
+import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 @Repository
@@ -150,6 +152,29 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .and(seriesCondition)
             .orderBy(coalesce(bm.SERIES_NUMBER, inline(0.0)))
             .fetch(BOOK.ID)
+
+    // ========================================================================
+    // Writes: soft-delete cleanup and library moves
+    // ========================================================================
+
+    fun deleteAllSoftDeleted(): Int =
+        dsl.deleteFrom(BOOK)
+            .where(BOOK.DELETED.eq(1))
+            .execute()
+
+    fun deleteSoftDeletedBefore(cutoff: Instant): Int =
+        dsl.deleteFrom(BOOK)
+            .where(BOOK.DELETED.eq(1))
+            .and(BOOK.DELETED_AT.lt(LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC)))
+            .execute()
+
+    fun updateLibrary(bookId: Long, libraryId: Long, libraryPathId: Long) {
+        dsl.update(BOOK)
+            .set(BOOK.LIBRARY_ID, libraryId)
+            .set(BOOK.LIBRARY_PATH_ID, libraryPathId)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
 
     private fun firstBookFileName(): Field<String> {
         val bf2 = BOOK_FILE.`as`("bf2")

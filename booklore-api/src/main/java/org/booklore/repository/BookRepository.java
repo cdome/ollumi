@@ -1,8 +1,6 @@
 package org.booklore.repository;
 
-import org.springframework.transaction.annotation.Transactional;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.LibraryPathEntity;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
@@ -158,16 +156,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long>, JpaSpec
             """)
     List<BookEntity> findBooksWithMetadataAndAuthors(@Param("bookIds") List<Long> bookIds);
 
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM BookEntity b WHERE b.deleted IS TRUE")
-    int deleteAllSoftDeleted();
-
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM BookEntity b WHERE b.deleted IS TRUE AND b.deletedAt < :cutoffDate")
-    int deleteSoftDeletedBefore(@Param("cutoffDate") Instant cutoffDate);
-
     @Query("""
         SELECT DISTINCT b FROM BookEntity b
         JOIN FETCH b.bookFiles bf
@@ -207,16 +195,4 @@ public interface BookRepository extends JpaRepository<BookEntity, Long>, JpaSpec
             HAVING COUNT(bf) = 0
             """)
     List<BookEntity> findFilelessBooksByLibraryId(@Param("libraryId") Long libraryId);
-
-    @Modifying
-    @Query("""
-            UPDATE BookEntity b SET
-                b.library.id = :libraryId,
-                b.libraryPath = :libraryPath
-            WHERE b.id = :bookId
-            """)
-    void updateLibrary(
-            @Param("bookId") Long bookId,
-            @Param("libraryId") Long libraryId,
-            @Param("libraryPath") LibraryPathEntity libraryPath);
 }
