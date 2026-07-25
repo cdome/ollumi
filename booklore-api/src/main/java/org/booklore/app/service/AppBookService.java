@@ -7,7 +7,6 @@ import org.booklore.app.dto.AppBookDetail;
 import org.booklore.app.dto.AppBookSummary;
 import org.booklore.app.dto.AppFilterOptions;
 import org.booklore.app.dto.AppPageResponse;
-import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
@@ -16,9 +15,9 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.AppBookConditions;
+import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.service.opds.MagicShelfBookService;
@@ -46,11 +45,10 @@ public class AppBookService {
     private final BookRepository bookRepository;
     private final JooqAppBookRepository jooqAppBookRepository;
     private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
+    private final JooqAppBookDetailRepository jooqAppBookDetailRepository;
     private final UserBookProgressRepository userBookProgressRepository;
-    private final UserBookFileProgressRepository userBookFileProgressRepository;
     private final ShelfRepository shelfRepository;
     private final AuthenticationService authenticationService;
-    private final AppBookMapper mobileBookMapper;
     private final MagicShelfBookService magicShelfBookService;
 
     @Transactional(readOnly = true)
@@ -93,22 +91,16 @@ public class AppBookService {
         Long userId = user.getId();
         Set<Long> accessibleLibraryIds = getAccessibleLibraryIds(user);
 
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        AppBookDetail detail = jooqAppBookDetailRepository.findDetailById(bookId, userId);
+        if (detail == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
-        if (accessibleLibraryIds != null && !accessibleLibraryIds.contains(book.getLibrary().getId())) {
+        if (accessibleLibraryIds != null && !accessibleLibraryIds.contains(detail.getLibraryId())) {
             throw ApiError.FORBIDDEN.createException("Access denied to this book");
         }
 
-        UserBookProgressEntity progress = userBookProgressRepository
-                .findByUserIdAndBookId(userId, bookId)
-                .orElse(null);
-
-        UserBookFileProgressEntity fileProgress = userBookFileProgressRepository
-                .findMostRecentAudiobookProgressByUserIdAndBookId(userId, bookId)
-                .orElse(null);
-
-        return mobileBookMapper.toDetail(book, progress, fileProgress);
+        return detail;
     }
 
     @Transactional(readOnly = true)

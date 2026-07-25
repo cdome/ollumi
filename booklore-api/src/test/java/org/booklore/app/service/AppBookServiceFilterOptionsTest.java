@@ -3,7 +3,6 @@ package org.booklore.app.service;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.app.dto.AppFilterOptions;
-import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
@@ -11,8 +10,8 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.repository.jooq.dto.AuthorFacet;
@@ -45,11 +44,10 @@ class AppBookServiceFilterOptionsTest {
     @Mock private BookRepository bookRepository;
     @Mock private JooqAppBookRepository jooqAppBookRepository;
     @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
+    @Mock private JooqAppBookDetailRepository jooqAppBookDetailRepository;
     @Mock private UserBookProgressRepository userBookProgressRepository;
-    @Mock private UserBookFileProgressRepository userBookFileProgressRepository;
     @Mock private ShelfRepository shelfRepository;
     @Mock private AuthenticationService authenticationService;
-    @Mock private AppBookMapper mobileBookMapper;
     @Mock private MagicShelfBookService magicShelfBookService;
 
     private AppBookService service;
@@ -59,9 +57,9 @@ class AppBookServiceFilterOptionsTest {
     @BeforeEach
     void setUp() {
         service = new AppBookService(
-                bookRepository, jooqAppBookRepository, jooqAppBookSummaryRepository, userBookProgressRepository,
-                userBookFileProgressRepository, shelfRepository, authenticationService,
-                mobileBookMapper, magicShelfBookService
+                bookRepository, jooqAppBookRepository, jooqAppBookSummaryRepository, jooqAppBookDetailRepository,
+                userBookProgressRepository, shelfRepository, authenticationService,
+                magicShelfBookService
         );
     }
 
