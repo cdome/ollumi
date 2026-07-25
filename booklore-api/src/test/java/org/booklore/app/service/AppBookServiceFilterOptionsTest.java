@@ -17,6 +17,7 @@ import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.service.opds.MagicShelfBookService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,7 @@ import static org.mockito.Mockito.*;
 class AppBookServiceFilterOptionsTest {
 
     @Mock private BookRepository bookRepository;
+    @Mock private JooqAppBookRepository jooqAppBookRepository;
     @Mock private UserBookProgressRepository userBookProgressRepository;
     @Mock private UserBookFileProgressRepository userBookFileProgressRepository;
     @Mock private ShelfRepository shelfRepository;
@@ -57,9 +59,9 @@ class AppBookServiceFilterOptionsTest {
     @BeforeEach
     void setUp() {
         service = new AppBookService(
-                bookRepository, userBookProgressRepository, userBookFileProgressRepository,
-                shelfRepository, authenticationService, mobileBookMapper,
-                magicShelfBookService, entityManager
+                bookRepository, jooqAppBookRepository, userBookProgressRepository,
+                userBookFileProgressRepository, shelfRepository, authenticationService,
+                mobileBookMapper, magicShelfBookService, entityManager
         );
     }
 

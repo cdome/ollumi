@@ -7,18 +7,19 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.app.dto.*;
 import org.booklore.app.mapper.AppBookMapper;
-import org.booklore.app.specification.AppBookSpecification;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.AppBookConditions;
+import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.jooq.Condition;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,7 @@ public class AppSeriesService {
     private final EntityManager entityManager;
     private final AuthenticationService authenticationService;
     private final BookRepository bookRepository;
+    private final JooqAppBookRepository jooqAppBookRepository;
     private final UserBookProgressRepository userBookProgressRepository;
     private final AppBookMapper mobileBookMapper;
 
@@ -271,20 +273,26 @@ public class AppSeriesService {
         Sort sort = buildBookSort(sortBy, sortDir);
         Pageable pageable = PageRequest.of(pageNum, pageSize, sort);
 
-        Specification<BookEntity> spec = buildSeriesBooksSpec(accessibleLibraryIds, libraryId, seriesName);
+        Condition condition = buildSeriesBooksCondition(accessibleLibraryIds, libraryId, seriesName);
 
-        Page<BookEntity> bookPage = bookRepository.findAll(spec, pageable);
+        Page<Long> idPage = jooqAppBookRepository.findBookIds(condition, pageable);
+        List<Long> ids = idPage.getContent();
 
-        Set<Long> bookIds = bookPage.getContent().stream()
-                .map(BookEntity::getId)
-                .collect(Collectors.toSet());
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMap(userId, bookIds);
+        if (ids.isEmpty()) {
+            return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, idPage.getTotalElements());
+        }
 
-        List<AppBookSummary> summaries = bookPage.getContent().stream()
-                .map(book -> mobileBookMapper.toSummary(book, progressMap.get(book.getId())))
+        List<BookEntity> enriched = bookRepository.findAllForSummaryByIds(ids);
+        Map<Long, BookEntity> enrichedMap = enriched.stream()
+                .collect(Collectors.toMap(BookEntity::getId, b -> b));
+        Map<Long, UserBookProgressEntity> progressMap = getProgressMap(userId, new LinkedHashSet<>(ids));
+
+        List<AppBookSummary> summaries = ids.stream()
+                .filter(enrichedMap::containsKey)
+                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
                 .toList();
 
-        return AppPageResponse.of(summaries, pageNum, pageSize, bookPage.getTotalElements());
+        return AppPageResponse.of(summaries, pageNum, pageSize, idPage.getTotalElements());
     }
 
     // --- Access control helpers (duplicated from AppBookService to minimize blast radius) ---
@@ -360,21 +368,20 @@ public class AppSeriesService {
         return Sort.by(direction, field);
     }
 
-    private Specification<BookEntity> buildSeriesBooksSpec(Set<Long> accessibleLibraryIds, Long libraryId, String seriesName) {
-        List<Specification<BookEntity>> specs = new ArrayList<>();
-        specs.add(AppBookSpecification.notDeleted());
-        specs.add(AppBookSpecification.hasDigitalFile());
-        specs.add(AppBookSpecification.inSeries(seriesName));
+    private Condition buildSeriesBooksCondition(Set<Long> accessibleLibraryIds, Long libraryId, String seriesName) {
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile())
+                .and(AppBookConditions.inSeries(seriesName));
 
         if (accessibleLibraryIds != null) {
-            specs.add(libraryId != null
-                    ? AppBookSpecification.inLibrary(libraryId)
-                    : AppBookSpecification.inLibraries(accessibleLibraryIds));
+            condition = condition.and(libraryId != null
+                    ? AppBookConditions.inLibrary(libraryId)
+                    : AppBookConditions.inLibraries(accessibleLibraryIds));
         } else if (libraryId != null) {
-            specs.add(AppBookSpecification.inLibrary(libraryId));
+            condition = condition.and(AppBookConditions.inLibrary(libraryId));
         }
 
-        return AppBookSpecification.combine(specs.toArray(new Specification[0]));
+        return condition;
     }
 
     private Map<Long, UserBookProgressEntity> getProgressMap(Long userId, Set<Long> bookIds) {

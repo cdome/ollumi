@@ -15,6 +15,8 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.jooq.Condition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -25,7 +27,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
 import java.util.*;
@@ -41,6 +42,7 @@ class AppSeriesServiceTest {
     @Mock private EntityManager entityManager;
     @Mock private AuthenticationService authenticationService;
     @Mock private BookRepository bookRepository;
+    @Mock private JooqAppBookRepository jooqAppBookRepository;
     @Mock private UserBookProgressRepository userBookProgressRepository;
     @Mock private AppBookMapper mobileBookMapper;
 
@@ -52,7 +54,7 @@ class AppSeriesServiceTest {
     void setUp() {
         service = new AppSeriesService(
                 entityManager, authenticationService, bookRepository,
-                userBookProgressRepository, mobileBookMapper
+                jooqAppBookRepository, userBookProgressRepository, mobileBookMapper
         );
     }
 
@@ -431,10 +433,11 @@ class AppSeriesServiceTest {
         when(entityManager.createQuery(anyString(), eq(BookEntity.class))).thenReturn(booksQ);
     }
 
-    @SuppressWarnings("unchecked")
     private void mockBookPage(List<BookEntity> books, long total) {
-        var page = new PageImpl<>(books, Pageable.ofSize(20), total);
-        when(bookRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        List<Long> ids = books.stream().map(BookEntity::getId).toList();
+        var page = new PageImpl<>(ids, Pageable.ofSize(20), total);
+        when(jooqAppBookRepository.findBookIds(any(Condition.class), any(Pageable.class))).thenReturn(page);
+        when(bookRepository.findAllForSummaryByIds(anyCollection())).thenReturn(books);
     }
 
     private void mockProgress(List<UserBookProgressEntity> progressList) {
