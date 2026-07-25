@@ -13,6 +13,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.repository.jooq.JooqAppSeriesRepository;
 import org.booklore.repository.jooq.dto.SeriesAggregate;
 import org.jooq.Condition;
@@ -43,9 +44,8 @@ class AppSeriesServiceTest {
     @Mock private AuthenticationService authenticationService;
     @Mock private BookRepository bookRepository;
     @Mock private JooqAppBookRepository jooqAppBookRepository;
+    @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     @Mock private JooqAppSeriesRepository jooqAppSeriesRepository;
-    @Mock private UserBookProgressRepository userBookProgressRepository;
-    @Mock private AppBookMapper mobileBookMapper;
 
     private AppSeriesService service;
 
@@ -55,7 +55,7 @@ class AppSeriesServiceTest {
     void setUp() {
         service = new AppSeriesService(
                 authenticationService, bookRepository, jooqAppBookRepository,
-                jooqAppSeriesRepository, userBookProgressRepository, mobileBookMapper
+                jooqAppBookSummaryRepository, jooqAppSeriesRepository
         );
     }
 
@@ -226,8 +226,6 @@ class AppSeriesServiceTest {
             mockAdminUser();
             BookEntity book = buildBook(1L, "Dune", 1.0f, "Frank Herbert");
             mockBookPage(List.of(book), 1L);
-            mockProgress(Collections.emptyList());
-            mockMapperSummary();
 
             AppPageResponse<AppBookSummary> result = service.getSeriesBooks("Dune", 0, 20, null, null, null);
 
@@ -241,8 +239,6 @@ class AppSeriesServiceTest {
             mockNonAdminUser(Set.of(5L));
             BookEntity book = buildBook(2L, "Dune", 2.0f, "Frank Herbert");
             mockBookPage(List.of(book), 1L);
-            mockProgress(Collections.emptyList());
-            mockMapperSummary();
 
             AppPageResponse<AppBookSummary> result = service.getSeriesBooks("Dune", 0, 20, null, null, 5L);
 
@@ -392,23 +388,13 @@ class AppSeriesServiceTest {
         List<Long> ids = books.stream().map(BookEntity::getId).toList();
         var page = new PageImpl<>(ids, Pageable.ofSize(20), total);
         when(jooqAppBookRepository.findBookIds(any(Condition.class), any(Pageable.class))).thenReturn(page);
-        when(bookRepository.findAllForSummaryByIds(anyCollection())).thenReturn(books);
-    }
-
-    private void mockProgress(List<UserBookProgressEntity> progressList) {
-        when(userBookProgressRepository.findByUserIdAndBookIdIn(eq(userId), anySet()))
-                .thenReturn(progressList);
-    }
-
-    private void mockMapperSummary() {
-        when(mobileBookMapper.toSummary(any(BookEntity.class), any()))
-                .thenAnswer(inv -> {
-                    BookEntity b = inv.getArgument(0);
-                    return AppBookSummary.builder()
-                            .id(b.getId())
-                            .title(b.getMetadata() != null ? b.getMetadata().getTitle() : null)
-                            .build();
-                });
+        List<AppBookSummary> summaries = books.stream()
+                .map(b -> AppBookSummary.builder()
+                        .id(b.getId())
+                        .title(b.getMetadata() != null ? b.getMetadata().getTitle() : null)
+                        .build())
+                .toList();
+        when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any())).thenReturn(summaries);
     }
 
     private BookEntity buildBook(Long id, String seriesName, Float seriesNumber, String authorName) {

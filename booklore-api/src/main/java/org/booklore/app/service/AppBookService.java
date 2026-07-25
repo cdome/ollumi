@@ -20,6 +20,7 @@ import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.service.opds.MagicShelfBookService;
 import org.jooq.Condition;
 import org.springframework.data.domain.Page;
@@ -44,6 +45,7 @@ public class AppBookService {
 
     private final BookRepository bookRepository;
     private final JooqAppBookRepository jooqAppBookRepository;
+    private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     private final UserBookProgressRepository userBookProgressRepository;
     private final UserBookFileProgressRepository userBookFileProgressRepository;
     private final ShelfRepository shelfRepository;
@@ -171,13 +173,7 @@ public class AppBookService {
 
         if (topIds.isEmpty()) return Collections.emptyList();
 
-        Map<Long, BookEntity> enrichedMap = bookRepository.findAllForSummaryByIds(topIds)
-                .stream().collect(Collectors.toMap(BookEntity::getId, b -> b));
-
-        return topIds.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
+        return assembleSummaries(topIds, userId);
     }
 
     @Transactional(readOnly = true)
@@ -214,13 +210,7 @@ public class AppBookService {
 
         if (topIds.isEmpty()) return Collections.emptyList();
 
-        Map<Long, BookEntity> enrichedMap = bookRepository.findAllForSummaryByIds(topIds)
-                .stream().collect(Collectors.toMap(BookEntity::getId, b -> b));
-
-        return topIds.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
+        return assembleSummaries(topIds, userId);
     }
 
     @Transactional(readOnly = true)
@@ -241,15 +231,7 @@ public class AppBookService {
         List<Long> ids = idPage.getContent();
         if (ids.isEmpty()) return Collections.emptyList();
 
-        List<BookEntity> enriched = bookRepository.findAllForSummaryByIds(ids);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, enriched);
-        Map<Long, BookEntity> enrichedMap = enriched.stream()
-                .collect(Collectors.toMap(BookEntity::getId, b -> b));
-
-        return ids.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
+        return assembleSummaries(ids, userId);
     }
 
     @Transactional(readOnly = true)
@@ -269,15 +251,7 @@ public class AppBookService {
         List<Long> ids = idPage.getContent();
         if (ids.isEmpty()) return Collections.emptyList();
 
-        List<BookEntity> enriched = bookRepository.findAllForSummaryByIds(ids);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, enriched);
-        Map<Long, BookEntity> enrichedMap = enriched.stream()
-                .collect(Collectors.toMap(BookEntity::getId, b -> b));
-
-        return ids.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
+        return assembleSummaries(ids, userId);
     }
 
     @Transactional(readOnly = true)
@@ -332,13 +306,11 @@ public class AppBookService {
             return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, 0L);
         }
 
-        List<BookEntity> bookEntities = bookRepository.findAllForSummaryByIds(bookIds);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, bookEntities);
+        // Restrict to books that actually have files (mirrors the old hasFiles filter)
+        List<Long> idsWithFiles = jooqAppBookRepository.findAllBookIds(
+                AppBookConditions.withBookIds(bookIds).and(AppBookConditions.hasDigitalFile()));
 
-        List<AppBookSummary> summaries = bookEntities.stream()
-                .filter(BookEntity::hasFiles)
-                .map(bookEntity -> mobileBookMapper.toSummary(bookEntity, progressMap.get(bookEntity.getId())))
-                .collect(Collectors.toList());
+        List<AppBookSummary> summaries = assembleSummaries(idsWithFiles, userId);
 
         return AppPageResponse.of(summaries, pageNum, pageSize, booksPage.getTotalElements());
     }
@@ -642,26 +614,23 @@ public class AppBookService {
             return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, idPage.getTotalElements());
         }
 
-        List<BookEntity> enriched = bookRepository.findAllForSummaryByIds(ids);
-        Map<Long, BookEntity> enrichedMap = enriched.stream()
-                .collect(Collectors.toMap(BookEntity::getId, b -> b));
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, enriched);
-
-        List<AppBookSummary> summaries = ids.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
-
+        List<AppBookSummary> summaries = assembleSummaries(ids, userId);
         return AppPageResponse.of(summaries, pageNum, pageSize, idPage.getTotalElements());
     }
 
-    private Map<Long, UserBookProgressEntity> getProgressMapForBooks(Long userId, List<BookEntity> books) {
-        if (books.isEmpty()) {
-            return Collections.emptyMap();
+    /**
+     * Loads {@link AppBookSummary} rows for the given book IDs via the jOOQ read
+     * model and returns them in the same order as {@code orderedIds}.
+     */
+    private List<AppBookSummary> assembleSummaries(List<Long> orderedIds, Long userId) {
+        if (orderedIds.isEmpty()) {
+            return Collections.emptyList();
         }
-        Set<Long> bookIds = books.stream()
-                .map(BookEntity::getId)
-                .collect(Collectors.toSet());
-        return getProgressMap(userId, bookIds);
+        Map<Long, AppBookSummary> byId = jooqAppBookSummaryRepository.findSummariesByIds(orderedIds, userId).stream()
+                .collect(Collectors.toMap(AppBookSummary::getId, s -> s));
+        return orderedIds.stream()
+                .filter(byId::containsKey)
+                .map(byId::get)
+                .collect(Collectors.toList());
     }
 }

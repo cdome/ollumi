@@ -14,6 +14,7 @@ import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.repository.jooq.dto.AuthorFacet;
 import org.booklore.repository.jooq.dto.LanguageFacet;
 import org.booklore.service.opds.MagicShelfBookService;
@@ -43,6 +44,7 @@ class AppBookServiceFilterOptionsTest {
 
     @Mock private BookRepository bookRepository;
     @Mock private JooqAppBookRepository jooqAppBookRepository;
+    @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     @Mock private UserBookProgressRepository userBookProgressRepository;
     @Mock private UserBookFileProgressRepository userBookFileProgressRepository;
     @Mock private ShelfRepository shelfRepository;
@@ -57,7 +59,7 @@ class AppBookServiceFilterOptionsTest {
     @BeforeEach
     void setUp() {
         service = new AppBookService(
-                bookRepository, jooqAppBookRepository, userBookProgressRepository,
+                bookRepository, jooqAppBookRepository, jooqAppBookSummaryRepository, userBookProgressRepository,
                 userBookFileProgressRepository, shelfRepository, authenticationService,
                 mobileBookMapper, magicShelfBookService
         );

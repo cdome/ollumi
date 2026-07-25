@@ -4,14 +4,13 @@ import lombok.AllArgsConstructor;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.app.dto.*;
-import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.repository.jooq.JooqAppSeriesRepository;
 import org.booklore.repository.jooq.dto.SeriesAggregate;
 import org.jooq.Condition;
@@ -24,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,9 +35,8 @@ public class AppSeriesService {
     private final AuthenticationService authenticationService;
     private final BookRepository bookRepository;
     private final JooqAppBookRepository jooqAppBookRepository;
+    private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     private final JooqAppSeriesRepository jooqAppSeriesRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
-    private final AppBookMapper mobileBookMapper;
 
     @Transactional(readOnly = true)
     public AppPageResponse<AppSeriesSummary> getSeries(
@@ -177,14 +174,12 @@ public class AppSeriesService {
             return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, idPage.getTotalElements());
         }
 
-        List<BookEntity> enriched = bookRepository.findAllForSummaryByIds(ids);
-        Map<Long, BookEntity> enrichedMap = enriched.stream()
-                .collect(Collectors.toMap(BookEntity::getId, b -> b));
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMap(userId, new LinkedHashSet<>(ids));
+        Map<Long, AppBookSummary> byId = jooqAppBookSummaryRepository.findSummariesByIds(ids, userId).stream()
+                .collect(Collectors.toMap(AppBookSummary::getId, s -> s));
 
         List<AppBookSummary> summaries = ids.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
+                .filter(byId::containsKey)
+                .map(byId::get)
                 .toList();
 
         return AppPageResponse.of(summaries, pageNum, pageSize, idPage.getTotalElements());
@@ -237,16 +232,5 @@ public class AppSeriesService {
         }
 
         return condition;
-    }
-
-    private Map<Long, UserBookProgressEntity> getProgressMap(Long userId, Set<Long> bookIds) {
-        if (bookIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        return userBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds).stream()
-                .collect(Collectors.toMap(
-                        p -> p.getBook().getId(),
-                        Function.identity()
-                ));
     }
 }
