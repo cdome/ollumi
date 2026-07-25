@@ -11,6 +11,7 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.progress.ReadingProgressService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class BookUpdateService {
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
     private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
     private final ReadingProgressService readingProgressService;
@@ -80,7 +82,7 @@ public class BookUpdateService {
         Set<Long> existingProgressBookIds = validateBooksAndGetExistingProgress(user.getId(), bookIds);
 
         if (!existingProgressBookIds.isEmpty()) {
-            userBookProgressRepository.bulkUpdatePersonalRating(user.getId(), new ArrayList<>(existingProgressBookIds), rating);
+            jooqUserBookProgressRepository.bulkUpdatePersonalRating(user.getId(), existingProgressBookIds, rating);
         }
 
         createProgressForRating(user.getId(), bookIds, existingProgressBookIds, rating);
@@ -94,7 +96,7 @@ public class BookUpdateService {
         Set<Long> existingProgressBookIds = validateBooksAndGetExistingProgress(user.getId(), bookIds);
 
         if (!existingProgressBookIds.isEmpty()) {
-            userBookProgressRepository.bulkUpdatePersonalRating(user.getId(), new ArrayList<>(existingProgressBookIds), null);
+            jooqUserBookProgressRepository.bulkUpdatePersonalRating(user.getId(), existingProgressBookIds, null);
         }
 
         return buildRatingUpdateResponses(bookIds, null);
@@ -218,7 +220,7 @@ public class BookUpdateService {
 
     private void updateExistingProgress(Long userId, Set<Long> bookIds, ReadStatus status, Instant now, Instant dateFinished) {
         if (!bookIds.isEmpty()) {
-            userBookProgressRepository.bulkUpdateReadStatus(userId, new ArrayList<>(bookIds), status, now, dateFinished);
+            jooqUserBookProgressRepository.bulkUpdateReadStatus(userId, bookIds, status, now, dateFinished);
         }
     }
 
@@ -338,7 +340,7 @@ public class BookUpdateService {
             throw ApiError.BOOK_NOT_FOUND.createException("One or more books not found");
         }
 
-        return userBookProgressRepository.findExistingProgressBookIds(userId, new HashSet<>(bookIds));
+        return jooqUserBookProgressRepository.findExistingProgressBookIds(userId, bookIds);
     }
 
     private List<BookStatusUpdateResponse> buildStatusUpdateResponses(List<Long> bookIds, ReadStatus status, Instant now, Instant dateFinished) {

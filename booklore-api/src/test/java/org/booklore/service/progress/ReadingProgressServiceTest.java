@@ -14,6 +14,7 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.kobo.KoboReadingStateService;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,8 @@ class ReadingProgressServiceTest {
 
     @Mock
     private UserBookProgressRepository userBookProgressRepository;
+    @Mock
+    private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
     private UserBookFileProgressRepository userBookFileProgressRepository;
     @Mock
@@ -254,11 +257,11 @@ class ReadingProgressServiceTest {
         List<Long> bookIds = Arrays.asList(1L, 2L);
         when(jooqBookRepository.countByIds(bookIds)).thenReturn(2L);
         Set<Long> existing = new HashSet<>(bookIds);
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         List<BookStatusUpdateResponse> result = readingProgressService.resetProgress(bookIds, ResetProgressType.BOOKLORE);
 
-        verify(userBookProgressRepository).bulkResetBookloreProgress(eq(1L), eq(new ArrayList<>(bookIds)), any());
+        verify(jooqUserBookProgressRepository).bulkResetBookloreProgress(eq(1L), eq(new ArrayList<>(bookIds)), any());
         assertEquals(2, result.size());
     }
 
@@ -275,7 +278,7 @@ class ReadingProgressServiceTest {
         List<Long> bookIds = Collections.singletonList(1L);
         when(jooqBookRepository.countByIds(bookIds)).thenReturn(1L);
         Set<Long> existing = new HashSet<>(bookIds);
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         assertDoesNotThrow(() -> readingProgressService.resetProgress(bookIds, ResetProgressType.BOOKLORE));
     }
@@ -305,11 +308,11 @@ class ReadingProgressServiceTest {
         List<Long> bookIds = Collections.singletonList(1L);
         when(jooqBookRepository.countByIds(bookIds)).thenReturn(1L);
         Set<Long> existing = new HashSet<>(bookIds);
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         readingProgressService.resetProgress(bookIds, ResetProgressType.KOBO);
 
-        verify(userBookProgressRepository).bulkResetKoboProgress(eq(1L), anyList());
+        verify(jooqUserBookProgressRepository).bulkResetKoboProgress(eq(1L), anyList());
         verify(koboReadingStateService).deleteReadingState(1L);
     }
 }

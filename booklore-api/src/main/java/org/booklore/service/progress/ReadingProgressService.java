@@ -20,6 +20,7 @@ import org.booklore.model.enums.ResetProgressType;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateService;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class ReadingProgressService {
     private static final float COMPLETED_THRESHOLD = 99.5f;
 
     private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final UserBookFileProgressRepository userBookFileProgressRepository;
     private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
@@ -458,12 +460,12 @@ public class ReadingProgressService {
 
         switch (type) {
             case BOOKLORE -> {
-                userBookProgressRepository.bulkResetBookloreProgress(userId, bookIdList, now);
+                jooqUserBookProgressRepository.bulkResetBookloreProgress(userId, bookIdList, now);
                 userBookFileProgressRepository.deleteByUserIdAndBookIds(userId, bookIdList);
             }
-            case KOREADER -> userBookProgressRepository.bulkResetKoreaderProgress(userId, bookIdList);
+            case KOREADER -> jooqUserBookProgressRepository.bulkResetKoreaderProgress(userId, bookIdList);
             case KOBO -> {
-                userBookProgressRepository.bulkResetKoboProgress(userId, bookIdList);
+                jooqUserBookProgressRepository.bulkResetKoboProgress(userId, bookIdList);
                 bookIds.forEach(koboReadingStateService::deleteReadingState);
             }
         }
@@ -487,7 +489,7 @@ public class ReadingProgressService {
             throw ApiError.BOOK_NOT_FOUND.createException("One or more books not found");
         }
 
-        return userBookProgressRepository.findExistingProgressBookIds(userId, new HashSet<>(bookIds));
+        return jooqUserBookProgressRepository.findExistingProgressBookIds(userId, bookIds);
     }
 
     private List<BookStatusUpdateResponse> buildResetResponses(List<Long> bookIds, Set<Long> existingBookIds, Instant now) {

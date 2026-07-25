@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
-import org.booklore.model.dto.ProgressPercentDto;
 import org.booklore.model.dto.request.ReadingSessionRequest;
 import org.booklore.model.dto.response.*;
 import org.booklore.model.entity.BookEntity;
@@ -19,7 +18,9 @@ import org.booklore.repository.ReadingSessionRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.CompletionRaceSession;
+import org.booklore.repository.jooq.dto.ProgressPercents;
 import org.booklore.repository.jooq.dto.PageTurnerSession;
 import org.booklore.repository.jooq.dto.ReadingSessionCount;
 import org.booklore.repository.jooq.dto.ReadingSessionDetail;
@@ -45,6 +46,7 @@ public class ReadingSessionService {
     private final AuthenticationService authenticationService;
     private final ReadingSessionRepository readingSessionRepository;
     private final JooqReadingSessionRepository jooqReadingSessionRepository;
+    private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final UserBookProgressRepository userBookProgressRepository;
@@ -211,7 +213,7 @@ public class ReadingSessionService {
         Long userId = authenticatedUser.getId();
         Map<String, EnumMap<ReadStatus, Long>> timelineMap = new HashMap<>();
 
-        userBookProgressRepository.findCompletionTimelineByUser(userId, year).forEach(dto -> {
+        jooqUserBookProgressRepository.findCompletionTimelineByUser(userId, year).forEach(dto -> {
             String key = dto.getYear() + "-" + dto.getMonth();
             timelineMap.computeIfAbsent(key, k -> new EnumMap<>(ReadStatus.class))
                     .put(dto.getReadStatus(), dto.getBookCount());
@@ -282,7 +284,7 @@ public class ReadingSessionService {
         int currentYear = LocalDate.now().getYear();
         int startYear = currentYear - 9;
 
-        return userBookProgressRepository.findBookCompletionHeatmap(userId, startYear, currentYear)
+        return jooqUserBookProgressRepository.findBookCompletionHeatmap(userId, startYear, currentYear)
                 .stream()
                 .map(dto -> BookCompletionHeatmapResponse.builder()
                         .year(dto.getYear())
@@ -428,7 +430,7 @@ public class ReadingSessionService {
         Long userId = authenticatedUser.getId();
 
         // Rating distribution
-        List<BookDistributionsResponse.RatingBucket> ratingBuckets = userBookProgressRepository.findRatingDistributionByUser(userId)
+        List<BookDistributionsResponse.RatingBucket> ratingBuckets = jooqUserBookProgressRepository.findRatingDistributionByUser(userId)
                 .stream()
                 .map(dto -> BookDistributionsResponse.RatingBucket.builder()
                         .rating(dto.getRating())
@@ -437,7 +439,7 @@ public class ReadingSessionService {
                 .collect(Collectors.toList());
 
         // Status distribution
-        List<BookDistributionsResponse.StatusBucket> statusBuckets = userBookProgressRepository.findStatusDistributionByUser(userId)
+        List<BookDistributionsResponse.StatusBucket> statusBuckets = jooqUserBookProgressRepository.findStatusDistributionByUser(userId)
                 .stream()
                 .map(dto -> BookDistributionsResponse.StatusBucket.builder()
                         .status(dto.getStatus().name())
@@ -446,10 +448,10 @@ public class ReadingSessionService {
                 .collect(Collectors.toList());
 
         // Progress distribution — coalesce to max across sources, then bucket
-        List<ProgressPercentDto> progressRows = userBookProgressRepository.findAllProgressPercentsByUser(userId);
+        List<ProgressPercents> progressRows = jooqUserBookProgressRepository.findAllProgressPercentsByUser(userId);
         long[] bucketCounts = new long[6]; // Not Started, Just Started, Getting Into It, Halfway Through, Almost Done, Completed
 
-        for (ProgressPercentDto row : progressRows) {
+        for (ProgressPercents row : progressRows) {
             float maxPercent = maxProgress(row);
             int pct = Math.round(maxPercent * 100);
             if (pct <= 0) bucketCounts[0]++;
@@ -486,7 +488,7 @@ public class ReadingSessionService {
                 .build();
     }
 
-    private float maxProgress(ProgressPercentDto row) {
+    private float maxProgress(ProgressPercents row) {
         float max = 0f;
         if (row.getKoreaderProgressPercent() != null) max = Math.max(max, row.getKoreaderProgressPercent());
         if (row.getKoboProgressPercent() != null) max = Math.max(max, row.getKoboProgressPercent());
