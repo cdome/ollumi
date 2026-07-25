@@ -15,13 +15,14 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/app/**/*.ts'],
-      exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts'],
-      // Baseline floor (2026-07). Raise as service tests land — never lower.
+      exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts', 'src/app/testing/**'],
+      // Ratchet floor — raise as service tests land, never lower.
+      // 2026-07 WP0.3 baseline: 23/24/14/21. WP1.1 Tier-1 specs: 27/28/18/25.
       thresholds: {
-        statements: 23,
-        branches: 24,
-        functions: 14,
-        lines: 21,
+        statements: 27,
+        branches: 28,
+        functions: 18,
+        lines: 25,
       },
     },
   },
