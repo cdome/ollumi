@@ -15,20 +15,27 @@ import org.booklore.model.entity.MagicShelfEntity;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.MagicShelfRepository;
 import org.booklore.repository.UserRepository;
-import org.booklore.service.BookRuleEvaluatorService;
+import org.booklore.repository.jooq.JooqBookRuleEvaluator;
+import org.booklore.repository.jooq.JooqMagicShelfBookRepository;
 import org.booklore.service.restriction.ContentRestrictionService;
+import org.jooq.Condition;
+import org.jooq.impl.DSL;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.booklore.jooq.tables.Book.BOOK;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -37,10 +44,11 @@ public class MagicShelfBookService {
 
     private final MagicShelfRepository magicShelfRepository;
     private final BookRepository bookRepository;
+    private final JooqMagicShelfBookRepository jooqMagicShelfBookRepository;
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
-    private final BookRuleEvaluatorService ruleEvaluatorService;
+    private final JooqBookRuleEvaluator ruleEvaluator;
     private final ContentRestrictionService contentRestrictionService;
     private final ObjectMapper objectMapper;
 
@@ -48,19 +56,18 @@ public class MagicShelfBookService {
     public Page<Book> getBooksByMagicShelfId(Long userId, Long magicShelfId, int page, int size) {
         MagicShelfEntity shelf = validateMagicShelfAccess(userId, magicShelfId);
         try {
-            GroupRule groupRule = objectMapper.readValue(shelf.getFilterJson(), GroupRule.class);
-            Specification<BookEntity> specification = ruleEvaluatorService.toSpecification(groupRule, userId);
-            specification = specification.and(createLibraryFilterSpecification(userId));
+            Condition condition = buildShelfCondition(shelf, userId);
             Pageable pageable = PageRequest.of(Math.max(page, 0), size);
 
-            Page<BookEntity> booksPage = bookRepository.findAll(specification, pageable);
+            Page<Long> idPage = jooqMagicShelfBookRepository.findBookIds(condition, pageable);
+            List<BookEntity> entities = loadBooksPreservingOrder(idPage.getContent());
 
-            List<BookEntity> filteredEntities = contentRestrictionService.applyRestrictions(booksPage.getContent(), userId);
+            List<BookEntity> filteredEntities = contentRestrictionService.applyRestrictions(entities, userId);
             List<Book> books = filteredEntities.stream()
                     .map(bookMapper::toBook)
                     .map(book -> filterBook(book, userId))
                     .toList();
-            return new PageImpl<>(books, pageable, booksPage.getTotalElements());
+            return new PageImpl<>(books, pageable, idPage.getTotalElements());
         } catch (Exception e) {
             log.error("Failed to parse or execute magic shelf rules", e);
             throw new RuntimeException("Failed to parse or execute magic shelf rules: " + e.getMessage(), e);
@@ -74,13 +81,11 @@ public class MagicShelfBookService {
     public List<Long> getBookIdsByMagicShelfId(Long userId, Long magicShelfId, int limit) {
         MagicShelfEntity shelf = validateMagicShelfAccess(userId, magicShelfId);
         try {
-            GroupRule groupRule = objectMapper.readValue(shelf.getFilterJson(), GroupRule.class);
-            Specification<BookEntity> specification = ruleEvaluatorService.toSpecification(groupRule, userId);
-            specification = specification.and(createLibraryFilterSpecification(userId));
+            Condition condition = buildShelfCondition(shelf, userId);
 
-            Pageable pageable = PageRequest.of(0, limit);
-            Page<BookEntity> booksPage = bookRepository.findAll(specification, pageable);
-            List<BookEntity> filtered = contentRestrictionService.applyRestrictions(booksPage.getContent(), userId);
+            Page<Long> idPage = jooqMagicShelfBookRepository.findBookIds(condition, PageRequest.of(0, limit));
+            List<BookEntity> entities = loadBooksPreservingOrder(idPage.getContent());
+            List<BookEntity> filtered = contentRestrictionService.applyRestrictions(entities, userId);
             return filtered.stream().map(BookEntity::getId).toList();
         } catch (Exception e) {
             log.error("Failed to parse or execute magic shelf rules", e);
@@ -92,6 +97,12 @@ public class MagicShelfBookService {
         return magicShelfRepository.findById(magicShelfId)
                 .map(s -> s.getName() + " - Magic Shelf")
                 .orElse("Magic Shelf Books");
+    }
+
+    private Condition buildShelfCondition(MagicShelfEntity shelf, Long userId) {
+        GroupRule groupRule = objectMapper.readValue(shelf.getFilterJson(), GroupRule.class);
+        return ruleEvaluator.toCondition(groupRule, userId)
+                .and(libraryFilterCondition(userId));
     }
 
     private MagicShelfEntity validateMagicShelfAccess(Long userId, Long magicShelfId) {
@@ -124,23 +135,33 @@ public class MagicShelfBookService {
         return shelf;
     }
 
-    private Specification<BookEntity> createLibraryFilterSpecification(Long userId) {
-        return (root, query, cb) -> {
-            BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                    .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+    private Condition libraryFilterCondition(Long userId) {
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
+                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
-            BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
+        BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
-            if (user.getPermissions() != null && user.getPermissions().isAdmin()) {
-                return cb.conjunction();
-            }
+        if (user.getPermissions() != null && user.getPermissions().isAdmin()) {
+            return DSL.noCondition();
+        }
 
-            Set<Long> userLibraryIds = user.getAssignedLibraries().stream()
-                    .map(Library::getId)
-                    .collect(Collectors.toSet());
+        Set<Long> userLibraryIds = user.getAssignedLibraries().stream()
+                .map(Library::getId)
+                .collect(Collectors.toSet());
 
-            return root.get("library").get("id").in(userLibraryIds);
-        };
+        return BOOK.LIBRARY_ID.in(userLibraryIds);
+    }
+
+    private List<BookEntity> loadBooksPreservingOrder(List<Long> bookIds) {
+        if (bookIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+                .collect(Collectors.toMap(BookEntity::getId, book -> book));
+        return bookIds.stream()
+                .map(booksById::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private Book filterBook(Book dto, Long userId) {
