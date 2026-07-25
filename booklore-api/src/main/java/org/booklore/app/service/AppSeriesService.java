@@ -1,7 +1,5 @@
 package org.booklore.app.service;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
 import lombok.AllArgsConstructor;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
@@ -10,11 +8,12 @@ import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
-import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppSeriesRepository;
+import org.booklore.repository.jooq.dto.SeriesAggregate;
 import org.jooq.Condition;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,7 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,10 +34,10 @@ public class AppSeriesService {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 50;
 
-    private final EntityManager entityManager;
     private final AuthenticationService authenticationService;
     private final BookRepository bookRepository;
     private final JooqAppBookRepository jooqAppBookRepository;
+    private final JooqAppSeriesRepository jooqAppSeriesRepository;
     private final UserBookProgressRepository userBookProgressRepository;
     private final AppBookMapper mobileBookMapper;
 
@@ -63,148 +62,45 @@ public class AppSeriesService {
         int pageNum = page != null && page >= 0 ? page : 0;
         int pageSize = size != null && size > 0 ? Math.min(size, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
 
-        // Build WHERE clause fragments
-        String libraryClause = buildLibraryClause(accessibleLibraryIds, libraryId);
-        String searchClause = (search != null && !search.trim().isEmpty())
-                ? " AND LOWER(m.seriesName) LIKE :searchPattern"
-                : "";
+        List<SeriesAggregate> aggregates = jooqAppSeriesRepository.findSeriesAggregates(
+                userId, accessibleLibraryIds, libraryId, search, inProgressOnly,
+                sortBy, sortDir, pageNum * pageSize, pageSize);
 
-        String havingClause = inProgressOnly
-                ? " HAVING SUM(CASE WHEN p.readStatus IN (org.booklore.model.enums.ReadStatus.READING, org.booklore.model.enums.ReadStatus.RE_READING) THEN 1 ELSE 0 END) > 0"
-                : "";
+        long totalElements = jooqAppSeriesRepository.countSeries(
+                userId, accessibleLibraryIds, libraryId, search, inProgressOnly);
 
-        String orderBy = buildSeriesOrderBy(sortBy, sortDir, inProgressOnly);
-
-        // Phase 1: Aggregate query
-        String aggregateQuery = "SELECT m.seriesName, COUNT(b.id), MAX(m.seriesTotal), MAX(b.addedOn),"
-                + " SUM(CASE WHEN p.readStatus = org.booklore.model.enums.ReadStatus.READ THEN 1 ELSE 0 END)"
-                + (inProgressOnly ? ", MAX(p.lastReadTime)" : "")
-                + " FROM BookEntity b JOIN b.metadata m"
-                + " LEFT JOIN b.userBookProgress p ON p.user.id = :userId"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + " AND m.seriesName IS NOT NULL"
-                + libraryClause
-                + searchClause
-                + " GROUP BY m.seriesName"
-                + havingClause
-                + " ORDER BY " + orderBy;
-
-        var aggregateQ = entityManager.createQuery(aggregateQuery, Tuple.class);
-        aggregateQ.setParameter("userId", userId);
-        setLibraryParams(aggregateQ, accessibleLibraryIds, libraryId);
-        if (!searchClause.isEmpty()) {
-            aggregateQ.setParameter("searchPattern", "%" + search.trim().toLowerCase() + "%");
-        }
-        aggregateQ.setFirstResult(pageNum * pageSize);
-        aggregateQ.setMaxResults(pageSize);
-
-        List<Tuple> aggregateResults = aggregateQ.getResultList();
-
-        // Count query
-        String countQuery = "SELECT COUNT(DISTINCT m.seriesName) FROM BookEntity b JOIN b.metadata m"
-                + (inProgressOnly ? " LEFT JOIN b.userBookProgress p ON p.user.id = :userId" : "")
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + " AND m.seriesName IS NOT NULL"
-                + libraryClause
-                + searchClause;
-
-        if (inProgressOnly) {
-            // For in-progress, we need the HAVING filter in the count — use a subquery approach
-            String countWithHaving = "SELECT COUNT(*) FROM ("
-                    + "SELECT m.seriesName FROM BookEntity b JOIN b.metadata m"
-                    + " LEFT JOIN b.userBookProgress p ON p.user.id = :userId"
-                    + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                    + " AND b.bookFiles IS NOT EMPTY"
-                    + " AND m.seriesName IS NOT NULL"
-                    + libraryClause
-                    + searchClause
-                    + " GROUP BY m.seriesName"
-                    + " HAVING SUM(CASE WHEN p.readStatus IN (org.booklore.model.enums.ReadStatus.READING, org.booklore.model.enums.ReadStatus.RE_READING) THEN 1 ELSE 0 END) > 0"
-                    + ")";
-            // JPQL doesn't support subqueries in FROM — count via result list size instead
-            String countAlt = "SELECT m.seriesName FROM BookEntity b JOIN b.metadata m"
-                    + " LEFT JOIN b.userBookProgress p ON p.user.id = :userId"
-                    + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                    + " AND b.bookFiles IS NOT EMPTY"
-                    + " AND m.seriesName IS NOT NULL"
-                    + libraryClause
-                    + searchClause
-                    + " GROUP BY m.seriesName"
-                    + " HAVING SUM(CASE WHEN p.readStatus IN (org.booklore.model.enums.ReadStatus.READING, org.booklore.model.enums.ReadStatus.RE_READING) THEN 1 ELSE 0 END) > 0";
-            var countQ = entityManager.createQuery(countAlt, String.class);
-            countQ.setParameter("userId", userId);
-            setLibraryParams(countQ, accessibleLibraryIds, libraryId);
-            if (!searchClause.isEmpty()) {
-                countQ.setParameter("searchPattern", "%" + search.trim().toLowerCase() + "%");
-            }
-            long totalElements = countQ.getResultList().size();
-            return buildSeriesPage(aggregateResults, userId, accessibleLibraryIds, libraryId, inProgressOnly, pageNum, pageSize, totalElements);
-        }
-
-        var countQ = entityManager.createQuery(countQuery, Long.class);
-        if (inProgressOnly) {
-            countQ.setParameter("userId", userId);
-        }
-        setLibraryParams(countQ, accessibleLibraryIds, libraryId);
-        if (!searchClause.isEmpty()) {
-            countQ.setParameter("searchPattern", "%" + search.trim().toLowerCase() + "%");
-        }
-        long totalElements = countQ.getSingleResult();
-
-        return buildSeriesPage(aggregateResults, userId, accessibleLibraryIds, libraryId, inProgressOnly, pageNum, pageSize, totalElements);
+        return buildSeriesPage(aggregates, accessibleLibraryIds, libraryId, pageNum, pageSize, totalElements);
     }
 
     private AppPageResponse<AppSeriesSummary> buildSeriesPage(
-            List<Tuple> aggregateResults,
-            Long userId,
+            List<SeriesAggregate> aggregates,
             Set<Long> accessibleLibraryIds,
             Long libraryId,
-            boolean inProgressOnly,
             int pageNum,
             int pageSize,
             long totalElements) {
 
-        if (aggregateResults.isEmpty()) {
+        if (aggregates.isEmpty()) {
             return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, totalElements);
         }
 
-        List<String> seriesNames = aggregateResults.stream()
-                .map(t -> t.get(0, String.class))
+        List<String> seriesNames = aggregates.stream()
+                .map(SeriesAggregate::getSeriesName)
                 .toList();
 
-        // Phase 2: Fetch books for enrichment
-        String libraryClause = buildLibraryClause(accessibleLibraryIds, libraryId);
-        String booksQuery = "SELECT b FROM BookEntity b"
-                + " JOIN FETCH b.metadata m LEFT JOIN FETCH m.authors"
-                + " LEFT JOIN FETCH b.bookFiles"
-                + " WHERE m.seriesName IN :seriesNames"
-                + " AND (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + libraryClause;
+        // Phase 2: Fetch books for enrichment via the two-query pattern
+        List<Long> bookIds = jooqAppSeriesRepository.findBookIdsBySeriesNames(
+                seriesNames, accessibleLibraryIds, libraryId);
+        List<BookEntity> books = bookRepository.findAllForSummaryByIds(bookIds);
 
-        var booksQ = entityManager.createQuery(booksQuery, BookEntity.class);
-        booksQ.setParameter("seriesNames", seriesNames);
-        setLibraryParams(booksQ, accessibleLibraryIds, libraryId);
-
-        List<BookEntity> books = booksQ.getResultList();
-
-        // Group books by series name
         Map<String, List<BookEntity>> booksBySeries = books.stream()
+                .filter(b -> b.getMetadata() != null && b.getMetadata().getSeriesName() != null)
                 .collect(Collectors.groupingBy(b -> b.getMetadata().getSeriesName()));
-
-        // Build aggregates map from Phase 1
-        Map<String, Tuple> aggregateMap = new LinkedHashMap<>();
-        for (Tuple t : aggregateResults) {
-            aggregateMap.put(t.get(0, String.class), t);
-        }
 
         // Merge into summaries, preserving Phase 1 order
         List<AppSeriesSummary> summaries = new ArrayList<>();
-        for (String seriesName : seriesNames) {
-            Tuple agg = aggregateMap.get(seriesName);
-            List<BookEntity> seriesBooks = booksBySeries.getOrDefault(seriesName, Collections.emptyList());
+        for (SeriesAggregate agg : aggregates) {
+            List<BookEntity> seriesBooks = booksBySeries.getOrDefault(agg.getSeriesName(), Collections.emptyList());
 
             // Distinct authors across all books in series
             List<String> authors = seriesBooks.stream()
@@ -233,15 +129,14 @@ public class AppSeriesService {
                     })
                     .toList();
 
-            Long booksReadLong = agg.get(4, Long.class);
-            int booksRead = booksReadLong != null ? booksReadLong.intValue() : 0;
-
             summaries.add(AppSeriesSummary.builder()
-                    .seriesName(agg.get(0, String.class))
-                    .bookCount(agg.get(1, Long.class).intValue())
-                    .seriesTotal(agg.get(2, Integer.class))
-                    .latestAddedOn(agg.get(3, Instant.class))
-                    .booksRead(booksRead)
+                    .seriesName(agg.getSeriesName())
+                    .bookCount((int) agg.getBookCount())
+                    .seriesTotal(agg.getSeriesTotal())
+                    .latestAddedOn(agg.getLatestAddedOn() != null
+                            ? agg.getLatestAddedOn().toInstant(ZoneOffset.UTC)
+                            : null)
+                    .booksRead((int) agg.getBooksRead())
                     .authors(authors)
                     .coverBooks(coverBooks)
                     .build());
@@ -316,46 +211,6 @@ public class AppSeriesService {
     }
 
     // --- Query helpers ---
-
-    private String buildLibraryClause(Set<Long> accessibleLibraryIds, Long libraryId) {
-        if (libraryId != null) {
-            return " AND b.library.id = :libraryId";
-        } else if (accessibleLibraryIds != null) {
-            return " AND b.library.id IN :libraryIds";
-        }
-        return "";
-    }
-
-    private void setLibraryParams(jakarta.persistence.Query query, Set<Long> accessibleLibraryIds, Long libraryId) {
-        if (libraryId != null) {
-            query.setParameter("libraryId", libraryId);
-        } else if (accessibleLibraryIds != null) {
-            query.setParameter("libraryIds", accessibleLibraryIds);
-        }
-    }
-
-    private String buildSeriesOrderBy(String sortBy, String sortDir, boolean inProgressOnly) {
-        String dir = "asc".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
-        String nullsClause = "ASC".equals(dir) ? " NULLS LAST" : " NULLS FIRST";
-
-        return switch (sortBy != null ? sortBy.toLowerCase() : "") {
-            case "name" -> "m.seriesName " + dir;
-            case "bookcount" -> "COUNT(b.id) " + dir;
-            case "readprogress" -> "SUM(CASE WHEN p.readStatus = org.booklore.model.enums.ReadStatus.READ THEN 1 ELSE 0 END) " + dir;
-            case "lastreadtime" -> {
-                if (inProgressOnly) {
-                    yield "MAX(p.lastReadTime) " + dir + nullsClause;
-                }
-                yield "MAX(b.addedOn) " + dir + nullsClause;
-            }
-            default -> {
-                if (inProgressOnly) {
-                    yield "MAX(p.lastReadTime) " + dir + nullsClause;
-                }
-                yield "MAX(b.addedOn) " + dir + nullsClause;
-            }
-        };
-    }
 
     private Sort buildBookSort(String sortBy, String sortDir) {
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;

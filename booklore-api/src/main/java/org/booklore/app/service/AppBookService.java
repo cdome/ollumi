@@ -29,8 +29,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -52,7 +50,6 @@ public class AppBookService {
     private final AuthenticationService authenticationService;
     private final AppBookMapper mobileBookMapper;
     private final MagicShelfBookService magicShelfBookService;
-    private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public AppPageResponse<AppBookSummary> getBooks(
@@ -380,109 +377,56 @@ public class AppBookService {
             }
         }
 
-        // Build scoping clauses
-        String libraryClause = "";
-        String shelfClause = "";
-        String magicBookClause = "";
-
-        if (magicBookIds != null) {
-            magicBookClause = "AND b.id IN :magicBookIds";
-        } else if (shelfId != null) {
-            shelfClause = "AND b.id IN (SELECT sb.id FROM ShelfEntity s JOIN s.bookEntities sb WHERE s.id = :shelfId)";
-        }
-
-        if (libraryId != null) {
-            libraryClause = "AND b.library.id = :libraryId";
-        } else if (accessibleLibraryIds != null) {
-            libraryClause = "AND b.library.id IN :libraryIds";
-        }
-
-        // Build the optional WHERE suffix once — each clause already starts with "AND"
-        String scopeClause = buildScopeClause(libraryClause, shelfClause, magicBookClause);
+        // Build the scope shared by all facet queries
+        Condition scope = buildFilterScope(accessibleLibraryIds, libraryId, shelfId, magicBookIds);
 
         // Authors with book count (top 200 by count)
-        String authorQuery = "SELECT a.name, COUNT(DISTINCT b.id) FROM BookEntity b"
-                + " JOIN b.metadata m JOIN m.authors a"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + scopeClause
-                + " GROUP BY a.name ORDER BY COUNT(DISTINCT b.id) DESC";
-        var authorQ = entityManager.createQuery(authorQuery, Tuple.class);
-        setFilterQueryParams(authorQ, accessibleLibraryIds, libraryId, shelfId, magicBookIds);
-        authorQ.setMaxResults(200);
-
-        List<AppFilterOptions.AuthorOption> authors = authorQ.getResultList().stream()
-                .map(t -> AppFilterOptions.AuthorOption.builder()
-                        .name(t.get(0, String.class))
-                        .count(t.get(1, Long.class))
+        List<AppFilterOptions.AuthorOption> authors = jooqAppBookRepository.findAuthorFacets(scope, 200).stream()
+                .map(f -> AppFilterOptions.AuthorOption.builder()
+                        .name(f.getName())
+                        .count(f.getCount())
                         .build())
                 .toList();
 
         // Languages with book count
-        String langQuery = "SELECT m.language, COUNT(DISTINCT b.id) FROM BookEntity b"
-                + " JOIN b.metadata m"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + " AND m.language IS NOT NULL AND m.language <> ''"
-                + scopeClause
-                + " GROUP BY m.language ORDER BY COUNT(DISTINCT b.id) DESC";
-        var langQ = entityManager.createQuery(langQuery, Tuple.class);
-        setFilterQueryParams(langQ, accessibleLibraryIds, libraryId, shelfId, magicBookIds);
-
-        List<AppFilterOptions.LanguageOption> languages = langQ.getResultList().stream()
-                .map(t -> AppFilterOptions.LanguageOption.builder()
-                        .code(t.get(0, String.class))
-                        .label(Locale.forLanguageTag(t.get(0, String.class)).getDisplayLanguage(Locale.ENGLISH))
-                        .count(t.get(1, Long.class))
+        List<AppFilterOptions.LanguageOption> languages = jooqAppBookRepository.findLanguageFacets(scope).stream()
+                .map(f -> AppFilterOptions.LanguageOption.builder()
+                        .code(f.getCode())
+                        .label(Locale.forLanguageTag(f.getCode()).getDisplayLanguage(Locale.ENGLISH))
+                        .count(f.getCount())
                         .build())
                 .toList();
 
         // Distinct file types present in scoped books
-        String fileTypeQuery = "SELECT DISTINCT bf.bookType FROM BookEntity b"
-                + " JOIN b.bookFiles bf"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + " AND bf.isBookFormat = true"
-                + scopeClause;
-        var ftQ = entityManager.createQuery(fileTypeQuery, BookFileType.class);
-        setFilterQueryParams(ftQ, accessibleLibraryIds, libraryId, shelfId, magicBookIds);
-
-        List<String> fileTypes = ftQ.getResultList().stream()
-                .map(Enum::name)
+        List<String> fileTypes = jooqAppBookRepository.findFileTypes(scope).stream()
                 .sorted()
                 .toList();
-
-        // Read statuses — return all meaningful values
-        List<String> readStatuses = getReadStatusOptions();
 
         return AppFilterOptions.builder()
                 .authors(authors)
                 .languages(languages)
                 .fileTypes(fileTypes)
-                .readStatuses(readStatuses)
+                .readStatuses(getReadStatusOptions())
                 .build();
     }
 
-    private String buildScopeClause(String libraryClause, String shelfClause, String magicBookClause) {
-        var sb = new StringBuilder();
-        if (!libraryClause.isEmpty()) sb.append(" ").append(libraryClause);
-        if (!shelfClause.isEmpty()) sb.append(" ").append(shelfClause);
-        if (!magicBookClause.isEmpty()) sb.append(" ").append(magicBookClause);
-        return sb.toString();
-    }
+    private Condition buildFilterScope(Set<Long> accessibleLibraryIds, Long libraryId, Long shelfId, Set<Long> magicBookIds) {
+        Condition scope = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile());
 
-    private void setFilterQueryParams(jakarta.persistence.Query query, Set<Long> accessibleLibraryIds, Long libraryId, Long shelfId, Set<Long> magicBookIds) {
-        if (libraryId != null) {
-            query.setParameter("libraryId", libraryId);
-        } else if (accessibleLibraryIds != null) {
-            query.setParameter("libraryIds", accessibleLibraryIds);
-        }
-        if (shelfId != null && magicBookIds == null) {
-            query.setParameter("shelfId", shelfId);
-        }
         if (magicBookIds != null) {
-            query.setParameter("magicBookIds", magicBookIds);
+            scope = scope.and(AppBookConditions.withBookIds(magicBookIds));
+        } else if (shelfId != null) {
+            scope = scope.and(AppBookConditions.inShelf(shelfId));
         }
+
+        if (libraryId != null) {
+            scope = scope.and(AppBookConditions.inLibrary(libraryId));
+        } else if (accessibleLibraryIds != null) {
+            scope = scope.and(AppBookConditions.inLibraries(accessibleLibraryIds));
+        }
+
+        return scope;
     }
 
     private Set<Long> resolveMagicShelfBookIds(Long magicShelfId, Long userId) {

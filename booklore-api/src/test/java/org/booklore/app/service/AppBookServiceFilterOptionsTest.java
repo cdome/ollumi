@@ -1,8 +1,5 @@
 package org.booklore.app.service;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
-import jakarta.persistence.TypedQuery;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.app.dto.AppFilterOptions;
@@ -12,13 +9,15 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
-import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.dto.AuthorFacet;
+import org.booklore.repository.jooq.dto.LanguageFacet;
 import org.booklore.service.opds.MagicShelfBookService;
+import org.jooq.Condition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +49,6 @@ class AppBookServiceFilterOptionsTest {
     @Mock private AuthenticationService authenticationService;
     @Mock private AppBookMapper mobileBookMapper;
     @Mock private MagicShelfBookService magicShelfBookService;
-    @Mock private EntityManager entityManager;
 
     private AppBookService service;
 
@@ -61,7 +59,7 @@ class AppBookServiceFilterOptionsTest {
         service = new AppBookService(
                 bookRepository, jooqAppBookRepository, userBookProgressRepository,
                 userBookFileProgressRepository, shelfRepository, authenticationService,
-                mobileBookMapper, magicShelfBookService, entityManager
+                mobileBookMapper, magicShelfBookService
         );
     }
 
@@ -72,7 +70,7 @@ class AppBookServiceFilterOptionsTest {
     @Test
     void getFilterOptions_noParams_returnsGlobalOptions() {
         mockAdminUser();
-        mockJpqlQueries();
+        mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(null, null, null);
 
@@ -90,18 +88,20 @@ class AppBookServiceFilterOptionsTest {
     @Test
     void getFilterOptions_withLibraryId_admin_succeeds() {
         mockAdminUser();
-        mockJpqlQueries();
+        mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(5L, null, null);
 
         assertNotNull(result);
-        verify(entityManager, times(3)).createQuery(anyString(), any(Class.class));
+        verify(jooqAppBookRepository).findAuthorFacets(any(Condition.class), eq(200));
+        verify(jooqAppBookRepository).findLanguageFacets(any(Condition.class));
+        verify(jooqAppBookRepository).findFileTypes(any(Condition.class));
     }
 
     @Test
     void getFilterOptions_withLibraryId_nonAdminWithAccess_succeeds() {
         mockNonAdminUser(Set.of(5L, 10L));
-        mockJpqlQueries();
+        mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(5L, null, null);
 
@@ -125,7 +125,7 @@ class AppBookServiceFilterOptionsTest {
         ShelfEntity shelf = ShelfEntity.builder().id(10L).isPublic(true)
                 .user(BookLoreUserEntity.builder().id(99L).build()).build();
         when(shelfRepository.findById(10L)).thenReturn(Optional.of(shelf));
-        mockJpqlQueries();
+        mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(null, 10L, null);
 
@@ -138,7 +138,7 @@ class AppBookServiceFilterOptionsTest {
         ShelfEntity shelf = ShelfEntity.builder().id(10L).isPublic(false)
                 .user(BookLoreUserEntity.builder().id(userId).build()).build();
         when(shelfRepository.findById(10L)).thenReturn(Optional.of(shelf));
-        mockJpqlQueries();
+        mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(null, 10L, null);
 
@@ -187,7 +187,7 @@ class AppBookServiceFilterOptionsTest {
         Book book1 = Book.builder().id(100L).build();
         Book book2 = Book.builder().id(200L).build();
         mockMagicShelfBooks(7L, List.of(book1, book2));
-        mockJpqlQueries();
+        mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(null, null, 7L);
 
@@ -238,25 +238,12 @@ class AppBookServiceFilterOptionsTest {
                 .thenReturn(page);
     }
 
-    @SuppressWarnings("unchecked")
-    private void mockJpqlQueries() {
-        TypedQuery<Tuple> authorQuery = mock(TypedQuery.class);
-        when(authorQuery.setMaxResults(anyInt())).thenReturn(authorQuery);
-        when(authorQuery.setParameter(anyString(), any())).thenReturn(authorQuery);
-        when(authorQuery.getResultList()).thenReturn(Collections.emptyList());
-
-        TypedQuery<Tuple> langQuery = mock(TypedQuery.class);
-        when(langQuery.setParameter(anyString(), any())).thenReturn(langQuery);
-        when(langQuery.getResultList()).thenReturn(Collections.emptyList());
-
-        TypedQuery<BookFileType> ftQuery = mock(TypedQuery.class);
-        when(ftQuery.setParameter(anyString(), any())).thenReturn(ftQuery);
-        when(ftQuery.getResultList()).thenReturn(Collections.emptyList());
-
-        when(entityManager.createQuery(anyString(), eq(Tuple.class)))
-                .thenReturn(authorQuery)
-                .thenReturn(langQuery);
-        when(entityManager.createQuery(anyString(), eq(BookFileType.class)))
-                .thenReturn(ftQuery);
+    private void mockFacetQueries() {
+        when(jooqAppBookRepository.findAuthorFacets(any(Condition.class), anyInt()))
+                .thenReturn(List.of(new AuthorFacet("Tolkien", 3L)));
+        when(jooqAppBookRepository.findLanguageFacets(any(Condition.class)))
+                .thenReturn(List.of(new LanguageFacet("en", 5L)));
+        when(jooqAppBookRepository.findFileTypes(any(Condition.class)))
+                .thenReturn(List.of("EPUB", "PDF"));
     }
 }

@@ -35,6 +35,10 @@ object AppBookConditions {
             select(bsm.BOOK_ID).from(bsm).where(bsm.SHELF_ID.eq(shelfId))
         )
 
+    @JvmStatic fun withBookIds(bookIds: Collection<Long>?): Condition =
+        if (bookIds.isNullOrEmpty()) noCondition()
+        else BOOK.ID.`in`(bookIds)
+
     @JvmStatic fun hasDigitalFile(): Condition =
         exists(selectOne().from(bf).where(bf.BOOK_ID.eq(BOOK.ID)))
 
