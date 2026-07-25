@@ -56,8 +56,9 @@ class JooqBookRepositoryTest : AbstractIntegrationTest() {
         book5Id = insertBook(lib2Id, path2Id)
         deletedBookId = insertBook(lib1Id, path1Id, deleted = true)
 
-        insertMetadata(book1Id, title = "The Hobbit", seriesName = "LOTR", coverUpdatedOn = coverUpdatedOn)
-        insertMetadata(book2Id, title = "The Two Towers", seriesName = "LOTR")
+        // Series numbers deliberately inverted vs insertion order to exercise ordering
+        insertMetadata(book1Id, title = "The Hobbit", seriesName = "LOTR", seriesNumber = 2.0, coverUpdatedOn = coverUpdatedOn)
+        insertMetadata(book2Id, title = "The Two Towers", seriesName = "LOTR", seriesNumber = 1.0)
         insertMetadata(book3Id, title = "1984")
         insertMetadata(book4Id, title = null)
         insertMetadata(book5Id, title = "Dune", seriesName = "Dune")
@@ -222,6 +223,43 @@ class JooqBookRepositoryTest : AbstractIntegrationTest() {
     }
 
     // =============================================================
+    // findBookIdsBySeriesNameGrouped / Ungrouped
+    // =============================================================
+
+    @Test
+    fun `grouped series book ids are ordered by series number`() {
+        val ids = repository.findBookIdsBySeriesNameGrouped("LOTR", lib1Id)
+
+        // book2 is series #1, book1 is series #2
+        assertThat(ids).containsExactly(book2Id, book1Id)
+    }
+
+    @Test
+    fun `grouped series book ids fall back to first book file name only`() {
+        // book4 has no series name -> matched by its first book-format file name
+        assertThat(repository.findBookIdsBySeriesNameGrouped("orphan-book.pdf", lib1Id))
+            .containsExactly(book4Id)
+        // grouped mode has no title fallback (JPA parity): book3's title does not match
+        assertThat(repository.findBookIdsBySeriesNameGrouped("1984", lib2Id)).isEmpty()
+    }
+
+    @Test
+    fun `grouped series book ids exclude deleted books and other libraries`() {
+        assertThat(repository.findBookIdsBySeriesNameGrouped("GhostSeries", lib1Id)).isEmpty()
+        assertThat(repository.findBookIdsBySeriesNameGrouped("LOTR", lib2Id)).isEmpty()
+    }
+
+    @Test
+    fun `ungrouped series book ids match series then title then file name`() {
+        assertThat(repository.findBookIdsBySeriesNameUngrouped("LOTR", lib1Id))
+            .containsExactly(book2Id, book1Id)
+        assertThat(repository.findBookIdsBySeriesNameUngrouped("1984", lib2Id))
+            .containsExactly(book3Id)
+        assertThat(repository.findBookIdsBySeriesNameUngrouped("orphan-book.pdf", lib1Id))
+            .containsExactly(book4Id)
+    }
+
+    // =============================================================
     // Helpers
     // =============================================================
 
@@ -251,12 +289,14 @@ class JooqBookRepositoryTest : AbstractIntegrationTest() {
         bookId: Long,
         title: String?,
         seriesName: String? = null,
+        seriesNumber: Double? = null,
         coverUpdatedOn: LocalDateTime? = null
     ) {
         val insert = dsl.insertInto(BOOK_METADATA)
             .set(BOOK_METADATA.BOOK_ID, bookId)
         if (title != null) insert.set(BOOK_METADATA.TITLE, title)
         if (seriesName != null) insert.set(BOOK_METADATA.SERIES_NAME, seriesName)
+        if (seriesNumber != null) insert.set(BOOK_METADATA.SERIES_NUMBER, seriesNumber)
         if (coverUpdatedOn != null) insert.set(BOOK_METADATA.COVER_UPDATED_ON, coverUpdatedOn)
         insert.execute()
     }

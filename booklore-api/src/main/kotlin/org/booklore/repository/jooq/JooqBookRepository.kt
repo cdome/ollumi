@@ -5,7 +5,9 @@ import org.booklore.jooq.tables.BookFile.BOOK_FILE
 import org.booklore.jooq.tables.BookMetadata.BOOK_METADATA
 import org.booklore.model.enums.BookFileType
 import org.booklore.repository.jooq.dto.BookCoverUpdate
+import org.jooq.Condition
 import org.jooq.DSLContext
+import org.jooq.Field
 import org.jooq.impl.DSL.*
 import org.springframework.stereotype.Repository
 import java.time.ZoneOffset
@@ -102,16 +104,7 @@ class JooqBookRepository(private val dsl: DSLContext) {
      * (metadata title, or the first book file's name as last resort).
      */
     fun findDistinctSeriesNamesUngrouped(libraryId: Long?): List<String> {
-        val bf2 = BOOK_FILE.`as`("bf2")
-        val firstBookFileName = field(
-            select(bf2.FILE_NAME)
-                .from(bf2)
-                .where(bf2.BOOK_ID.eq(BOOK.ID))
-                .and(bf2.IS_BOOK.eq(1))
-                .orderBy(bf2.ID.asc())
-                .limit(1)
-        )
-        val seriesName = coalesce(bm.SERIES_NAME, bm.TITLE, firstBookFileName)
+        val seriesName = coalesce(bm.SERIES_NAME, bm.TITLE, firstBookFileName())
         return dsl.selectDistinct(seriesName)
             .from(BOOK)
             .leftJoin(bm).on(bm.BOOK_ID.eq(BOOK.ID))
@@ -119,5 +112,54 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .and(if (libraryId != null) BOOK.LIBRARY_ID.eq(libraryId) else noCondition())
             .orderBy(seriesName)
             .fetch(seriesName)
+    }
+
+    // ========================================================================
+    // Books by series name (Komga API) — ID queries for the two-query pattern
+    // ========================================================================
+
+    /**
+     * IDs of a library's non-deleted books in [seriesName], ordered by series number.
+     * Books without a series name match via their first book file's name.
+     */
+    fun findBookIdsBySeriesNameGrouped(seriesName: String, libraryId: Long): List<Long> =
+        findBookIdsBySeries(
+            bm.SERIES_NAME.eq(seriesName)
+                .or(bm.SERIES_NAME.isNull.and(firstBookFileName().eq(seriesName))),
+            libraryId
+        )
+
+    /**
+     * IDs of a library's non-deleted books in [seriesName], ordered by series number.
+     * Books without a series name match via their title, then their first book file's name.
+     */
+    fun findBookIdsBySeriesNameUngrouped(seriesName: String, libraryId: Long): List<Long> =
+        findBookIdsBySeries(
+            bm.SERIES_NAME.eq(seriesName)
+                .or(bm.SERIES_NAME.isNull.and(bm.TITLE.eq(seriesName)))
+                .or(bm.SERIES_NAME.isNull.and(bm.TITLE.isNull).and(firstBookFileName().eq(seriesName))),
+            libraryId
+        )
+
+    private fun findBookIdsBySeries(seriesCondition: Condition, libraryId: Long): List<Long> =
+        dsl.select(BOOK.ID)
+            .from(BOOK)
+            .leftJoin(bm).on(bm.BOOK_ID.eq(BOOK.ID))
+            .where(BookConditions.notDeleted())
+            .and(BOOK.LIBRARY_ID.eq(libraryId))
+            .and(seriesCondition)
+            .orderBy(coalesce(bm.SERIES_NUMBER, inline(0.0)))
+            .fetch(BOOK.ID)
+
+    private fun firstBookFileName(): Field<String> {
+        val bf2 = BOOK_FILE.`as`("bf2")
+        return field(
+            select(bf2.FILE_NAME)
+                .from(bf2)
+                .where(bf2.BOOK_ID.eq(BOOK.ID))
+                .and(bf2.IS_BOOK.eq(1))
+                .orderBy(bf2.ID.asc())
+                .limit(1)
+        )
     }
 }

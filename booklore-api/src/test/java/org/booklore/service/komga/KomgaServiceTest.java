@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -223,10 +224,12 @@ class KomgaServiceTest {
         List<BookEntity> seriesABooks = List.of(seriesBooks.get(0), seriesBooks.get(1));
         List<BookEntity> seriesBBooks = List.of(seriesBooks.get(2), seriesBooks.get(3));
         
-        when(bookRepository.findBooksBySeriesNameGroupedByLibraryId("Series A", 1L, "Unknown Series"))
-                .thenReturn(seriesABooks);
-        when(bookRepository.findBooksBySeriesNameGroupedByLibraryId("Series B", 1L, "Unknown Series"))
-                .thenReturn(seriesBBooks);
+        when(jooqBookRepository.findBookIdsBySeriesNameGrouped("Series A", 1L))
+                .thenReturn(List.of(1L, 2L));
+        when(jooqBookRepository.findBookIdsBySeriesNameGrouped("Series B", 1L))
+                .thenReturn(List.of(3L, 4L));
+        when(bookRepository.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(seriesABooks);
+        when(bookRepository.findAllWithMetadataByIds(Set.of(3L, 4L))).thenReturn(seriesBBooks);
         
         when(komgaMapper.getUnknownSeriesName()).thenReturn("Unknown Series");
         when(komgaMapper.toKomgaSeriesDto(eq("Series A"), anyLong(), any()))

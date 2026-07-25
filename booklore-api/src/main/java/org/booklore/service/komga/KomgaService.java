@@ -106,13 +106,10 @@ public class KomgaService {
                 // Load only the books for this specific series
                 List<BookEntity> seriesBooks;
                 if (libraryId != null) {
-                    if (groupUnknown) {
-                        seriesBooks = bookRepository.findBooksBySeriesNameGroupedByLibraryId(
-                            seriesName, libraryId, komgaMapper.getUnknownSeriesName());
-                    } else {
-                        seriesBooks = bookRepository.findBooksBySeriesNameUngroupedByLibraryId(
-                            seriesName, libraryId);
-                    }
+                    List<Long> seriesBookIds = groupUnknown
+                            ? jooqBookRepository.findBookIdsBySeriesNameGrouped(seriesName, libraryId)
+                            : jooqBookRepository.findBookIdsBySeriesNameUngrouped(seriesName, libraryId);
+                    seriesBooks = loadBooksPreservingOrder(seriesBookIds);
                 } else {
                     // For all libraries, need to load all books and filter (less common case)
                     List<BookEntity> allBooks = bookRepository.findAllWithMetadata();
@@ -308,6 +305,18 @@ public class KomgaService {
         }
         
         return pages;
+    }
+
+    private List<BookEntity> loadBooksPreservingOrder(List<Long> bookIds) {
+        if (bookIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+                .collect(Collectors.toMap(BookEntity::getId, book -> book));
+        return bookIds.stream()
+                .map(booksById::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private Map<String, List<BookEntity>> groupBooksBySeries(List<BookEntity> books) {
