@@ -7,7 +7,6 @@ import org.booklore.app.dto.*;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
@@ -33,7 +32,6 @@ public class AppSeriesService {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final AuthenticationService authenticationService;
-    private final BookRepository bookRepository;
     private final JooqAppBookRepository jooqAppBookRepository;
     private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     private final JooqAppSeriesRepository jooqAppSeriesRepository;
@@ -85,45 +83,36 @@ public class AppSeriesService {
                 .map(SeriesAggregate::getSeriesName)
                 .toList();
 
-        // Phase 2: Fetch books for enrichment via the two-query pattern
+        // Phase 2: Fetch summary projections for enrichment (jOOQ read model)
         List<Long> bookIds = jooqAppSeriesRepository.findBookIdsBySeriesNames(
                 seriesNames, accessibleLibraryIds, libraryId);
-        List<BookEntity> books = bookRepository.findAllForSummaryByIds(bookIds);
-
-        Map<String, List<BookEntity>> booksBySeries = books.stream()
-                .filter(b -> b.getMetadata() != null && b.getMetadata().getSeriesName() != null)
-                .collect(Collectors.groupingBy(b -> b.getMetadata().getSeriesName()));
+        Map<String, List<AppBookSummary>> booksBySeries = jooqAppBookSummaryRepository
+                .findSummariesByIds(bookIds, null).stream()
+                .filter(s -> s.getSeriesName() != null)
+                .collect(Collectors.groupingBy(AppBookSummary::getSeriesName));
 
         // Merge into summaries, preserving Phase 1 order
         List<AppSeriesSummary> summaries = new ArrayList<>();
         for (SeriesAggregate agg : aggregates) {
-            List<BookEntity> seriesBooks = booksBySeries.getOrDefault(agg.getSeriesName(), Collections.emptyList());
+            List<AppBookSummary> seriesBooks = booksBySeries.getOrDefault(agg.getSeriesName(), Collections.emptyList());
 
             // Distinct authors across all books in series
             List<String> authors = seriesBooks.stream()
-                    .filter(b -> b.getMetadata() != null && b.getMetadata().getAuthors() != null)
-                    .flatMap(b -> b.getMetadata().getAuthors().stream())
-                    .map(AuthorEntity::getName)
+                    .flatMap(s -> s.getAuthors().stream())
                     .distinct()
                     .toList();
 
             // Cover books sorted by seriesNumber ASC nulls last
             List<SeriesCoverBook> coverBooks = seriesBooks.stream()
                     .sorted(Comparator.comparing(
-                            (BookEntity b) -> b.getMetadata().getSeriesNumber(),
+                            AppBookSummary::getSeriesNumber,
                             Comparator.nullsLast(Comparator.naturalOrder())))
-                    .map(b -> {
-                        BookFileEntity primaryFile = b.getPrimaryBookFile();
-                        String fileType = (primaryFile != null && primaryFile.getBookType() != null)
-                                ? primaryFile.getBookType().name()
-                                : null;
-                        return SeriesCoverBook.builder()
-                                .bookId(b.getId())
-                                .coverUpdatedOn(b.getMetadata().getCoverUpdatedOn())
-                                .seriesNumber(b.getMetadata().getSeriesNumber())
-                                .primaryFileType(fileType)
-                                .build();
-                    })
+                    .map(s -> SeriesCoverBook.builder()
+                            .bookId(s.getId())
+                            .coverUpdatedOn(s.getCoverUpdatedOn())
+                            .seriesNumber(s.getSeriesNumber())
+                            .primaryFileType(s.getPrimaryFileType())
+                            .build())
                     .toList();
 
             summaries.add(AppSeriesSummary.builder()

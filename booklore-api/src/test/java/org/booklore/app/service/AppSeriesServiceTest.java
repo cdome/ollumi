@@ -10,8 +10,6 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
 import org.booklore.repository.jooq.JooqAppSeriesRepository;
@@ -42,7 +40,6 @@ import static org.mockito.Mockito.*;
 class AppSeriesServiceTest {
 
     @Mock private AuthenticationService authenticationService;
-    @Mock private BookRepository bookRepository;
     @Mock private JooqAppBookRepository jooqAppBookRepository;
     @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     @Mock private JooqAppSeriesRepository jooqAppSeriesRepository;
@@ -54,7 +51,7 @@ class AppSeriesServiceTest {
     @BeforeEach
     void setUp() {
         service = new AppSeriesService(
-                authenticationService, bookRepository, jooqAppBookRepository,
+                authenticationService, jooqAppBookRepository,
                 jooqAppBookSummaryRepository, jooqAppSeriesRepository
         );
     }
@@ -360,7 +357,7 @@ class AppSeriesServiceTest {
         // Enrichment defaults (overridden by mockBooksQuery when a test provides books)
         when(jooqAppSeriesRepository.findBookIdsBySeriesNames(anyCollection(), any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(bookRepository.findAllForSummaryByIds(anyCollection()))
+        when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any()))
                 .thenReturn(Collections.emptyList());
     }
 
@@ -381,7 +378,16 @@ class AppSeriesServiceTest {
         List<Long> ids = books.stream().map(BookEntity::getId).toList();
         when(jooqAppSeriesRepository.findBookIdsBySeriesNames(anyCollection(), any(), any()))
                 .thenReturn(ids);
-        when(bookRepository.findAllForSummaryByIds(anyCollection())).thenReturn(books);
+        List<AppBookSummary> summaries = books.stream()
+                .map(b -> AppBookSummary.builder()
+                        .id(b.getId())
+                        .seriesName(b.getMetadata().getSeriesName())
+                        .seriesNumber(b.getMetadata().getSeriesNumber())
+                        .coverUpdatedOn(b.getMetadata().getCoverUpdatedOn())
+                        .authors(b.getMetadata().getAuthors().stream().map(AuthorEntity::getName).toList())
+                        .build())
+                .toList();
+        when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any())).thenReturn(summaries);
     }
 
     private void mockBookPage(List<BookEntity> books, long total) {
