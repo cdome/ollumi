@@ -1,7 +1,6 @@
 package org.booklore.service.security;
 
-import org.booklore.model.entity.JwtSecretEntity;
-import org.booklore.repository.JwtSecretRepository;
+import org.booklore.repository.jooq.JooqJwtSecretRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,11 +11,11 @@ import java.util.concurrent.locks.ReentrantLock;
 @Service
 public class JwtSecretService {
 
-    private final JwtSecretRepository jwtSecretRepository;
+    private final JooqJwtSecretRepository jwtSecretRepository;
     private volatile String cachedSecret;
     private final ReentrantLock lock = new ReentrantLock();
 
-    public JwtSecretService(JwtSecretRepository jwtSecretRepository) {
+    public JwtSecretService(JooqJwtSecretRepository jwtSecretRepository) {
         this.jwtSecretRepository = jwtSecretRepository;
     }
 
@@ -26,8 +25,8 @@ public class JwtSecretService {
             lock.lock();
             try {
                 if (cachedSecret == null) {
-                    cachedSecret = jwtSecretRepository.findLatestSecret()
-                            .orElseGet(this::generateAndStoreNewSecret);
+                    String latest = jwtSecretRepository.findLatestSecret();
+                    cachedSecret = latest != null ? latest : generateAndStoreNewSecret();
                 }
             } finally {
                 lock.unlock();
@@ -38,8 +37,7 @@ public class JwtSecretService {
 
     private String generateAndStoreNewSecret() {
         String newSecret = generateRandomSecret();
-        JwtSecretEntity secretEntity = new JwtSecretEntity(newSecret);
-        jwtSecretRepository.save(secretEntity);
+        jwtSecretRepository.insertSecret(newSecret);
         return newSecret;
     }
 
