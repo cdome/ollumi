@@ -10,24 +10,39 @@ import org.booklore.jooq.tables.BookMetadataMoodMapping.BOOK_METADATA_MOOD_MAPPI
 import org.booklore.jooq.tables.BookMetadataTagMapping.BOOK_METADATA_TAG_MAPPING
 import org.booklore.jooq.tables.BookShelfMapping.BOOK_SHELF_MAPPING
 import org.booklore.jooq.tables.Category.CATEGORY
+import org.booklore.jooq.tables.ComicCharacter.COMIC_CHARACTER
+import org.booklore.jooq.tables.ComicCreator.COMIC_CREATOR
+import org.booklore.jooq.tables.ComicLocation.COMIC_LOCATION
+import org.booklore.jooq.tables.ComicMetadata.COMIC_METADATA
+import org.booklore.jooq.tables.ComicMetadataCharacterMapping.COMIC_METADATA_CHARACTER_MAPPING
+import org.booklore.jooq.tables.ComicMetadataCreatorMapping.COMIC_METADATA_CREATOR_MAPPING
+import org.booklore.jooq.tables.ComicMetadataLocationMapping.COMIC_METADATA_LOCATION_MAPPING
+import org.booklore.jooq.tables.ComicMetadataTeamMapping.COMIC_METADATA_TEAM_MAPPING
+import org.booklore.jooq.tables.ComicTeam.COMIC_TEAM
 import org.booklore.jooq.tables.Library.LIBRARY
 import org.booklore.jooq.tables.LibraryPath.LIBRARY_PATH
 import org.booklore.jooq.tables.Mood.MOOD
 import org.booklore.jooq.tables.Shelf.SHELF
 import org.booklore.jooq.tables.Tag.TAG
 import org.booklore.jooq.tables.records.BookMetadataRecord
+import org.booklore.jooq.tables.records.ComicMetadataRecord
+import org.booklore.model.dto.AudiobookMetadata
 import org.booklore.model.dto.Book
 import org.booklore.model.dto.BookFile
 import org.booklore.model.dto.BookMetadata
+import org.booklore.model.dto.ComicMetadata
 import org.booklore.model.dto.LibraryPath
 import org.booklore.model.dto.Shelf
 import org.booklore.model.enums.BookFileType
+import org.booklore.model.enums.ComicCreatorRole
 import org.booklore.model.enums.IconType
 import org.booklore.util.ArchiveUtils
 import org.jooq.DSLContext
 import org.jooq.impl.DSL.field
 import org.jooq.impl.DSL.selectCount
 import org.springframework.stereotype.Repository
+import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.ObjectMapper
 import java.nio.file.Paths
 import java.time.Instant
 import java.time.LocalDateTime
@@ -45,7 +60,10 @@ import java.time.ZoneOffset
  * folder-based files is filesystem-derived and cannot be reproduced here.
  */
 @Repository
-class JooqBookReadRepository(private val dsl: DSLContext) {
+class JooqBookReadRepository(
+    private val dsl: DSLContext,
+    private val objectMapper: ObjectMapper
+) {
 
     private data class BookScalars(
         val id: Long,
@@ -132,6 +150,8 @@ class JooqBookReadRepository(private val dsl: DSLContext) {
 
         val shelvesByBook = shelvesByBook(bookIds)
         val filesByBook = filesByBook(bookIds)
+        val comicByBook = comicByBook(bookIds)
+        val audiobookByBook = audiobookByBook(bookIds)
 
         return scalars.map { s ->
             val files = filesByBook[s.id].orEmpty()
@@ -144,7 +164,7 @@ class JooqBookReadRepository(private val dsl: DSLContext) {
                 .metadataMatchScore(s.metadataMatchScore?.toFloat())
                 .isPhysical(s.isPhysical == 1.toByte())
                 .libraryPath(s.libraryPathId?.let { LibraryPath.builder().id(it).build() })
-                .metadata(metaByBook[s.id]?.let { buildMetadata(it, authorsByBook[s.id].orEmpty(), categoriesByBook[s.id].orEmpty(), moodsByBook[s.id].orEmpty(), tagsByBook[s.id].orEmpty()) })
+                .metadata(metaByBook[s.id]?.let { buildMetadata(it, authorsByBook[s.id].orEmpty(), categoriesByBook[s.id].orEmpty(), moodsByBook[s.id].orEmpty(), tagsByBook[s.id].orEmpty(), comicByBook[s.id], audiobookByBook[s.id]) })
                 .shelves(shelvesByBook[s.id]?.toSet())
                 .primaryFile(primary?.let { toBookFile(s, it) })
                 .alternativeFormats(files.filter { it.isBook && it != primary }.map { toBookFile(s, it) })
@@ -159,10 +179,13 @@ class JooqBookReadRepository(private val dsl: DSLContext) {
 
     private fun buildMetadata(
         m: BookMetadataRecord,
-        authors: List<String>, categories: Set<String>, moods: Set<String>, tags: Set<String>
+        authors: List<String>, categories: Set<String>, moods: Set<String>, tags: Set<String>,
+        comic: ComicMetadata?, audiobook: AudiobookMetadata?
     ): BookMetadata =
         BookMetadata.builder()
             .bookId(m.bookId)
+            .comicMetadata(comic)
+            .audiobookMetadata(audiobook)
             .title(m.title)
             .subtitle(m.subtitle)
             .publisher(m.publisher)
@@ -248,6 +271,172 @@ class JooqBookReadRepository(private val dsl: DSLContext) {
             .ageRatingLocked(m.ageRatingLocked.toBool())
             .contentRatingLocked(m.contentRatingLocked.toBool())
             .build()
+
+    // ------------------------------------------------------------------------
+    // Audiobook metadata (from the first audiobook book file)
+    // ------------------------------------------------------------------------
+
+    private data class ChapterJson(
+        val index: Int? = null, val title: String? = null,
+        val startTimeMs: Long? = null, val endTimeMs: Long? = null, val durationMs: Long? = null
+    )
+
+    private fun audiobookByBook(bookIds: Collection<Long>): Map<Long, AudiobookMetadata> {
+        val byBook = dsl.select(
+            BOOK_FILE.BOOK_ID, BOOK_FILE.DURATION_SECONDS, BOOK_FILE.BITRATE, BOOK_FILE.SAMPLE_RATE,
+            BOOK_FILE.CHANNELS, BOOK_FILE.CODEC, BOOK_FILE.CHAPTER_COUNT, BOOK_FILE.CHAPTERS_JSON
+        )
+            .from(BOOK_FILE)
+            .where(BOOK_FILE.BOOK_ID.`in`(bookIds))
+            .and(BOOK_FILE.BOOK_TYPE.eq("AUDIOBOOK"))
+            .and(BOOK_FILE.IS_BOOK.eq(1))
+            .orderBy(BOOK_FILE.BOOK_ID, BOOK_FILE.ID)
+            .fetchGroups(BOOK_FILE.BOOK_ID)
+
+        val result = HashMap<Long, AudiobookMetadata>()
+        for ((bookId, rows) in byBook) {
+            val r = rows.first()  // first audiobook file, mirroring the mapper
+            val duration = r[BOOK_FILE.DURATION_SECONDS] ?: continue
+            result[bookId] = AudiobookMetadata.builder()
+                .durationSeconds(duration)
+                .bitrate(r[BOOK_FILE.BITRATE])
+                .sampleRate(r[BOOK_FILE.SAMPLE_RATE])
+                .channels(r[BOOK_FILE.CHANNELS])
+                .codec(r[BOOK_FILE.CODEC])
+                .chapterCount(r[BOOK_FILE.CHAPTER_COUNT])
+                .chapters(parseChapters(r[BOOK_FILE.CHAPTERS_JSON]))
+                .build()
+        }
+        return result
+    }
+
+    private fun parseChapters(json: String?): List<AudiobookMetadata.ChapterInfo>? {
+        if (json.isNullOrEmpty()) return null
+        val parsed = try {
+            objectMapper.readValue(json, object : TypeReference<List<ChapterJson>>() {})
+        } catch (e: Exception) {
+            return null
+        }
+        return parsed.map {
+            AudiobookMetadata.ChapterInfo.builder()
+                .index(it.index).title(it.title)
+                .startTimeMs(it.startTimeMs).endTimeMs(it.endTimeMs).durationMs(it.durationMs)
+                .build()
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Comic metadata
+    // ------------------------------------------------------------------------
+
+    private fun comicByBook(bookIds: Collection<Long>): Map<Long, ComicMetadata> {
+        val records: Map<Long, ComicMetadataRecord> = dsl.selectFrom(COMIC_METADATA)
+            .where(COMIC_METADATA.BOOK_ID.`in`(bookIds))
+            .fetchMap(COMIC_METADATA.BOOK_ID)
+        if (records.isEmpty()) return emptyMap()
+
+        val charactersByBook = comicCollection(
+            dsl.select(COMIC_METADATA_CHARACTER_MAPPING.BOOK_ID, COMIC_CHARACTER.NAME)
+                .from(COMIC_METADATA_CHARACTER_MAPPING)
+                .join(COMIC_CHARACTER).on(COMIC_CHARACTER.ID.eq(COMIC_METADATA_CHARACTER_MAPPING.CHARACTER_ID))
+                .where(COMIC_METADATA_CHARACTER_MAPPING.BOOK_ID.`in`(bookIds)).fetch()
+        )
+        val teamsByBook = comicCollection(
+            dsl.select(COMIC_METADATA_TEAM_MAPPING.BOOK_ID, COMIC_TEAM.NAME)
+                .from(COMIC_METADATA_TEAM_MAPPING)
+                .join(COMIC_TEAM).on(COMIC_TEAM.ID.eq(COMIC_METADATA_TEAM_MAPPING.TEAM_ID))
+                .where(COMIC_METADATA_TEAM_MAPPING.BOOK_ID.`in`(bookIds)).fetch()
+        )
+        val locationsByBook = comicCollection(
+            dsl.select(COMIC_METADATA_LOCATION_MAPPING.BOOK_ID, COMIC_LOCATION.NAME)
+                .from(COMIC_METADATA_LOCATION_MAPPING)
+                .join(COMIC_LOCATION).on(COMIC_LOCATION.ID.eq(COMIC_METADATA_LOCATION_MAPPING.LOCATION_ID))
+                .where(COMIC_METADATA_LOCATION_MAPPING.BOOK_ID.`in`(bookIds)).fetch()
+        )
+
+        // Creators grouped by book, then split by role
+        val creatorsByBook: Map<Long, List<Pair<String, String>>> =
+            dsl.select(COMIC_METADATA_CREATOR_MAPPING.BOOK_ID, COMIC_METADATA_CREATOR_MAPPING.ROLE, COMIC_CREATOR.NAME)
+                .from(COMIC_METADATA_CREATOR_MAPPING)
+                .join(COMIC_CREATOR).on(COMIC_CREATOR.ID.eq(COMIC_METADATA_CREATOR_MAPPING.CREATOR_ID))
+                .where(COMIC_METADATA_CREATOR_MAPPING.BOOK_ID.`in`(bookIds))
+                .fetch()
+                .groupBy({ it.value1()!! }, { it.value2()!! to it.value3()!! })
+
+        return records.mapValues { (bookId, c) ->
+            val creators = creatorsByBook[bookId].orEmpty()
+            buildComic(
+                c,
+                characters = charactersByBook[bookId].orEmpty(),
+                teams = teamsByBook[bookId].orEmpty(),
+                locations = locationsByBook[bookId].orEmpty(),
+                creators = creators
+            )
+        }
+    }
+
+    private fun creatorsWithRole(creators: List<Pair<String, String>>, role: ComicCreatorRole): Set<String> =
+        creators.filter { it.first == role.name }.map { it.second }.toSet()
+
+    private fun buildComic(
+        c: ComicMetadataRecord,
+        characters: Set<String>, teams: Set<String>, locations: Set<String>,
+        creators: List<Pair<String, String>>
+    ): ComicMetadata =
+        ComicMetadata.builder()
+            .issueNumber(c.issueNumber)
+            .volumeName(c.volumeName)
+            .volumeNumber(c.volumeNumber)
+            .storyArc(c.storyArc)
+            .storyArcNumber(c.storyArcNumber)
+            .alternateSeries(c.alternateSeries)
+            .alternateIssue(c.alternateIssue)
+            .imprint(c.imprint)
+            .format(c.format)
+            .blackAndWhite(c.blackAndWhite.toBool())
+            .manga(c.manga.toBool())
+            .readingDirection(c.readingDirection)
+            .webLink(c.webLink)
+            .notes(c.notes)
+            .characters(characters)
+            .teams(teams)
+            .locations(locations)
+            .pencillers(creatorsWithRole(creators, ComicCreatorRole.PENCILLER))
+            .inkers(creatorsWithRole(creators, ComicCreatorRole.INKER))
+            .colorists(creatorsWithRole(creators, ComicCreatorRole.COLORIST))
+            .letterers(creatorsWithRole(creators, ComicCreatorRole.LETTERER))
+            .coverArtists(creatorsWithRole(creators, ComicCreatorRole.COVER_ARTIST))
+            .editors(creatorsWithRole(creators, ComicCreatorRole.EDITOR))
+            .issueNumberLocked(c.issueNumberLocked.toBool())
+            .volumeNameLocked(c.volumeNameLocked.toBool())
+            .volumeNumberLocked(c.volumeNumberLocked.toBool())
+            .storyArcLocked(c.storyArcLocked.toBool())
+            .storyArcNumberLocked(c.storyArcNumberLocked.toBool())
+            .alternateSeriesLocked(c.alternateSeriesLocked.toBool())
+            .alternateIssueLocked(c.alternateIssueLocked.toBool())
+            .imprintLocked(c.imprintLocked.toBool())
+            .formatLocked(c.formatLocked.toBool())
+            .blackAndWhiteLocked(c.blackAndWhiteLocked.toBool())
+            .mangaLocked(c.mangaLocked.toBool())
+            .readingDirectionLocked(c.readingDirectionLocked.toBool())
+            .webLinkLocked(c.webLinkLocked.toBool())
+            .notesLocked(c.notesLocked.toBool())
+            .creatorsLocked(c.creatorsLocked.toBool())
+            .pencillersLocked(c.pencillersLocked.toBool())
+            .inkersLocked(c.inkersLocked.toBool())
+            .coloristsLocked(c.coloristsLocked.toBool())
+            .letterersLocked(c.letterersLocked.toBool())
+            .coverArtistsLocked(c.coverArtistsLocked.toBool())
+            .editorsLocked(c.editorsLocked.toBool())
+            .charactersLocked(c.charactersLocked.toBool())
+            .teamsLocked(c.teamsLocked.toBool())
+            .locationsLocked(c.locationsLocked.toBool())
+            .build()
+
+    private fun comicCollection(
+        result: org.jooq.Result<out org.jooq.Record2<Long, String>>
+    ): Map<Long, Set<String>> =
+        result.groupBy({ it.value1()!! }, { it.value2()!! }).mapValues { it.value.toSet() }
 
     // ------------------------------------------------------------------------
     // Shelves

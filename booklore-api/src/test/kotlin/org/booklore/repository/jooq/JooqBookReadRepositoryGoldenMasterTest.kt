@@ -1,6 +1,7 @@
 package org.booklore.repository.jooq
 
 import org.assertj.core.api.Assertions.assertThat
+import org.booklore.mapper.BookMapper
 import org.booklore.mapper.v2.BookMapperV2
 import org.booklore.jooq.tables.Author.AUTHOR
 import org.booklore.jooq.tables.Book.BOOK
@@ -12,6 +13,15 @@ import org.booklore.jooq.tables.BookMetadataMoodMapping.BOOK_METADATA_MOOD_MAPPI
 import org.booklore.jooq.tables.BookMetadataTagMapping.BOOK_METADATA_TAG_MAPPING
 import org.booklore.jooq.tables.BookShelfMapping.BOOK_SHELF_MAPPING
 import org.booklore.jooq.tables.Category.CATEGORY
+import org.booklore.jooq.tables.ComicCharacter.COMIC_CHARACTER
+import org.booklore.jooq.tables.ComicCreator.COMIC_CREATOR
+import org.booklore.jooq.tables.ComicLocation.COMIC_LOCATION
+import org.booklore.jooq.tables.ComicMetadata.COMIC_METADATA
+import org.booklore.jooq.tables.ComicMetadataCharacterMapping.COMIC_METADATA_CHARACTER_MAPPING
+import org.booklore.jooq.tables.ComicMetadataCreatorMapping.COMIC_METADATA_CREATOR_MAPPING
+import org.booklore.jooq.tables.ComicMetadataLocationMapping.COMIC_METADATA_LOCATION_MAPPING
+import org.booklore.jooq.tables.ComicMetadataTeamMapping.COMIC_METADATA_TEAM_MAPPING
+import org.booklore.jooq.tables.ComicTeam.COMIC_TEAM
 import org.booklore.jooq.tables.Library.LIBRARY
 import org.booklore.jooq.tables.LibraryPath.LIBRARY_PATH
 import org.booklore.jooq.tables.Mood.MOOD
@@ -39,6 +49,7 @@ class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
     @Autowired private lateinit var repository: JooqBookReadRepository
     @Autowired private lateinit var bookRepository: BookRepository
     @Autowired private lateinit var bookMapperV2: BookMapperV2
+    @Autowired private lateinit var bookMapper: BookMapper
     @Autowired private lateinit var dsl: DSLContext
 
     private var bookId = 0L
@@ -51,6 +62,11 @@ class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
             BOOK_METADATA_MOOD_MAPPING, MOOD,
             BOOK_METADATA_TAG_MAPPING, TAG,
             BOOK_METADATA_AUTHOR_MAPPING, AUTHOR,
+            COMIC_METADATA_CHARACTER_MAPPING, COMIC_CHARACTER,
+            COMIC_METADATA_TEAM_MAPPING, COMIC_TEAM,
+            COMIC_METADATA_LOCATION_MAPPING, COMIC_LOCATION,
+            COMIC_METADATA_CREATOR_MAPPING, COMIC_CREATOR,
+            COMIC_METADATA,
             BOOK_FILE, BOOK_METADATA, BOOK, LIBRARY_PATH, LIBRARY
         ).forEach { dsl.deleteFrom(it).execute() }
 
@@ -117,17 +133,87 @@ class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
         insertFile("hobbit.epub", "EPUB", isBook = true)
         insertFile("hobbit.pdf", "PDF", isBook = true)
         insertFile("notes.txt", null, isBook = false)
+        insertAudiobookFile()
+
+        insertComicMetadata()
+    }
+
+    private fun insertAudiobookFile() {
+        dsl.insertInto(BOOK_FILE)
+            .set(BOOK_FILE.BOOK_ID, bookId)
+            .set(BOOK_FILE.FILE_NAME, "hobbit.m4b")
+            .set(BOOK_FILE.FILE_SUB_PATH, "sub")
+            .set(BOOK_FILE.BOOK_TYPE, "AUDIOBOOK")
+            .set(BOOK_FILE.IS_BOOK, 1.toByte())
+            .set(BOOK_FILE.ADDED_ON, LocalDateTime.of(2026, 1, 6, 10, 0))
+            .set(BOOK_FILE.DURATION_SECONDS, 57_600L)
+            .set(BOOK_FILE.BITRATE, 128)
+            .set(BOOK_FILE.SAMPLE_RATE, 44_100)
+            .set(BOOK_FILE.CHANNELS, 2)
+            .set(BOOK_FILE.CODEC, "aac")
+            .set(BOOK_FILE.CHAPTER_COUNT, 2)
+            .set(
+                BOOK_FILE.CHAPTERS_JSON,
+                """[{"index":1,"title":"Chapter 1","startTimeMs":0,"endTimeMs":1000,"durationMs":1000},{"index":2,"title":"Chapter 2","startTimeMs":1000,"endTimeMs":3000,"durationMs":2000}]"""
+            )
+            .execute()
+    }
+
+    private fun insertComicMetadata() {
+        dsl.insertInto(COMIC_METADATA)
+            .set(COMIC_METADATA.BOOK_ID, bookId)
+            .set(COMIC_METADATA.ISSUE_NUMBER, "1")
+            .set(COMIC_METADATA.VOLUME_NAME, "Vol 1")
+            .set(COMIC_METADATA.VOLUME_NUMBER, 1)
+            .set(COMIC_METADATA.STORY_ARC, "Origins")
+            .set(COMIC_METADATA.IMPRINT, "Vertigo")
+            .set(COMIC_METADATA.FORMAT, "Trade Paperback")
+            .set(COMIC_METADATA.BLACK_AND_WHITE, 0.toByte())
+            .set(COMIC_METADATA.MANGA, 1.toByte())
+            .set(COMIC_METADATA.READING_DIRECTION, "LTR")
+            .set(COMIC_METADATA.WEB_LINK, "https://example.com")
+            .set(COMIC_METADATA.NOTES, "note")
+            .set(COMIC_METADATA.ISSUE_NUMBER_LOCKED, 1.toByte())
+            .set(COMIC_METADATA.MANGA_LOCKED, 0.toByte())
+            .execute()
+
+        val charId = dsl.insertInto(COMIC_CHARACTER).set(COMIC_CHARACTER.NAME, "Batman")
+            .returningResult(COMIC_CHARACTER.ID).fetchOne()!!.get(COMIC_CHARACTER.ID)!!
+        dsl.insertInto(COMIC_METADATA_CHARACTER_MAPPING)
+            .set(COMIC_METADATA_CHARACTER_MAPPING.BOOK_ID, bookId)
+            .set(COMIC_METADATA_CHARACTER_MAPPING.CHARACTER_ID, charId).execute()
+
+        val teamId = dsl.insertInto(COMIC_TEAM).set(COMIC_TEAM.NAME, "Justice League")
+            .returningResult(COMIC_TEAM.ID).fetchOne()!!.get(COMIC_TEAM.ID)!!
+        dsl.insertInto(COMIC_METADATA_TEAM_MAPPING)
+            .set(COMIC_METADATA_TEAM_MAPPING.BOOK_ID, bookId)
+            .set(COMIC_METADATA_TEAM_MAPPING.TEAM_ID, teamId).execute()
+
+        val locId = dsl.insertInto(COMIC_LOCATION).set(COMIC_LOCATION.NAME, "Gotham")
+            .returningResult(COMIC_LOCATION.ID).fetchOne()!!.get(COMIC_LOCATION.ID)!!
+        dsl.insertInto(COMIC_METADATA_LOCATION_MAPPING)
+            .set(COMIC_METADATA_LOCATION_MAPPING.BOOK_ID, bookId)
+            .set(COMIC_METADATA_LOCATION_MAPPING.LOCATION_ID, locId).execute()
+
+        val creatorId = dsl.insertInto(COMIC_CREATOR).set(COMIC_CREATOR.NAME, "Alan Moore")
+            .returningResult(COMIC_CREATOR.ID).fetchOne()!!.get(COMIC_CREATOR.ID)!!
+        dsl.insertInto(COMIC_METADATA_CREATOR_MAPPING)
+            .set(COMIC_METADATA_CREATOR_MAPPING.BOOK_ID, bookId)
+            .set(COMIC_METADATA_CREATOR_MAPPING.CREATOR_ID, creatorId)
+            .set(COMIC_METADATA_CREATOR_MAPPING.ROLE, "PENCILLER").execute()
     }
 
     @Test
     @Transactional
     fun `jooq book read model matches MapStruct`() {
         val entity: BookEntity = bookRepository.findAllWithMetadataByIds(setOf(bookId)).single()
-        val reference = bookMapperV2.toDTO(entity)
-
         val candidate = repository.findByIds(listOf(bookId)).single()
 
-        assertThat(candidate).usingRecursiveComparison().ignoringCollectionOrder().isEqualTo(reference)
+        assertThat(candidate).usingRecursiveComparison().ignoringCollectionOrder()
+            .isEqualTo(bookMapperV2.toDTO(entity))
+        // Both web read paths must be reproduced: BookService uses BookMapper, BookQueryService uses BookMapperV2.
+        assertThat(candidate).usingRecursiveComparison().ignoringCollectionOrder()
+            .isEqualTo(bookMapper.toBook(entity))
     }
 
     @Test
