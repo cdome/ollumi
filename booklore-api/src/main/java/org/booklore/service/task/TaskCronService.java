@@ -5,9 +5,8 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.TaskCronConfigRequest;
 import org.booklore.model.dto.response.CronConfig;
-import org.booklore.model.entity.TaskCronConfigurationEntity;
 import org.booklore.model.enums.TaskType;
-import org.booklore.repository.TaskCronConfigurationRepository;
+import org.booklore.repository.jooq.JooqTaskCronConfigurationRepository;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -24,45 +23,45 @@ import java.util.regex.Pattern;
 public class TaskCronService {
 
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
-    private final TaskCronConfigurationRepository repository;
+    private final JooqTaskCronConfigurationRepository repository;
     private final AuthenticationService authService;
 
     @Transactional(readOnly = true)
-    public List<TaskCronConfigurationEntity> getAllEnabledCronConfigs() {
-        return repository.findByEnabledTrue();
+    public List<CronConfig> getAllEnabledCronConfigs() {
+        return repository.findAllEnabled();
     }
 
     @Transactional(readOnly = true)
     public CronConfig getCronConfigOrDefault(TaskType taskType) {
         validateTaskTypeForCron(taskType);
-        return repository.findByTaskType(taskType)
-                .map(this::mapToResponse)
-                .orElse(CronConfig.builder()
+        CronConfig existing = repository.findByTaskType(taskType);
+        return existing != null ? existing
+                : CronConfig.builder()
                         .taskType(taskType)
                         .enabled(false)
-                        .build());
+                        .build();
     }
 
     @Transactional
     public CronConfig patchCronConfig(TaskType taskType, TaskCronConfigRequest request) {
         validateTaskTypeForCron(taskType);
         BookLoreUser user = authService.getAuthenticatedUser();
-        TaskCronConfigurationEntity config = repository.findByTaskType(taskType)
-                .orElse(TaskCronConfigurationEntity.builder()
-                        .taskType(taskType)
-                        .createdBy(user.getId())
-                        .enabled(false)
-                        .build());
+
+        CronConfig existing = repository.findByTaskType(taskType);
+        String cronExpression = existing != null ? existing.getCronExpression() : null;
+        boolean enabled = existing != null && Boolean.TRUE.equals(existing.getEnabled());
+
         if (request.getCronExpression() != null) {
             validateCronExpression(request.getCronExpression());
-            config.setCronExpression(request.getCronExpression());
+            cronExpression = request.getCronExpression();
         }
         if (request.getEnabled() != null) {
-            config.setEnabled(request.getEnabled());
+            enabled = request.getEnabled();
         }
-        config = repository.save(config);
+
+        CronConfig saved = repository.save(taskType, cronExpression, enabled, user.getId());
         log.info("Updated cron configuration for task type: {}", taskType);
-        return mapToResponse(config);
+        return saved;
     }
 
     private void validateTaskTypeForCron(TaskType taskType) {
@@ -89,14 +88,4 @@ public class TaskCronService {
         }
     }
 
-    private CronConfig mapToResponse(TaskCronConfigurationEntity config) {
-        return CronConfig.builder()
-                .id(config.getId())
-                .taskType(config.getTaskType())
-                .cronExpression(config.getCronExpression())
-                .enabled(config.getEnabled())
-                .createdAt(config.getCreatedAt())
-                .updatedAt(config.getUpdatedAt())
-                .build();
-    }
 }
