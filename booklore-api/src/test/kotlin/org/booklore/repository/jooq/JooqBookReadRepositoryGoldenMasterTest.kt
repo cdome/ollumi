@@ -2,7 +2,6 @@ package org.booklore.repository.jooq
 
 import org.assertj.core.api.Assertions.assertThat
 import org.booklore.mapper.BookMapper
-import org.booklore.mapper.v2.BookMapperV2
 import org.booklore.jooq.tables.Author.AUTHOR
 import org.booklore.jooq.tables.Book.BOOK
 import org.booklore.jooq.tables.BookFile.BOOK_FILE
@@ -48,7 +47,6 @@ class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
 
     @Autowired private lateinit var repository: JooqBookReadRepository
     @Autowired private lateinit var bookRepository: BookRepository
-    @Autowired private lateinit var bookMapperV2: BookMapperV2
     @Autowired private lateinit var bookMapper: BookMapper
     @Autowired private lateinit var dsl: DSLContext
 
@@ -209,9 +207,8 @@ class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
         val entity: BookEntity = bookRepository.findAllWithMetadataByIds(setOf(bookId)).single()
         val candidate = repository.findByIds(listOf(bookId)).single()
 
-        assertThat(candidate).usingRecursiveComparison().ignoringCollectionOrder()
-            .isEqualTo(bookMapperV2.toDTO(entity))
-        // Both web read paths must be reproduced: BookService uses BookMapper, BookQueryService uses BookMapperV2.
+        // BookMapper.toBook is the live web Book mapper (write-flow notifications still use it);
+        // the jOOQ read model must reproduce it exactly.
         assertThat(candidate).usingRecursiveComparison().ignoringCollectionOrder()
             .isEqualTo(bookMapper.toBook(entity))
     }
