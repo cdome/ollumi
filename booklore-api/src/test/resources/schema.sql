@@ -15,6 +15,22 @@ CREATE TABLE IF NOT EXISTS task_cron_configuration
     CONSTRAINT uq_task_type UNIQUE (task_type)
 );
 
+-- Task history (`tasks`): read/written by TaskHistoryService now that its entity is gone.
+CREATE TABLE IF NOT EXISTS tasks
+(
+    id                  VARCHAR(36) NOT NULL PRIMARY KEY,
+    type                VARCHAR(50) NOT NULL,
+    status              VARCHAR(50) NOT NULL,
+    user_id             BIGINT      NOT NULL,
+    created_at          TIMESTAMP   NOT NULL,
+    updated_at          TIMESTAMP,
+    completed_at        TIMESTAMP,
+    progress_percentage INT,
+    message             TEXT,
+    errorDetails        TEXT,
+    task_options        TEXT
+);
+
 -- Written by AuditService during full-context tests (login, etc.); the write swallows
 -- errors, but recreating the table keeps audit writes working as they did under JPA.
 CREATE TABLE IF NOT EXISTS audit_log

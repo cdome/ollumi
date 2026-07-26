@@ -1,7 +1,7 @@
 package org.booklore.service.task;
 
-import org.booklore.repository.TaskHistoryRepository;
-import org.booklore.model.entity.TaskHistoryEntity;
+import org.booklore.repository.jooq.JooqTaskHistoryRepository;
+import org.booklore.repository.jooq.dto.TaskHistory;
 import org.booklore.service.audit.AuditService;
 import org.booklore.task.TaskStatus;
 import org.booklore.model.dto.response.TasksHistoryResponse;
@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class TaskHistoryServiceTest {
@@ -24,7 +25,7 @@ class TaskHistoryServiceTest {
     private static final LocalDateTime FIXED_TIME = LocalDateTime.of(2025, 1, 1, 12, 0, 0);
 
     @Mock
-    private TaskHistoryRepository taskHistoryRepository;
+    private JooqTaskHistoryRepository taskHistoryRepository;
     @Mock
     private AuditService auditService;
 
@@ -45,106 +46,57 @@ class TaskHistoryServiceTest {
         }
     }
 
+    private TaskHistory history(String id, TaskType type, TaskStatus status, Integer progress, LocalDateTime createdAt) {
+        return new TaskHistory(id, type, status, progress, null, createdAt, null, null);
+    }
+
     @Test
-    void testCreateTask_savesEntity() {
+    void testCreateTask_insertsRow() {
         String taskId = "task1";
         TaskType type = TaskType.REFRESH_LIBRARY_METADATA;
         Long userId = 123L;
         Map<String, Object> options = new HashMap<>();
         options.put("key", "value");
 
-        ArgumentCaptor<TaskHistoryEntity> captor = ArgumentCaptor.forClass(TaskHistoryEntity.class);
-
         taskHistoryService.createTask(taskId, type, userId, options);
 
-        verify(taskHistoryRepository, times(1)).save(captor.capture());
-        TaskHistoryEntity saved = captor.getValue();
-        assertEquals(taskId, saved.getId());
-        assertEquals(type, saved.getType());
-        assertEquals(TaskStatus.ACCEPTED, saved.getStatus());
-        assertEquals(userId, saved.getUserId());
-        assertEquals(0, saved.getProgressPercentage());
-        assertEquals(options, saved.getTaskOptions());
-        assertNotNull(saved.getCreatedAt());
+        verify(taskHistoryRepository, times(1)).insert(
+                eq(taskId), eq(type), eq(TaskStatus.ACCEPTED), eq(userId), any(), eq(0), eq(options));
     }
 
     @Test
-    void testUpdateTaskStatus_foundAndUpdated() {
+    void testUpdateTaskStatus_terminalCompletesRow() {
         String taskId = "task2";
-        TaskHistoryEntity entity = TaskHistoryEntity.builder()
-                .id(taskId)
-                .type(TaskType.SYNC_LIBRARY_FILES)
-                .status(TaskStatus.ACCEPTED)
-                .progressPercentage(0)
-                .createdAt(FIXED_TIME)
-                .build();
-
-        when(taskHistoryRepository.findById(taskId)).thenReturn(Optional.of(entity));
 
         taskHistoryService.updateTaskStatus(taskId, TaskStatus.COMPLETED, "Done");
 
-        assertEquals(TaskStatus.COMPLETED, entity.getStatus());
-        assertEquals("Done", entity.getMessage());
-        assertEquals(100, entity.getProgressPercentage());
-        assertNotNull(entity.getCompletedAt());
-        assertNotNull(entity.getUpdatedAt());
-        verify(taskHistoryRepository).save(entity);
+        verify(taskHistoryRepository).completeStatus(eq(taskId), eq(TaskStatus.COMPLETED), eq("Done"), any(), any(), eq(100));
+        verify(taskHistoryRepository, never()).updateStatus(any(), any(), any(), any());
     }
 
     @Test
-    void testUpdateTaskStatus_notFound() {
-        when(taskHistoryRepository.findById("notfound")).thenReturn(Optional.empty());
-        taskHistoryService.updateTaskStatus("notfound", TaskStatus.FAILED, "Error");
-        verify(taskHistoryRepository, never()).save(any());
+    void testUpdateTaskStatus_nonTerminalUpdatesStatusOnly() {
+        String taskId = "task2b";
+
+        taskHistoryService.updateTaskStatus(taskId, TaskStatus.IN_PROGRESS, "Working");
+
+        verify(taskHistoryRepository).updateStatus(eq(taskId), eq(TaskStatus.IN_PROGRESS), eq("Working"), any());
+        verify(taskHistoryRepository, never()).completeStatus(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test
-    void testUpdateTaskError_foundAndUpdated() {
+    void testUpdateTaskError_updatesRow() {
         String taskId = "task3";
-        TaskHistoryEntity entity = TaskHistoryEntity.builder()
-                .id(taskId)
-                .type(TaskType.REFRESH_LIBRARY_METADATA)
-                .status(TaskStatus.ACCEPTED)
-                .progressPercentage(0)
-                .createdAt(FIXED_TIME)
-                .build();
-
-        when(taskHistoryRepository.findById(taskId)).thenReturn(Optional.of(entity));
 
         taskHistoryService.updateTaskError(taskId, "Some error");
 
-        assertEquals(TaskStatus.FAILED, entity.getStatus());
-        assertEquals("Some error", entity.getErrorDetails());
-        assertEquals(0, entity.getProgressPercentage());
-        assertNotNull(entity.getCompletedAt());
-        assertNotNull(entity.getUpdatedAt());
-        verify(taskHistoryRepository).save(entity);
-    }
-
-    @Test
-    void testUpdateTaskError_notFound() {
-        when(taskHistoryRepository.findById("notfound")).thenReturn(Optional.empty());
-        taskHistoryService.updateTaskError("notfound", "Error");
-        verify(taskHistoryRepository, never()).save(any());
+        verify(taskHistoryRepository).updateError(eq(taskId), eq("Some error"), any(), any());
     }
 
     @Test
     void testGetLatestTasksForEachType_success() {
-        TaskHistoryEntity importTask = TaskHistoryEntity.builder()
-                .id("t1")
-                .type(TaskType.REFRESH_LIBRARY_METADATA)
-                .status(TaskStatus.COMPLETED)
-                .progressPercentage(100)
-                .createdAt(FIXED_TIME)
-                .build();
-
-        TaskHistoryEntity exportTask = TaskHistoryEntity.builder()
-                .id("t2")
-                .type(TaskType.SYNC_LIBRARY_FILES)
-                .status(TaskStatus.ACCEPTED)
-                .progressPercentage(50)
-                .createdAt(FIXED_TIME.plusMinutes(5))
-                .build();
+        TaskHistory importTask = history("t1", TaskType.REFRESH_LIBRARY_METADATA, TaskStatus.COMPLETED, 100, FIXED_TIME);
+        TaskHistory exportTask = history("t2", TaskType.SYNC_LIBRARY_FILES, TaskStatus.ACCEPTED, 50, FIXED_TIME.plusMinutes(5));
 
         when(taskHistoryRepository.findLatestTaskForEachType())
                 .thenReturn(Arrays.asList(importTask, exportTask));
@@ -168,79 +120,33 @@ class TaskHistoryServiceTest {
     }
 
     @Test
-    void testGetLatestTasksForEachType_skipsInvalidType() {
-        TaskHistoryEntity invalidTask = TaskHistoryEntity.builder()
-                .id("t3")
-                .type(null)
-                .status(TaskStatus.FAILED)
-                .progressPercentage(0)
-                .createdAt(FIXED_TIME)
-                .build();
-
-        when(taskHistoryRepository.findLatestTaskForEachType()).thenReturn(Collections.singletonList(invalidTask));
-
-        TasksHistoryResponse response = taskHistoryService.getLatestTasksForEachType();
-        assertNotNull(response);
-        assertTrue(response.getTaskHistories().stream().allMatch(h -> h.getId() == null || h.getType() != null));
-    }
-
-    @Test
     void testCreateTask_withNullOptions() {
         String taskId = "taskNullOptions";
         TaskType type = TaskType.CLEANUP_TEMP_METADATA;
         Long userId = 456L;
 
-        ArgumentCaptor<TaskHistoryEntity> captor = ArgumentCaptor.forClass(TaskHistoryEntity.class);
-
         taskHistoryService.createTask(taskId, type, userId, null);
 
-        verify(taskHistoryRepository, times(1)).save(captor.capture());
-        TaskHistoryEntity saved = captor.getValue();
-        assertNull(saved.getTaskOptions());
+        verify(taskHistoryRepository, times(1)).insert(
+                eq(taskId), eq(type), eq(TaskStatus.ACCEPTED), eq(userId), any(), eq(0), isNull());
     }
 
     @Test
     void testUpdateTaskStatus_withNullMessage() {
         String taskId = "taskNullMsg";
-        TaskHistoryEntity entity = TaskHistoryEntity.builder()
-                .id(taskId)
-                .type(TaskType.CLEANUP_TEMP_METADATA)
-                .status(TaskStatus.ACCEPTED)
-                .progressPercentage(0)
-                .createdAt(FIXED_TIME)
-                .build();
-
-        when(taskHistoryRepository.findById(taskId)).thenReturn(Optional.of(entity));
 
         taskHistoryService.updateTaskStatus(taskId, TaskStatus.COMPLETED, null);
 
-        assertEquals(TaskStatus.COMPLETED, entity.getStatus());
-        assertNull(entity.getMessage());
-        assertEquals(100, entity.getProgressPercentage());
-        assertNotNull(entity.getCompletedAt());
-        verify(taskHistoryRepository).save(entity);
+        verify(taskHistoryRepository).completeStatus(eq(taskId), eq(TaskStatus.COMPLETED), isNull(), any(), any(), eq(100));
     }
 
     @Test
     void testUpdateTaskError_withNullErrorDetails() {
         String taskId = "taskNullError";
-        TaskHistoryEntity entity = TaskHistoryEntity.builder()
-                .id(taskId)
-                .type(TaskType.CLEANUP_TEMP_METADATA)
-                .status(TaskStatus.ACCEPTED)
-                .progressPercentage(0)
-                .createdAt(FIXED_TIME)
-                .build();
-
-        when(taskHistoryRepository.findById(taskId)).thenReturn(Optional.of(entity));
 
         taskHistoryService.updateTaskError(taskId, null);
 
-        assertEquals(TaskStatus.FAILED, entity.getStatus());
-        assertNull(entity.getErrorDetails());
-        assertEquals(0, entity.getProgressPercentage());
-        assertNotNull(entity.getCompletedAt());
-        verify(taskHistoryRepository).save(entity);
+        verify(taskHistoryRepository).updateError(eq(taskId), isNull(), any(), any());
     }
 
     @Test
@@ -250,10 +156,8 @@ class TaskHistoryServiceTest {
         Map<String, Object> options = new HashMap<>();
 
         assertDoesNotThrow(() -> taskHistoryService.createTask(taskId, null, userId, options));
-        ArgumentCaptor<TaskHistoryEntity> captor = ArgumentCaptor.forClass(TaskHistoryEntity.class);
-        verify(taskHistoryRepository, times(1)).save(captor.capture());
-        TaskHistoryEntity saved = captor.getValue();
-        assertNull(saved.getType());
+        verify(taskHistoryRepository, times(1)).insert(
+                eq(taskId), isNull(), eq(TaskStatus.ACCEPTED), eq(userId), any(), eq(0), eq(options));
     }
 
     @Test
@@ -267,13 +171,7 @@ class TaskHistoryServiceTest {
     @Test
     void testGetLatestTasksForEachType_allTypesHidden() {
         List<TaskType> hiddenTypes = Arrays.asList(TaskType.values());
-        TaskHistoryEntity dummyTask = TaskHistoryEntity.builder()
-                .id("dummy")
-                .type(TaskType.CLEANUP_DELETED_BOOKS)
-                .status(TaskStatus.FAILED)
-                .progressPercentage(0)
-                .createdAt(FIXED_TIME)
-                .build();
+        TaskHistory dummyTask = history("dummy", TaskType.CLEANUP_DELETED_BOOKS, TaskStatus.FAILED, 0, FIXED_TIME);
         when(taskHistoryRepository.findLatestTaskForEachType()).thenReturn(Collections.singletonList(dummyTask));
 
         hiddenTypes.forEach(type -> {
