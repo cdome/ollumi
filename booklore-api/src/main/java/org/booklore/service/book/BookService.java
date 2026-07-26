@@ -7,6 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -53,9 +57,9 @@ public class BookService {
 
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
-    private final PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
-    private final CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
-    private final NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
+    private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
+    private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
+    private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     private final FileService fileService;
     private final JooqBookReadRepository jooqBookReadRepository;
     private final UserBookProgressRepository userBookProgressRepository;
@@ -65,7 +69,7 @@ public class BookService {
     private final BookDownloadService bookDownloadService;
     private final MonitoringRegistrationService monitoringRegistrationService;
     private final BookUpdateService bookUpdateService;
-    private final EbookViewerPreferenceRepository ebookViewerPreferencesRepository;
+    private final JooqEbookViewerPreferenceRepository ebookViewerPreferencesRepository;
     private final SidecarMetadataWriter sidecarMetadataWriter;
     private final FileStreamingService fileStreamingService;
     private final AuditService auditService;
@@ -180,49 +184,16 @@ public class BookService {
         if (bookType == BookFileType.EPUB || bookType == BookFileType.FB2
                 || bookType == BookFileType.MOBI
                 || bookType == BookFileType.AZW3) {
-            ebookViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(epubPref -> settingsBuilder.ebookSettings(EbookViewerPreferences.builder()
-                            .bookId(bookId)
-                            .userId(user.getId())
-                            .fontFamily(epubPref.getFontFamily())
-                            .fontSize(epubPref.getFontSize())
-                            .gap(epubPref.getGap())
-                            .hyphenate(epubPref.getHyphenate())
-                            .isDark(epubPref.getIsDark())
-                            .justify(epubPref.getJustify())
-                            .lineHeight(epubPref.getLineHeight())
-                            .maxBlockSize(epubPref.getMaxBlockSize())
-                            .maxColumnCount(epubPref.getMaxColumnCount())
-                            .maxInlineSize(epubPref.getMaxInlineSize())
-                            .theme(epubPref.getTheme())
-                            .flow(epubPref.getFlow())
-                            .build()));
+            Optional.ofNullable(ebookViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::ebookSettings);
         } else if (bookType == BookFileType.PDF) {
-            pdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(pdfPref -> settingsBuilder.pdfSettings(PdfViewerPreferences.builder()
-                            .bookId(bookId)
-                            .zoom(pdfPref.getZoom())
-                            .spread(pdfPref.getSpread())
-                            .build()));
-            newPdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(pdfPref -> settingsBuilder.newPdfSettings(NewPdfViewerPreferences.builder()
-                            .bookId(bookId)
-                            .pageViewMode(pdfPref.getPageViewMode())
-                            .pageSpread(pdfPref.getPageSpread())
-                            .fitMode(pdfPref.getFitMode())
-                            .scrollMode(pdfPref.getScrollMode())
-                            .backgroundColor(pdfPref.getBackgroundColor())
-                            .build()));
+            Optional.ofNullable(pdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::pdfSettings);
+            Optional.ofNullable(newPdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::newPdfSettings);
         } else if (bookType == BookFileType.CBX) {
-            cbxViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(cbxPref -> settingsBuilder.cbxSettings(CbxViewerPreferences.builder()
-                            .bookId(bookId)
-                            .pageViewMode(cbxPref.getPageViewMode())
-                            .pageSpread(cbxPref.getPageSpread())
-                            .fitMode(cbxPref.getFitMode())
-                            .scrollMode(cbxPref.getScrollMode())
-                            .backgroundColor(cbxPref.getBackgroundColor())
-                            .build()));
+            Optional.ofNullable(cbxViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::cbxSettings);
         } else {
             throw ApiError.UNSUPPORTED_BOOK_TYPE.createException();
         }

@@ -2,6 +2,10 @@ package org.booklore;
 
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.*;
 import org.booklore.service.book.BookDownloadService;
 import org.booklore.service.book.BookQueryService;
@@ -41,10 +45,10 @@ class BookServiceDeleteTests {
     void setUp() {
         BookRepository bookRepository = Mockito.mock(BookRepository.class);
         BookFileRepository bookFileRepository = Mockito.mock(BookFileRepository.class);
-        PdfViewerPreferencesRepository pdfViewerPreferencesRepository = Mockito.mock(PdfViewerPreferencesRepository.class);
-        EbookViewerPreferenceRepository ebookViewerPreferenceRepository = Mockito.mock(EbookViewerPreferenceRepository.class);
-        CbxViewerPreferencesRepository cbxViewerPreferencesRepository = Mockito.mock(CbxViewerPreferencesRepository.class);
-        NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository = Mockito.mock(NewPdfViewerPreferencesRepository.class);
+        JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository = Mockito.mock(JooqPdfViewerPreferenceRepository.class);
+        JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository = Mockito.mock(JooqEbookViewerPreferenceRepository.class);
+        JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository = Mockito.mock(JooqCbxViewerPreferenceRepository.class);
+        JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository = Mockito.mock(JooqNewPdfViewerPreferenceRepository.class);
         FileService fileService = Mockito.mock(FileService.class);
         JooqBookReadRepository jooqBookReadRepository = Mockito.mock(JooqBookReadRepository.class);
         UserBookProgressRepository userBookProgressRepository = Mockito.mock(UserBookProgressRepository.class);

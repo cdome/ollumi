@@ -12,6 +12,10 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.service.progress.ReadingProgressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,11 +35,11 @@ class BookUpdateServiceTest {
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
-    private PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
+    private JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     @Mock
-    private CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
+    private JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     @Mock
-    private NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
+    private JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     @Mock
     private ShelfRepository shelfRepository;
     @Mock
@@ -53,7 +57,7 @@ class BookUpdateServiceTest {
     @Mock
     private ReadingProgressService readingProgressService;
     @Mock
-    private EbookViewerPreferenceRepository ebookViewerPreferenceRepository;
+    private JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository;
 
     @InjectMocks
     private BookUpdateService bookUpdateService;
@@ -93,8 +97,6 @@ class BookUpdateServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
-        PdfViewerPreferencesEntity pdfPrefs = new PdfViewerPreferencesEntity();
-        when(pdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, 2L)).thenReturn(Optional.of(pdfPrefs));
         BookViewerSettings settings = BookViewerSettings.builder()
                 .pdfSettings(PdfViewerPreferences.builder()
                         .zoom("1.5")
@@ -104,9 +106,7 @@ class BookUpdateServiceTest {
 
         bookUpdateService.updateBookViewerSetting(bookId, settings);
 
-        verify(pdfViewerPreferencesRepository).save(pdfPrefs);
-        assertEquals("1.5", pdfPrefs.getZoom());
-        assertEquals("spread", pdfPrefs.getSpread());
+        verify(pdfViewerPreferencesRepository).upsert(bookId, 2L, "1.5", "spread");
     }
 
     @Test
@@ -123,40 +123,27 @@ class BookUpdateServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
-        EbookViewerPreferenceEntity epubPrefs = new EbookViewerPreferenceEntity();
-        when(ebookViewerPreferenceRepository.findByBookIdAndUserId(bookId, 2L)).thenReturn(Optional.of(epubPrefs));
+        EbookViewerPreferences ebookSettings = EbookViewerPreferences.builder()
+                .fontFamily("serif")
+                .fontSize(18)
+                .gap(0.1f)
+                .hyphenate(true)
+                .isDark(true)
+                .justify(true)
+                .lineHeight(1.7f)
+                .maxBlockSize(800)
+                .maxColumnCount(3)
+                .maxInlineSize(1200)
+                .theme("dark")
+                .flow("paginated")
+                .build();
         BookViewerSettings settings = BookViewerSettings.builder()
-                .ebookSettings(EbookViewerPreferences.builder()
-                        .fontFamily("serif")
-                        .fontSize(18)
-                        .gap(0.1f)
-                        .hyphenate(true)
-                        .isDark(true)
-                        .justify(true)
-                        .lineHeight(1.7f)
-                        .maxBlockSize(800)
-                        .maxColumnCount(3)
-                        .maxInlineSize(1200)
-                        .theme("dark")
-                        .flow("paginated")
-                        .build())
+                .ebookSettings(ebookSettings)
                 .build();
 
         bookUpdateService.updateBookViewerSetting(bookId, settings);
 
-        verify(ebookViewerPreferenceRepository).save(epubPrefs);
-        assertEquals("serif", epubPrefs.getFontFamily());
-        assertEquals(18, epubPrefs.getFontSize());
-        assertEquals(0.1f, epubPrefs.getGap());
-        assertTrue(epubPrefs.getHyphenate());
-        assertTrue(epubPrefs.getIsDark());
-        assertTrue(epubPrefs.getJustify());
-        assertEquals(1.7f, epubPrefs.getLineHeight());
-        assertEquals(800, epubPrefs.getMaxBlockSize());
-        assertEquals(3, epubPrefs.getMaxColumnCount());
-        assertEquals(1200, epubPrefs.getMaxInlineSize());
-        assertEquals("dark", epubPrefs.getTheme());
-        assertEquals("paginated", epubPrefs.getFlow());
+        verify(ebookViewerPreferenceRepository).upsert(bookId, 2L, ebookSettings);
     }
 
     @Test

@@ -5,6 +5,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -48,13 +52,13 @@ class BookServiceTest {
     @Mock
     private BookRepository bookRepository;
     @Mock
-    private PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
+    private JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     @Mock
-    private EbookViewerPreferenceRepository ebookViewerPreferenceRepository;
+    private JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository;
     @Mock
-    private CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
+    private JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     @Mock
-    private NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
+    private JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     @Mock
     private FileService fileService;
     @Mock
@@ -147,19 +151,20 @@ class BookServiceTest {
         primaryFile.setBookType(BookFileType.EPUB);
         entity.setBookFiles(List.of(primaryFile));
         when(bookRepository.findByIdWithBookFiles(4L)).thenReturn(Optional.of(entity));
-        EbookViewerPreferenceEntity epubPref = new EbookViewerPreferenceEntity();
-        epubPref.setFontFamily("Arial");
-        epubPref.setFontSize(16);
-        epubPref.setGap(0.2f);
-        epubPref.setHyphenate(true);
-        epubPref.setIsDark(false);
-        epubPref.setJustify(true);
-        epubPref.setLineHeight(1.5f);
-        epubPref.setMaxBlockSize(800);
-        epubPref.setMaxColumnCount(2);
-        epubPref.setMaxInlineSize(1200);
-        epubPref.setTheme("light");
-        when(ebookViewerPreferenceRepository.findByBookIdAndUserId(4L, testUser.getId())).thenReturn(Optional.of(epubPref));
+        EbookViewerPreferences epubPref = EbookViewerPreferences.builder()
+                .fontFamily("Arial")
+                .fontSize(16)
+                .gap(0.2f)
+                .hyphenate(true)
+                .isDark(false)
+                .justify(true)
+                .lineHeight(1.5f)
+                .maxBlockSize(800)
+                .maxColumnCount(2)
+                .maxInlineSize(1200)
+                .theme("light")
+                .build();
+        when(ebookViewerPreferenceRepository.findByBookIdAndUserId(4L, testUser.getId())).thenReturn(epubPref);
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
 
         BookViewerSettings settings = bookService.getBookViewerSetting(4L, 1L);
