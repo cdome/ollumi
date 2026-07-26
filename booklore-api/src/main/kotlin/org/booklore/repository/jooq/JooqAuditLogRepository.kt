@@ -59,6 +59,29 @@ class JooqAuditLogRepository(private val dsl: DSLContext) {
             .orderBy(AUDIT_LOG.USERNAME)
             .fetch(AUDIT_LOG.USERNAME)
 
+    fun insert(
+        userId: Long?,
+        username: String,
+        action: AuditAction,
+        entityType: String?,
+        entityId: Long?,
+        description: String?,
+        ipAddress: String?,
+        countryCode: String?,
+    ) {
+        dsl.insertInto(AUDIT_LOG)
+            .set(AUDIT_LOG.USER_ID, userId)
+            .set(AUDIT_LOG.USERNAME, username)
+            .set(AUDIT_LOG.ACTION, action.name)
+            .set(AUDIT_LOG.ENTITY_TYPE, entityType)
+            .set(AUDIT_LOG.ENTITY_ID, entityId)
+            .set(AUDIT_LOG.DESCRIPTION, description)
+            .set(AUDIT_LOG.IP_ADDRESS, ipAddress)
+            .set(AUDIT_LOG.COUNTRY_CODE, countryCode)
+            .set(AUDIT_LOG.CREATED_AT, LocalDateTime.now())
+            .execute()
+    }
+
     private fun toDto(record: Record): AuditLogDto =
         AuditLogDto.builder()
             .id(record.get(AUDIT_LOG.ID))

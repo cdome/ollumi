@@ -114,4 +114,48 @@ class JooqAuditLogRepositoryTest : AbstractIntegrationTest() {
 
         assertThat(usernames).containsExactly("admin", "reader")
     }
+
+    @Test
+    fun `insert persists all fields and defaults createdAt`() {
+        repository.insert(
+            userId = 7L,
+            username = "writer",
+            action = AuditAction.METADATA_UPDATED,
+            entityType = "BOOK",
+            entityId = 42L,
+            description = "Edited metadata",
+            ipAddress = "10.0.0.1",
+            countryCode = "US",
+        )
+
+        val row = dsl.selectFrom(AUDIT_LOG).where(AUDIT_LOG.USERNAME.eq("writer")).fetchOne()!!
+        assertThat(row.userId).isEqualTo(7L)
+        assertThat(row.action).isEqualTo(AuditAction.METADATA_UPDATED.name)
+        assertThat(row.entityType).isEqualTo("BOOK")
+        assertThat(row.entityId).isEqualTo(42L)
+        assertThat(row.description).isEqualTo("Edited metadata")
+        assertThat(row.ipAddress).isEqualTo("10.0.0.1")
+        assertThat(row.countryCode).isEqualTo("US")
+        assertThat(row.createdAt).isNotNull()
+    }
+
+    @Test
+    fun `insert allows null optional fields`() {
+        repository.insert(
+            userId = null,
+            username = "system",
+            action = AuditAction.LOGIN_SUCCESS,
+            entityType = null,
+            entityId = null,
+            description = "System event",
+            ipAddress = null,
+            countryCode = null,
+        )
+
+        val row = dsl.selectFrom(AUDIT_LOG).where(AUDIT_LOG.USERNAME.eq("system")).fetchOne()!!
+        assertThat(row.get(AUDIT_LOG.USER_ID) as Long?).isNull()
+        assertThat(row.get(AUDIT_LOG.ENTITY_TYPE) as String?).isNull()
+        assertThat(row.get(AUDIT_LOG.IP_ADDRESS) as String?).isNull()
+        assertThat(row.get(AUDIT_LOG.COUNTRY_CODE) as String?).isNull()
+    }
 }

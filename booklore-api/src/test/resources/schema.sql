@@ -14,3 +14,19 @@ CREATE TABLE IF NOT EXISTS task_cron_configuration
     updated_at      TIMESTAMP,
     CONSTRAINT uq_task_type UNIQUE (task_type)
 );
+
+-- Written by AuditService during full-context tests (login, etc.); the write swallows
+-- errors, but recreating the table keeps audit writes working as they did under JPA.
+CREATE TABLE IF NOT EXISTS audit_log
+(
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT,
+    username     VARCHAR(255)  NOT NULL,
+    action       VARCHAR(100)  NOT NULL,
+    entity_type  VARCHAR(100),
+    entity_id    BIGINT,
+    description  VARCHAR(1024) NOT NULL,
+    ip_address   VARCHAR(45),
+    country_code VARCHAR(2),
+    created_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

@@ -4,9 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.AuditLogDto;
-import org.booklore.model.entity.AuditLogEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.AuditLogRepository;
 import org.booklore.repository.jooq.JooqAuditLogRepository;
 import org.booklore.util.RequestUtils;
 import org.springframework.data.domain.Page;
@@ -23,7 +21,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AuditService {
 
-    private final AuditLogRepository auditLogRepository;
     private final JooqAuditLogRepository jooqAuditLogRepository;
     private final GeoIpService geoIpService;
 
@@ -58,18 +55,7 @@ public class AuditService {
                 safeDescription = safeDescription.substring(0, MAX_DESCRIPTION_LENGTH - 3) + "...";
             }
 
-            AuditLogEntity entity = AuditLogEntity.builder()
-                    .userId(userId)
-                    .username(username)
-                    .action(action)
-                    .entityType(entityType)
-                    .entityId(entityId)
-                    .description(safeDescription)
-                    .ipAddress(ipAddress)
-                    .countryCode(countryCode)
-                    .build();
-
-            auditLogRepository.save(entity);
+            jooqAuditLogRepository.insert(userId, username, action, entityType, entityId, safeDescription, ipAddress, countryCode);
         } catch (Exception e) {
             log.warn("Failed to write audit log: action={}, description={}", action, description, e);
         }
