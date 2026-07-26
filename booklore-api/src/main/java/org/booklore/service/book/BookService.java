@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
-import org.booklore.mapper.BookMapper;
+import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -57,7 +57,7 @@ public class BookService {
     private final CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
     private final NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
     private final FileService fileService;
-    private final BookMapper bookMapper;
+    private final JooqBookReadRepository jooqBookReadRepository;
     private final UserBookProgressRepository userBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
@@ -113,29 +113,28 @@ public class BookService {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         boolean isAdmin = user.getPermissions().isAdmin();
 
-        List<BookEntity> bookEntities = bookQueryService.findAllWithMetadataByIds(bookIds);
+        List<Book> books = jooqBookReadRepository.findByIds(bookIds);
 
         if (!isAdmin) {
             Set<Long> userLibraryIds = getUserLibraryIds(user);
-            bookEntities = bookEntities.stream()
-                    .filter(book -> userLibraryIds.contains(book.getLibrary().getId()))
+            books = books.stream()
+                    .filter(book -> userLibraryIds.contains(book.getLibraryId()))
                     .toList();
         }
 
-        Set<Long> entityIds = bookEntities.stream().map(BookEntity::getId).collect(Collectors.toSet());
+        Set<Long> entityIds = books.stream().map(Book::getId).collect(Collectors.toSet());
 
         Map<Long, UserBookProgressEntity> progressMap =
                 readingProgressService.fetchUserProgress(user.getId(), entityIds);
         Map<Long, UserBookFileProgressEntity> fileProgressMap =
                 readingProgressService.fetchUserFileProgress(user.getId(), entityIds);
 
-        return bookEntities.stream().map(bookEntity -> {
-            Book book = bookMapper.toBook(bookEntity);
+        return books.stream().map(book -> {
             if (!withDescription) book.getMetadata().setDescription(null);
             readingProgressService.enrichBookWithProgress(
                     book,
-                    progressMap.get(bookEntity.getId()),
-                    fileProgressMap.get(bookEntity.getId())
+                    progressMap.get(book.getId()),
+                    fileProgressMap.get(book.getId())
             );
             return book;
         }).collect(Collectors.toList());
@@ -144,7 +143,8 @@ public class BookService {
     @Transactional(readOnly = true)
     public Book getBook(long bookId, boolean withDescription) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        Book book = jooqBookReadRepository.findByIds(List.of(bookId)).stream().findFirst()
+                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
         UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
                 .orElse(new UserBookProgressEntity());
@@ -154,7 +154,6 @@ public class BookService {
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 
-        Book book = bookMapper.toBook(bookEntity);
         book.setShelves(filterShelvesByUserId(book.getShelves(), user.getId()));
         readingProgressService.enrichBookWithProgress(book, userProgress, fileProgress);
 

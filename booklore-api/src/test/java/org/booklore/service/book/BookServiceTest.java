@@ -4,7 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
-import org.booklore.mapper.BookMapper;
+import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -58,7 +58,7 @@ class BookServiceTest {
     @Mock
     private FileService fileService;
     @Mock
-    private BookMapper bookMapper;
+    private JooqBookReadRepository jooqBookReadRepository;
     @Mock
     private UserBookProgressRepository userBookProgressRepository;
     @Mock
@@ -107,62 +107,32 @@ class BookServiceTest {
 
     @Test
     void getBooksByIds_returnsMappedBooksWithProgress() {
-        BookEntity entity = new BookEntity();
-        entity.setId(2L);
-        BookFileEntity primaryFile = new BookFileEntity();
-        primaryFile.setBook(entity);
-        primaryFile.setBookType(BookFileType.EPUB);
-        entity.setBookFiles(List.of(primaryFile));
-        LibraryPathEntity libPath = new LibraryPathEntity();
-        libPath.setPath("/tmp/library");
-        LibraryEntity library = new LibraryEntity();
-        library.setLibraryPaths(List.of(libPath));
-        entity.setLibrary(library);
-        when(bookQueryService.findAllWithMetadataByIds(anySet())).thenReturn(List.of(entity));
-        when(readingProgressService.fetchUserProgress(anyLong(), anySet())).thenReturn(Map.of(2L, new UserBookProgressEntity()));
         Book mappedBook = Book.builder().id(2L).primaryFile(BookFile.builder().bookType(BookFileType.EPUB).build()).metadata(BookMetadata.builder().build()).build();
-        when(bookMapper.toBook(entity)).thenReturn(mappedBook);
+        when(jooqBookReadRepository.findByIds(anyCollection())).thenReturn(List.of(mappedBook));
+        when(readingProgressService.fetchUserProgress(anyLong(), anySet())).thenReturn(Map.of(2L, new UserBookProgressEntity()));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
 
-        try (MockedStatic<FileUtils> fileUtilsMock = mockStatic(FileUtils.class)) {
-            fileUtilsMock.when(() -> FileUtils.getBookFullPath(entity)).thenReturn("/tmp/library/book.epub");
-            List<Book> result = bookService.getBooksByIds(Set.of(2L), false);
+        List<Book> result = bookService.getBooksByIds(Set.of(2L), false);
 
-            assertEquals(1, result.size());
-            assertEquals(2L, result.getFirst().getId());
-        }
+        assertEquals(1, result.size());
+        assertEquals(2L, result.getFirst().getId());
     }
 
     @Test
     void getBook_existingBook_returnsBookWithProgress() {
-        BookEntity entity = new BookEntity();
-        entity.setId(3L);
-        BookFileEntity primaryFile = new BookFileEntity();
-        primaryFile.setBook(entity);
-        primaryFile.setBookType(BookFileType.PDF);
-        entity.setBookFiles(List.of(primaryFile));
-        LibraryPathEntity libPath = new LibraryPathEntity();
-        libPath.setPath("/tmp/library");
-        LibraryEntity library = new LibraryEntity();
-        library.setLibraryPaths(List.of(libPath));
-        entity.setLibrary(library);
-        when(bookRepository.findByIdWithBookFiles(3L)).thenReturn(Optional.of(entity));
         when(userBookProgressRepository.findByUserIdAndBookId(anyLong(), eq(3L))).thenReturn(Optional.of(new UserBookProgressEntity()));
         Book mappedBook = Book.builder().id(3L).primaryFile(BookFile.builder().bookType(BookFileType.PDF).build()).metadata(BookMetadata.builder().build()).shelves(Set.of()).build();
-        when(bookMapper.toBook(entity)).thenReturn(mappedBook);
+        when(jooqBookReadRepository.findByIds(List.of(3L))).thenReturn(List.of(mappedBook));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
 
-        try (MockedStatic<FileUtils> fileUtilsMock = mockStatic(FileUtils.class)) {
-            fileUtilsMock.when(() -> FileUtils.getBookFullPath(entity)).thenReturn("/tmp/library/book.pdf");
-            Book result = bookService.getBook(3L, true);
-            assertEquals(3L, result.getId());
-            verify(bookRepository).findByIdWithBookFiles(3L);
-        }
+        Book result = bookService.getBook(3L, true);
+        assertEquals(3L, result.getId());
+        verify(jooqBookReadRepository).findByIds(List.of(3L));
     }
 
     @Test
     void getBook_notFound_throwsException() {
-        when(bookRepository.findByIdWithBookFiles(99L)).thenReturn(Optional.empty());
+        when(jooqBookReadRepository.findByIds(List.of(99L))).thenReturn(List.of());
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
         assertThrows(APIException.class, () -> bookService.getBook(99L, true));
     }

@@ -1,7 +1,7 @@
 package org.booklore;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.BookMapper;
+import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.repository.*;
 import org.booklore.service.book.BookDownloadService;
 import org.booklore.service.book.BookQueryService;
@@ -46,7 +46,7 @@ class BookServiceDeleteTests {
         CbxViewerPreferencesRepository cbxViewerPreferencesRepository = Mockito.mock(CbxViewerPreferencesRepository.class);
         NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository = Mockito.mock(NewPdfViewerPreferencesRepository.class);
         FileService fileService = Mockito.mock(FileService.class);
-        BookMapper bookMapper = Mockito.mock(BookMapper.class);
+        JooqBookReadRepository jooqBookReadRepository = Mockito.mock(JooqBookReadRepository.class);
         UserBookProgressRepository userBookProgressRepository = Mockito.mock(UserBookProgressRepository.class);
         AuthenticationService authenticationService = Mockito.mock(AuthenticationService.class);
         BookQueryService bookQueryService = Mockito.mock(BookQueryService.class);
@@ -65,7 +65,7 @@ class BookServiceDeleteTests {
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,
                 fileService,
-                bookMapper,
+                jooqBookReadRepository,
                 userBookProgressRepository,
                 authenticationService,
                 bookQueryService,

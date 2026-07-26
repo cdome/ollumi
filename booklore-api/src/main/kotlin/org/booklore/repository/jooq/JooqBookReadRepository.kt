@@ -101,6 +101,7 @@ class JooqBookReadRepository(
             .leftJoin(LIBRARY).on(LIBRARY.ID.eq(BOOK.LIBRARY_ID))
             .leftJoin(LIBRARY_PATH).on(LIBRARY_PATH.ID.eq(BOOK.LIBRARY_PATH_ID))
             .where(BOOK.ID.`in`(bookIds))
+            .and(BookConditions.notDeleted())
             .fetch { r ->
                 BookScalars(
                     id = r[BOOK.ID]!!,
