@@ -1,12 +1,12 @@
 package org.booklore.service.book;
 
 import lombok.RequiredArgsConstructor;
-import org.booklore.mapper.v2.BookMapperV2;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ComicMetadata;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.service.restriction.ContentRestrictionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,26 +21,22 @@ import java.util.stream.Collectors;
 public class BookQueryService {
 
     private final BookRepository bookRepository;
-    private final BookMapperV2 bookMapperV2;
+    private final JooqBookReadRepository jooqBookReadRepository;
     private final ContentRestrictionService contentRestrictionService;
 
     public List<Book> getAllBooks(boolean includeDescription) {
-        List<BookEntity> books = bookRepository.findAllWithMetadata();
+        List<Book> books = jooqBookReadRepository.findByIds(jooqBookReadRepository.allBookIds());
         return mapBooksToDto(books, includeDescription, null, !includeDescription);
     }
 
     public List<Book> getAllBooksByLibraryIds(Set<Long> libraryIds, boolean includeDescription, Long userId) {
-        List<BookEntity> books = bookRepository.findAllWithMetadataByLibraryIds(libraryIds);
-        books = contentRestrictionService.applyRestrictions(books, userId);
+        List<Book> books = jooqBookReadRepository.findByIds(jooqBookReadRepository.bookIdsByLibraries(libraryIds));
+        books = contentRestrictionService.applyRestrictionsToDtos(books, userId);
         return mapBooksToDto(books, includeDescription, userId, !includeDescription);
     }
 
     public List<BookEntity> findAllWithMetadataByIds(Set<Long> bookIds) {
         return bookRepository.findAllWithMetadataByIds(bookIds);
-    }
-
-    public List<Book> mapEntitiesToDto(List<BookEntity> entities, boolean includeDescription, Long userId) {
-        return mapBooksToDto(entities, includeDescription, userId, !includeDescription);
     }
 
     public List<BookEntity> getAllFullBookEntities() {
@@ -52,15 +48,13 @@ public class BookQueryService {
         bookRepository.saveAll(books);
     }
 
-    private List<Book> mapBooksToDto(List<BookEntity> books, boolean includeDescription, Long userId, boolean stripForListView) {
+    private List<Book> mapBooksToDto(List<Book> books, boolean includeDescription, Long userId, boolean stripForListView) {
         return books.stream()
                 .map(book -> mapBookToDto(book, includeDescription, userId, stripForListView))
                 .collect(Collectors.toList());
     }
 
-    private Book mapBookToDto(BookEntity bookEntity, boolean includeDescription, Long userId, boolean stripForListView) {
-        Book dto = bookMapperV2.toDTO(bookEntity);
-
+    private Book mapBookToDto(Book dto, boolean includeDescription, Long userId, boolean stripForListView) {
         if (!includeDescription && dto.getMetadata() != null) {
             dto.getMetadata().setDescription(null);
         }

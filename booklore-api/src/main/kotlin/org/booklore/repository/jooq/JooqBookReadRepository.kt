@@ -90,6 +90,23 @@ class JooqBookReadRepository(
         val addedOn: LocalDateTime?
     )
 
+    /** IDs of all non-deleted books, ordered by id. */
+    fun allBookIds(): List<Long> =
+        dsl.select(BOOK.ID).from(BOOK)
+            .where(BookConditions.notDeleted())
+            .orderBy(BOOK.ID)
+            .fetch(BOOK.ID)
+
+    /** IDs of non-deleted books in the given libraries, ordered by id. */
+    fun bookIdsByLibraries(libraryIds: Collection<Long>): List<Long> {
+        if (libraryIds.isEmpty()) return emptyList()
+        return dsl.select(BOOK.ID).from(BOOK)
+            .where(BookConditions.notDeleted())
+            .and(BOOK.LIBRARY_ID.`in`(libraryIds))
+            .orderBy(BOOK.ID)
+            .fetch(BOOK.ID)
+    }
+
     fun findByIds(bookIds: Collection<Long>): List<Book> {
         if (bookIds.isEmpty()) return emptyList()
 
