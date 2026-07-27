@@ -6,9 +6,8 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.request.UserLoginRequest;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.RefreshTokenRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -39,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,7 +47,7 @@ class AuthenticationServiceTest {
 
     @Mock private AppProperties appProperties;
     @Mock private UserRepository userRepository;
-    @Mock private RefreshTokenRepository refreshTokenRepository;
+    @Mock private JooqRefreshTokenRepository refreshTokenRepository;
     @Mock private UserProvisioningService userProvisioningService;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtUtils jwtUtils;
@@ -56,7 +56,7 @@ class AuthenticationServiceTest {
     @Mock private AuthRateLimitService authRateLimitService;
     @Mock private AppSettingService appSettingService;
 
-    @Captor private ArgumentCaptor<RefreshTokenEntity> refreshTokenCaptor;
+    @Captor private ArgumentCaptor<Instant> expiryDateCaptor;
 
     private AuthenticationService authenticationService;
 
@@ -132,7 +132,6 @@ class AuthenticationServiceTest {
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
-        when(refreshTokenRepository.save(any(RefreshTokenEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var request = new UserLoginRequest();
         request.setUsername("admin");
@@ -163,7 +162,6 @@ class AuthenticationServiceTest {
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
-        when(refreshTokenRepository.save(any(RefreshTokenEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var request = new UserLoginRequest();
         request.setUsername("normaluser");
@@ -185,15 +183,13 @@ class AuthenticationServiceTest {
 
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
-        when(refreshTokenRepository.save(any(RefreshTokenEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Instant before = Instant.now();
         authenticationService.loginUser(user, customExpirationMs);
 
-        verify(refreshTokenRepository).save(refreshTokenCaptor.capture());
-        RefreshTokenEntity saved = refreshTokenCaptor.getValue();
+        verify(refreshTokenRepository).insert(eq(3L), eq("refresh-token"), expiryDateCaptor.capture(), eq(false));
         Instant expectedExpiry = before.plusMillis(customExpirationMs);
-        assertThat(saved.getExpiryDate()).isCloseTo(expectedExpiry, within(5, java.time.temporal.ChronoUnit.SECONDS));
+        assertThat(expiryDateCaptor.getValue()).isCloseTo(expectedExpiry, within(5, java.time.temporal.ChronoUnit.SECONDS));
     }
 
     @Test
@@ -205,15 +201,13 @@ class AuthenticationServiceTest {
 
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
-        when(refreshTokenRepository.save(any(RefreshTokenEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Instant before = Instant.now();
         authenticationService.loginUser(user, null);
 
-        verify(refreshTokenRepository).save(refreshTokenCaptor.capture());
-        RefreshTokenEntity saved = refreshTokenCaptor.getValue();
+        verify(refreshTokenRepository).insert(eq(4L), eq("refresh-token"), expiryDateCaptor.capture(), eq(false));
         Instant expectedExpiry = before.plusMillis(JwtUtils.refreshTokenExpirationMs);
-        assertThat(saved.getExpiryDate()).isCloseTo(expectedExpiry, within(5, java.time.temporal.ChronoUnit.SECONDS));
+        assertThat(expiryDateCaptor.getValue()).isCloseTo(expectedExpiry, within(5, java.time.temporal.ChronoUnit.SECONDS));
     }
 
     @Test
@@ -226,7 +220,6 @@ class AuthenticationServiceTest {
 
         when(jwtUtils.generateAccessToken(user)).thenReturn("my-access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("my-refresh-token");
-        when(refreshTokenRepository.save(any(RefreshTokenEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ResponseEntity<Map<String, String>> response = authenticationService.loginUser(user, 7200000L);
 

@@ -9,11 +9,11 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.OidcSessionEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.OidcSessionRepository;
-import org.booklore.repository.RefreshTokenRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.junit.jupiter.api.Test;
@@ -23,19 +23,19 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class LogoutServiceTest {
 
     @Mock
-    private RefreshTokenRepository refreshTokenRepository;
+    private JooqRefreshTokenRepository refreshTokenRepository;
 
     @Mock
     private OidcSessionRepository oidcSessionRepository;
@@ -62,7 +62,6 @@ class LogoutServiceTest {
     void logout_withAuthenticatedLocalUser_returnsNullLogoutUrl() {
         var user = buildUser(1L, "testuser", ProvisioningMethod.LOCAL);
         stubAuthenticated("testuser", user);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, null);
 
@@ -74,7 +73,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubFullOidcFlow(user, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -89,11 +87,10 @@ class LogoutServiceTest {
     @Test
     void logout_withRefreshToken_resolvesUser() {
         var user = buildUser(2L, "tokenuser", ProvisioningMethod.LOCAL);
-        var tokenEntity = new RefreshTokenEntity();
-        tokenEntity.setUser(user);
+        var tokenRecord = new RefreshToken(1L, 2L, "valid-token", java.time.Instant.now(), false, null);
 
-        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(tokenEntity));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
+        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(tokenRecord);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
 
         LogoutResponse response = logoutService.logout(null, "valid-token", null);
 
@@ -115,7 +112,7 @@ class LogoutServiceTest {
 
     @Test
     void logout_withRefreshTokenNotFound_throwsUnauthorized() {
-        when(refreshTokenRepository.findByToken("invalid")).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByToken("invalid")).thenReturn(null);
 
         assertThatThrownBy(() -> logoutService.logout(null, "invalid", null))
                 .isInstanceOf(APIException.class);
@@ -137,19 +134,9 @@ class LogoutServiceTest {
         var user = buildUser(1L, "testuser", ProvisioningMethod.LOCAL);
         stubAuthenticated("testuser", user);
 
-        var token1 = new RefreshTokenEntity();
-        token1.setUser(user);
-        var token2 = new RefreshTokenEntity();
-        token2.setUser(user);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of(token1, token2));
-
         logoutService.logout(mockAuth(), null, null);
 
-        assertThat(token1.isRevoked()).isTrue();
-        assertThat(token1.getRevocationDate()).isNotNull();
-        assertThat(token2.isRevoked()).isTrue();
-        assertThat(token2.getRevocationDate()).isNotNull();
-        verify(refreshTokenRepository, times(2)).save(any(RefreshTokenEntity.class));
+        verify(refreshTokenRepository).revokeAllActiveByUserId(eq(1L), any());
     }
 
     @Test
@@ -163,7 +150,6 @@ class LogoutServiceTest {
                 .build();
 
         stubOidcWithSession(oidcSession, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -176,7 +162,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubFullOidcFlow(user, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://myapp.com");
 
@@ -192,7 +177,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubFullOidcFlow(user, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, null);
 
@@ -204,7 +188,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubAppSettings(true, buildProviderDetails());
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(1L))
                 .thenReturn(Optional.empty());
 
@@ -224,7 +207,6 @@ class LogoutServiceTest {
                 .build();
 
         stubOidcWithSession(oidcSession, null);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -236,7 +218,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubAppSettings(false, null);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -256,7 +237,6 @@ class LogoutServiceTest {
 
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(1L))
                 .thenThrow(new RuntimeException("db error"));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 

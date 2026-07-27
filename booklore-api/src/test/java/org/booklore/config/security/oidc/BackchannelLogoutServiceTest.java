@@ -7,11 +7,10 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.OidcSessionEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.OidcSessionRepository;
-import org.booklore.repository.RefreshTokenRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -45,7 +44,7 @@ class BackchannelLogoutServiceTest {
     private OidcSessionRepository oidcSessionRepository;
 
     @Mock
-    private RefreshTokenRepository refreshTokenRepository;
+    private JooqRefreshTokenRepository refreshTokenRepository;
 
     @Mock
     private NotificationService notificationService;
@@ -92,7 +91,6 @@ class BackchannelLogoutServiceTest {
         var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -117,7 +115,6 @@ class BackchannelLogoutServiceTest {
         var session = OidcSessionEntity.builder().user(user).oidcSubject("user-sub").revoked(false).build();
         when(oidcSessionRepository.findByOidcSubjectAndOidcIssuerAndRevokedFalse("user-sub", "https://issuer.example.com"))
                 .thenReturn(List.of(session));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -200,7 +197,6 @@ class BackchannelLogoutServiceTest {
         var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -239,18 +235,9 @@ class BackchannelLogoutServiceTest {
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
 
-        var rt1 = RefreshTokenEntity.builder().revoked(false).build();
-        var rt2 = RefreshTokenEntity.builder().revoked(false).build();
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of(rt1, rt2));
-
         backchannelLogoutService.handleLogoutToken("token");
 
-        assertThat(rt1.isRevoked()).isTrue();
-        assertThat(rt1.getRevocationDate()).isNotNull();
-        assertThat(rt2.isRevoked()).isTrue();
-        assertThat(rt2.getRevocationDate()).isNotNull();
-        verify(refreshTokenRepository).save(rt1);
-        verify(refreshTokenRepository).save(rt2);
+        verify(refreshTokenRepository).revokeAllActiveByUserId(eq(1L), any());
     }
 
     @Test
@@ -269,7 +256,6 @@ class BackchannelLogoutServiceTest {
         var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -298,7 +284,6 @@ class BackchannelLogoutServiceTest {
         var session2 = OidcSessionEntity.builder().user(user2).oidcSessionId("shared-sid").revoked(false).build();
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("shared-sid"))
                 .thenReturn(List.of(session1, session2));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(any())).thenReturn(List.of());
 
         backchannelLogoutService.handleLogoutToken("token");
 

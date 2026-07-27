@@ -9,7 +9,7 @@ import org.booklore.model.entity.OidcSessionEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.OidcSessionRepository;
-import org.booklore.repository.RefreshTokenRepository;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -37,7 +37,7 @@ public class BackchannelLogoutService {
     private final AppSettingService appSettingService;
     private final OidcTokenValidator oidcTokenValidator;
     private final OidcSessionRepository oidcSessionRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final JooqRefreshTokenRepository refreshTokenRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
 
@@ -89,11 +89,7 @@ public class BackchannelLogoutService {
             oidcSessionRepository.save(session);
 
             var user = session.getUser();
-            refreshTokenRepository.findAllByUserAndRevokedFalse(user).forEach(token -> {
-                token.setRevoked(true);
-                token.setRevocationDate(Instant.now());
-                refreshTokenRepository.save(token);
-            });
+            refreshTokenRepository.revokeAllActiveByUserId(user.getId(), Instant.now());
 
             notificationService.sendMessageToUser(
                     user.getUsername(),
