@@ -1,16 +1,14 @@
 package org.booklore.service.oidc;
 
 import org.booklore.exception.APIException;
-import org.booklore.mapper.OidcGroupMappingMapper;
 import org.booklore.model.dto.OidcGroupMapping;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.OidcGroupMappingEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.OidcGroupMappingRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqOidcGroupMappingRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.junit.jupiter.api.Test;
@@ -19,17 +17,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -37,10 +34,7 @@ import static org.mockito.Mockito.*;
 class OidcGroupMappingServiceTest {
 
     @Mock
-    private OidcGroupMappingRepository repository;
-
-    @Mock
-    private OidcGroupMappingMapper mapper;
+    private JooqOidcGroupMappingRepository repository;
 
     @Mock
     private AuditService auditService;
@@ -58,100 +52,72 @@ class OidcGroupMappingServiceTest {
     private OidcGroupMappingService service;
 
     @Test
-    void getAll_returnsMappedList() {
-        var entities = List.of(new OidcGroupMappingEntity());
+    void getAll_returnsRepositoryList() {
         var dtos = List.of(new OidcGroupMapping(1L, "group1", false, List.of(), List.of(), "desc"));
-        when(repository.findAll()).thenReturn(entities);
-        when(mapper.toDtoList(entities)).thenReturn(dtos);
+        when(repository.findAll()).thenReturn(dtos);
 
         var result = service.getAll();
 
         assertThat(result).isEqualTo(dtos);
         verify(repository).findAll();
-        verify(mapper).toDtoList(entities);
     }
 
     @Test
-    void create_savesEntityWithNullIdAndAudits() {
+    void create_insertsAndAudits() {
         var dto = new OidcGroupMapping(99L, "admins", true, List.of("permissionUpload"), List.of(1L), "Admin group");
-        var entity = new OidcGroupMappingEntity();
-        entity.setId(99L);
-        entity.setOidcGroupClaim("admins");
-        var savedEntity = new OidcGroupMappingEntity();
-        savedEntity.setId(1L);
-        savedEntity.setOidcGroupClaim("admins");
         var savedDto = new OidcGroupMapping(1L, "admins", true, List.of("permissionUpload"), List.of(1L), "Admin group");
-
-        when(mapper.toEntity(dto)).thenReturn(entity);
-        when(repository.save(entity)).thenReturn(savedEntity);
-        when(mapper.toDto(savedEntity)).thenReturn(savedDto);
+        when(repository.insert(dto)).thenReturn(savedDto);
 
         var result = service.create(dto);
 
         assertThat(result).isEqualTo(savedDto);
-        assertThat(entity.getId()).isNull();
-        verify(repository).save(entity);
+        verify(repository).insert(dto);
         verify(auditService).log(any(), anyString());
     }
 
     @Test
-    void update_existingMapping_updatesFieldsAndAudits() {
-        var existing = new OidcGroupMappingEntity();
-        existing.setId(1L);
-        existing.setOidcGroupClaim("old-group");
+    void update_existingMapping_updatesAndAudits() {
         var dto = new OidcGroupMapping(1L, "new-group", true, List.of("permissionUpload"), List.of(2L), "Updated");
-        var savedEntity = new OidcGroupMappingEntity();
-        savedEntity.setId(1L);
-        savedEntity.setOidcGroupClaim("new-group");
         var savedDto = new OidcGroupMapping(1L, "new-group", true, List.of("permissionUpload"), List.of(2L), "Updated");
-
-        when(repository.findById(1L)).thenReturn(Optional.of(existing));
-        when(mapper.stringListToJson(dto.permissions())).thenReturn("[\"permissionUpload\"]");
-        when(mapper.longListToJson(dto.libraryIds())).thenReturn("[2]");
-        when(repository.save(existing)).thenReturn(savedEntity);
-        when(mapper.toDto(savedEntity)).thenReturn(savedDto);
+        when(repository.findById(1L)).thenReturn(new OidcGroupMapping(1L, "old-group", false, List.of(), List.of(), null));
+        when(repository.update(1L, dto)).thenReturn(savedDto);
 
         var result = service.update(1L, dto);
 
         assertThat(result).isEqualTo(savedDto);
-        assertThat(existing.getOidcGroupClaim()).isEqualTo("new-group");
-        assertThat(existing.isAdmin()).isTrue();
-        assertThat(existing.getDescription()).isEqualTo("Updated");
+        verify(repository).update(1L, dto);
         verify(auditService).log(any(), anyString());
     }
 
     @Test
     void update_nonExisting_throwsGenericNotFound() {
-        when(repository.findById(999L)).thenReturn(Optional.empty());
+        when(repository.findById(999L)).thenReturn(null);
         var dto = new OidcGroupMapping(999L, "group", false, List.of(), List.of(), null);
 
         assertThatThrownBy(() -> service.update(999L, dto))
                 .isInstanceOf(APIException.class);
 
-        verify(repository, never()).save(any());
+        verify(repository, never()).update(anyLong(), any());
     }
 
     @Test
     void delete_existingMapping_deletesAndAudits() {
-        var existing = new OidcGroupMappingEntity();
-        existing.setId(1L);
-        existing.setOidcGroupClaim("group1");
-        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(repository.findById(1L)).thenReturn(new OidcGroupMapping(1L, "group1", false, List.of(), List.of(), null));
 
         service.delete(1L);
 
-        verify(repository).delete(existing);
+        verify(repository).deleteById(1L);
         verify(auditService).log(any(), anyString());
     }
 
     @Test
     void delete_nonExisting_throwsGenericNotFound() {
-        when(repository.findById(999L)).thenReturn(Optional.empty());
+        when(repository.findById(999L)).thenReturn(null);
 
         assertThatThrownBy(() -> service.delete(999L))
                 .isInstanceOf(APIException.class);
 
-        verify(repository, never()).delete(any());
+        verify(repository, never()).deleteById(anyLong());
     }
 
     @Test
@@ -216,7 +182,7 @@ class OidcGroupMappingServiceTest {
         perms.setPermissionDownload(true);
         var user = createMockedUser(perms);
 
-        var mapping = createMapping(false, "[\"permissionUpload\",\"permissionEditMetadata\"]", "[1]");
+        var mapping = createMapping(false, List.of("permissionUpload", "permissionEditMetadata"), List.of(1L));
         setupSyncMocks("ON_LOGIN", List.of("group1"), List.of(mapping));
 
         var lib1 = new LibraryEntity();
@@ -241,7 +207,7 @@ class OidcGroupMappingServiceTest {
         librariesHolder.set(new HashSet<>(List.of(existingLib)));
         var user = createMockedUserWithLibraries(perms, librariesHolder);
 
-        var mapping = createMapping(false, "[]", "[1,2]");
+        var mapping = createMapping(false, List.of(), List.of(1L, 2L));
         setupSyncMocks("ON_LOGIN", List.of("group1"), List.of(mapping));
 
         var lib1 = new LibraryEntity();
@@ -262,7 +228,7 @@ class OidcGroupMappingServiceTest {
         perms.setPermissionDownload(true);
         var user = createMockedUser(perms);
 
-        var mapping = createMapping(false, "[\"permissionUpload\"]", "[1]");
+        var mapping = createMapping(false, List.of("permissionUpload"), List.of(1L));
         setupSyncMocks("ON_LOGIN_ADDITIVE", List.of("group1"), List.of(mapping));
 
         var lib1 = new LibraryEntity();
@@ -285,7 +251,7 @@ class OidcGroupMappingServiceTest {
         librariesHolder.set(new HashSet<>(List.of(existingLib)));
         var user = createMockedUserWithLibraries(perms, librariesHolder);
 
-        var mapping = createMapping(false, "[]", "[1]");
+        var mapping = createMapping(false, List.of(), List.of(1L));
         setupSyncMocks("ON_LOGIN_ADDITIVE", List.of("group1"), List.of(mapping));
 
         var lib1 = new LibraryEntity();
@@ -305,8 +271,8 @@ class OidcGroupMappingServiceTest {
         var perms = new UserPermissionsEntity();
         var user = createMockedUser(perms);
 
-        var mapping1 = createMapping(false, "[\"permissionUpload\"]", "[]");
-        var mapping2 = createMapping(true, "[\"permissionDownload\"]", "[]");
+        var mapping1 = createMapping(false, List.of("permissionUpload"), List.of());
+        var mapping2 = createMapping(true, List.of("permissionDownload"), List.of());
         setupSyncMocks("ON_LOGIN", List.of("group1", "group2"), List.of(mapping1, mapping2));
 
         service.syncUserGroups(user, List.of("group1", "group2"));
@@ -331,10 +297,9 @@ class OidcGroupMappingServiceTest {
             permissionsHolder.get().setUser(user);
             return null;
         }).when(user).setLibraries(any());
-        // Need getLibraries for additive mode but this is ON_LOGIN
         lenient().when(user.getLibraries()).thenReturn(null);
 
-        var mapping = createMapping(false, "[\"permissionUpload\"]", "[1]");
+        var mapping = createMapping(false, List.of("permissionUpload"), List.of(1L));
         setupSyncMocks("ON_LOGIN", List.of("group1"), List.of(mapping));
 
         var lib1 = new LibraryEntity();
@@ -355,7 +320,7 @@ class OidcGroupMappingServiceTest {
         var perms = new UserPermissionsEntity();
         lenient().when(user.getPermissions()).thenReturn(perms);
 
-        var mapping = createMapping(false, "[\"permissionUpload\"]", "[1]");
+        var mapping = createMapping(false, List.of("permissionUpload"), List.of(1L));
         setupSyncMocks("UNKNOWN_MODE", List.of("group1"), List.of(mapping));
 
         service.syncUserGroups(user, List.of("group1"));
@@ -384,37 +349,14 @@ class OidcGroupMappingServiceTest {
         return user;
     }
 
-    private OidcGroupMappingEntity createMapping(boolean admin, String permissionsJson, String libraryIdsJson) {
-        var entity = new OidcGroupMappingEntity();
-        entity.setAdmin(admin);
-        entity.setPermissions(permissionsJson);
-        entity.setLibraryIds(libraryIdsJson);
-        entity.setOidcGroupClaim("group");
-        return entity;
+    private OidcGroupMapping createMapping(boolean admin, List<String> permissions, List<Long> libraryIds) {
+        return new OidcGroupMapping(1L, "group", admin, permissions, libraryIds, null);
     }
 
-    private void setupSyncMocks(String syncMode, List<String> groups, List<OidcGroupMappingEntity> mappings) {
+    private void setupSyncMocks(String syncMode, List<String> groups, List<OidcGroupMapping> mappings) {
         var settings = new AppSettings();
         settings.setOidcGroupSyncMode(syncMode);
         when(appSettingService.getAppSettings()).thenReturn(settings);
         when(repository.findByOidcGroupClaimIn(groups)).thenReturn(mappings);
-
-        for (var mapping : mappings) {
-            when(mapper.jsonToStringList(mapping.getPermissions()))
-                    .thenReturn(parseJsonStrings(mapping.getPermissions()));
-            when(mapper.jsonToLongList(mapping.getLibraryIds()))
-                    .thenReturn(parseJsonLongs(mapping.getLibraryIds()));
-        }
-    }
-
-    private List<String> parseJsonStrings(String json) {
-        if (json == null || json.equals("[]")) return List.of();
-        return List.of(json.replace("[", "").replace("]", "").replace("\"", "").split(","));
-    }
-
-    private List<Long> parseJsonLongs(String json) {
-        if (json == null || json.equals("[]")) return List.of();
-        var parts = json.replace("[", "").replace("]", "").split(",");
-        return java.util.Arrays.stream(parts).map(String::trim).map(Long::valueOf).toList();
     }
 }
