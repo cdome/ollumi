@@ -1,35 +1,28 @@
 package org.booklore.service;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.BookNoteMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookNote;
 import org.booklore.model.dto.CreateBookNoteRequest;
-import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.BookNoteEntity;
-import org.booklore.repository.BookNoteRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.service.book.BookNoteService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class BookNoteServiceTest {
 
-    private BookNoteRepository bookNoteRepository;
+    private JooqBookNoteRepository bookNoteRepository;
     private BookRepository bookRepository;
     private UserRepository userRepository;
-    private BookNoteMapper mapper;
     private BookNoteService service;
 
     private final Long userId = 1L;
@@ -38,12 +31,11 @@ class BookNoteServiceTest {
 
     @BeforeEach
     void setUp() {
-        bookNoteRepository = mock(BookNoteRepository.class);
+        bookNoteRepository = mock(JooqBookNoteRepository.class);
         bookRepository = mock(BookRepository.class);
         userRepository = mock(UserRepository.class);
-        mapper = mock(BookNoteMapper.class);
         AuthenticationService authenticationService = mock(AuthenticationService.class);
-        service = new BookNoteService(bookNoteRepository, bookRepository, userRepository, mapper, authenticationService);
+        service = new BookNoteService(bookNoteRepository, bookRepository, userRepository, authenticationService);
 
         BookLoreUser user = new BookLoreUser();
         user.setId(userId);
@@ -51,12 +43,10 @@ class BookNoteServiceTest {
     }
 
     @Test
-    void getNotesForBook_returnsMappedNotes() {
-        BookNoteEntity entity = BookNoteEntity.builder().id(noteId).build();
+    void getNotesForBook_returnsNotesFromRepository() {
         BookNote dto = BookNote.builder().id(noteId).build();
         when(bookNoteRepository.findByBookIdAndUserIdOrderByUpdatedAtDesc(bookId, userId))
-                .thenReturn(Collections.singletonList(entity));
-        when(mapper.toDto(entity)).thenReturn(dto);
+                .thenReturn(Collections.singletonList(dto));
 
         List<BookNote> result = service.getNotesForBook(bookId);
 
@@ -72,26 +62,16 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        BookEntity book = BookEntity.builder().id(bookId).build();
-        BookLoreUserEntity userEntity = BookLoreUserEntity.builder().id(userId).isDefaultPassword(false).build();
-        BookNoteEntity savedEntity = BookNoteEntity.builder().id(noteId).build();
-        BookNote dto = BookNote.builder().id(noteId).build();
-
-        when(bookRepository.findById(bookId)).thenReturn(Optional.of(book));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
-        when(bookNoteRepository.save(any(BookNoteEntity.class))).thenReturn(savedEntity);
-        when(mapper.toDto(savedEntity)).thenReturn(dto);
+        BookNote dto = BookNote.builder().id(noteId).title("t").content("c").build();
+        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(userRepository.existsById(userId)).thenReturn(true);
+        when(bookNoteRepository.insert(bookId, userId, "t", "c")).thenReturn(dto);
 
         BookNote result = service.createOrUpdateNote(req);
 
         assertEquals(noteId, result.getId());
-        ArgumentCaptor<BookNoteEntity> captor = ArgumentCaptor.forClass(BookNoteEntity.class);
-        verify(bookNoteRepository).save(captor.capture());
-        BookNoteEntity entity = captor.getValue();
-        assertEquals(book, entity.getBook());
-        assertEquals(userEntity, entity.getUser());
-        assertEquals("t", entity.getTitle());
-        assertEquals("c", entity.getContent());
+        verify(bookNoteRepository).insert(bookId, userId, "t", "c");
+        verify(bookNoteRepository, never()).update(anyLong(), anyLong(), any(), any());
     }
 
     @Test
@@ -103,21 +83,18 @@ class BookNoteServiceTest {
                 .content("new content")
                 .build();
 
-        BookNoteEntity existing = BookNoteEntity.builder().id(noteId).title("old").content("old").build();
-        BookNoteEntity saved = BookNoteEntity.builder().id(noteId).title("new title").content("new content").build();
         BookNote dto = BookNote.builder().id(noteId).title("new title").content("new content").build();
-
-        when(bookRepository.findById(bookId)).thenReturn(Optional.of(BookEntity.builder().id(bookId).build()));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(BookLoreUserEntity.builder().id(userId).isDefaultPassword(false).build()));
-        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(Optional.of(existing));
-        when(bookNoteRepository.save(existing)).thenReturn(saved);
-        when(mapper.toDto(saved)).thenReturn(dto);
+        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(userRepository.existsById(userId)).thenReturn(true);
+        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(BookNote.builder().id(noteId).build());
+        when(bookNoteRepository.update(noteId, userId, "new title", "new content")).thenReturn(dto);
 
         BookNote result = service.createOrUpdateNote(req);
 
-        assertEquals(noteId, result.getId());
-        assertEquals("new title", existing.getTitle());
-        assertEquals("new content", existing.getContent());
+        assertEquals("new title", result.getTitle());
+        assertEquals("new content", result.getContent());
+        verify(bookNoteRepository).update(noteId, userId, "new title", "new content");
+        verify(bookNoteRepository, never()).insert(anyLong(), anyLong(), any(), any());
     }
 
     @Test
@@ -128,7 +105,7 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        when(bookRepository.findById(bookId)).thenReturn(Optional.empty());
+        when(bookRepository.existsById(bookId)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> service.createOrUpdateNote(req));
 
@@ -146,8 +123,8 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        when(bookRepository.findById(bookId)).thenReturn(Optional.of(BookEntity.builder().id(bookId).build()));
-        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(userRepository.existsById(userId)).thenReturn(false);
 
         assertThrows(EntityNotFoundException.class, () -> service.createOrUpdateNote(req));
     }
@@ -161,26 +138,25 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        when(bookRepository.findById(bookId)).thenReturn(Optional.of(BookEntity.builder().id(bookId).build()));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(BookLoreUserEntity.builder().id(userId).isDefaultPassword(false).build()));
-        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(Optional.empty());
+        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(userRepository.existsById(userId)).thenReturn(true);
+        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(null);
 
         assertThrows(EntityNotFoundException.class, () -> service.createOrUpdateNote(req));
     }
 
     @Test
     void deleteNote_deletesIfExists() {
-        BookNoteEntity entity = BookNoteEntity.builder().id(noteId).build();
-        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(Optional.of(entity));
+        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(BookNote.builder().id(noteId).build());
 
         service.deleteNote(noteId);
 
-        verify(bookNoteRepository).delete(entity);
+        verify(bookNoteRepository).deleteById(noteId);
     }
 
     @Test
     void deleteNote_throwsIfNotFound() {
-        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(Optional.empty());
+        when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(null);
         assertThrows(EntityNotFoundException.class, () -> service.deleteNote(noteId));
     }
 }

@@ -13,6 +13,7 @@ import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,7 +33,7 @@ public class TelemetryService {
     private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final BookMarkRepository bookMarkRepository;
-    private final BookNoteRepository bookNoteRepository;
+    private final JooqBookNoteRepository bookNoteRepository;
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AuthorRepository authorRepository;
     private final ShelfRepository shelfRepository;
