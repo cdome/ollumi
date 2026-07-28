@@ -46,3 +46,11 @@ CREATE TABLE IF NOT EXISTS audit_log
     country_code VARCHAR(2),
     created_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Read/written by AppMigrationStartup at ApplicationReadyEvent (existsByKey + insert).
+CREATE TABLE IF NOT EXISTS app_migration
+(
+    migration_key VARCHAR(100) PRIMARY KEY,
+    executed_at   TIMESTAMP NOT NULL,
+    description   TEXT
+);
