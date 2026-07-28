@@ -1,17 +1,15 @@
 package org.booklore.service;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.KoboReadingStateMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoboReadingStateEntity;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.KoboReadingStateRepository;
+import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
@@ -43,9 +41,7 @@ import static org.mockito.Mockito.*;
 class KoboStatusSyncProtectionTest {
 
     @Mock
-    private KoboReadingStateRepository repository;
-    @Mock
-    private KoboReadingStateMapper mapper;
+    private JooqKoboReadingStateRepository repository;
     @Mock
     private UserBookProgressRepository progressRepository;
     @Mock
@@ -86,20 +82,10 @@ class KoboStatusSyncProtectionTest {
         when(koboSettingsService.getCurrentUserSettings()).thenReturn(testSettings);
         when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
-        lenient().when(repository
-                .findFirstByEntitlementIdAndUserIdIsNullOrderByPriorityTimestampDescLastModifiedStringDescIdDesc(
-                        anyString()))
-                .thenReturn(Optional.empty());
-        lenient().when(mapper.toJson(any())).thenCallRealMethod();
-        lenient().when(mapper.cleanString(any())).thenCallRealMethod();
     }
 
     private void setupMocksForSave(String entitlementId, KoboReadingState readingState) {
-        KoboReadingStateEntity entity = new KoboReadingStateEntity();
-        when(mapper.toEntity(any())).thenReturn(entity);
-        when(mapper.toDto(any(KoboReadingStateEntity.class))).thenReturn(readingState);
-        when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(Optional.empty());
-        when(repository.save(any())).thenReturn(entity);
+        when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
     }
 
     @Nested

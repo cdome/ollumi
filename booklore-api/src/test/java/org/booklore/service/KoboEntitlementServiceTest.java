@@ -21,14 +21,12 @@ import org.booklore.repository.ShelfRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.kobo.KoboCompatibilityService;
-import org.booklore.mapper.KoboReadingStateMapper;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.*;
-import org.booklore.model.entity.KoboReadingStateEntity;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.KoboReadingStateRepository;
+import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.service.kobo.KoboEntitlementService;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
@@ -93,10 +91,7 @@ class KoboEntitlementServiceTest {
     private UserBookProgressRepository progressRepository;
 
     @Mock
-    private KoboReadingStateRepository readingStateRepository;
-
-    @Mock
-    private KoboReadingStateMapper readingStateMapper;
+    private JooqKoboReadingStateRepository readingStateRepository;
 
     @Mock
     private KoboReadingStateBuilder readingStateBuilder;
@@ -112,7 +107,7 @@ class KoboEntitlementServiceTest {
     @BeforeEach
     void setUp() {
         BookLoreUser.UserPermissions permissions = new BookLoreUser.UserPermissions();
-        user = BookLoreUser.builder().permissions(permissions).build();
+        user = BookLoreUser.builder().id(1L).permissions(permissions).build();
     }
 
     @Test
@@ -455,9 +450,9 @@ class KoboEntitlementServiceTest {
             when(appSettingService.getAppSettings()).thenReturn(createAppSettingsWithKoboSettings());
             when(authenticationService.getAuthenticatedUser()).thenReturn(user);
             when(progressRepository.findByUserIdAndBookId(any(), eq(1L))).thenReturn(Optional.empty());
-            when(readingStateRepository.findByEntitlementIdAndUserId(anyString(), any())).thenReturn(Optional.empty());
-            when(readingStateRepository.findFirstByEntitlementIdAndUserIdIsNullOrderByPriorityTimestampDescLastModifiedStringDescIdDesc(anyString()))
-                    .thenReturn(Optional.empty());
+            when(readingStateRepository.findByEntitlementIdAndUserId(anyString(), anyLong())).thenReturn(null);
+            when(readingStateRepository.findFirstByEntitlementIdWithNullUserOrderByPriority(anyString()))
+                    .thenReturn(null);
 
             KoboSyncSettings settings = new KoboSyncSettings();
             when(koboSettingsService.getCurrentUserSettings()).thenReturn(settings);

@@ -3,7 +3,7 @@ package org.booklore.service.kobo;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.KoboReadingStateMapper;
+import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.model.dto.kobo.*;
 import org.booklore.model.dto.settings.KoboSettings;
 import org.booklore.model.entity.*;
@@ -11,7 +11,6 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.KoboReadingStateRepository;
 import org.booklore.repository.MagicShelfRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserBookProgressRepository;
@@ -43,8 +42,7 @@ public class KoboEntitlementService {
     private final AppSettingService appSettingService;
     private final KoboCompatibilityService koboCompatibilityService;
     private final UserBookProgressRepository progressRepository;
-    private final KoboReadingStateRepository readingStateRepository;
-    private final KoboReadingStateMapper readingStateMapper;
+    private final JooqKoboReadingStateRepository readingStateRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
     private final ShelfRepository shelfRepository;
@@ -210,11 +208,9 @@ public class KoboEntitlementService {
         String entitlementId = String.valueOf(book.getId());
         Long userId = authenticationService.getAuthenticatedUser().getId();
 
-        KoboReadingState existingState = readingStateRepository.findByEntitlementIdAndUserId(entitlementId, userId)
-                .or(() -> readingStateRepository
-                        .findFirstByEntitlementIdAndUserIdIsNullOrderByPriorityTimestampDescLastModifiedStringDescIdDesc(
-                                entitlementId))
-                .map(readingStateMapper::toDto)
+        KoboReadingState existingState = Optional.ofNullable(readingStateRepository.findByEntitlementIdAndUserId(entitlementId, userId))
+                .or(() -> Optional.ofNullable(readingStateRepository
+                        .findFirstByEntitlementIdWithNullUserOrderByPriority(entitlementId)))
                 .orElse(null);
 
         Optional<UserBookProgressEntity> userProgress = progressRepository
