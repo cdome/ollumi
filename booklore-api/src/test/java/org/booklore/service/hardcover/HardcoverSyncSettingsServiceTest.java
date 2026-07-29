@@ -4,9 +4,9 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.HardcoverSyncSettings;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoboUserSettingsEntity;
+import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.model.entity.UserSettingEntity;
-import org.booklore.repository.KoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +33,7 @@ class HardcoverSyncSettingsServiceTest {
     private AuthenticationService authenticationService;
 
     @Mock
-    private KoboUserSettingsRepository koboUserSettingsRepository;
+    private JooqKoboUserSettingsRepository koboUserSettingsRepository;
 
     private HardcoverSyncSettingsService service;
 
@@ -49,14 +49,10 @@ class HardcoverSyncSettingsServiceTest {
         user.setId(1L);
         user.setSettings(new HashSet<>());
 
-        KoboUserSettingsEntity legacy = KoboUserSettingsEntity.builder()
-                .userId(1L)
-                .hardcoverApiKey("legacy-key")
-                .hardcoverSyncEnabled(true)
-                .build();
+        KoboUserSettings legacy = new KoboUserSettings(1L, 1L, "token", false, 1f, 99f, false, "legacy-key", true, false);
 
         when(userRepository.findByIdWithSettings(1L)).thenReturn(Optional.of(user));
-        when(koboUserSettingsRepository.findByUserId(1L)).thenReturn(Optional.of(legacy));
+        when(koboUserSettingsRepository.findByUserId(1L)).thenReturn(legacy);
 
         HardcoverSyncSettings settings = service.getSettingsForUserId(1L);
 

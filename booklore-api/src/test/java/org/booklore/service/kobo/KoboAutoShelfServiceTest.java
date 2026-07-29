@@ -2,11 +2,11 @@ package org.booklore.service.kobo;
 
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoboUserSettingsEntity;
+import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.KoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.ShelfRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.*;
 class KoboAutoShelfServiceTest {
 
     @Mock
-    private KoboUserSettingsRepository koboUserSettingsRepository;
+    private JooqKoboUserSettingsRepository koboUserSettingsRepository;
 
     @Mock
     private ShelfRepository shelfRepository;
@@ -45,8 +45,8 @@ class KoboAutoShelfServiceTest {
     private BookLoreUserEntity testUser2;
     private ShelfEntity koboShelf1;
     private ShelfEntity koboShelf2;
-    private KoboUserSettingsEntity settings1;
-    private KoboUserSettingsEntity settings2;
+    private KoboUserSettings settings1;
+    private KoboUserSettings settings2;
 
     @BeforeEach
     void setUp() {
@@ -75,17 +75,8 @@ class KoboAutoShelfServiceTest {
                 .user(testUser2)
                 .build();
 
-        settings1 = KoboUserSettingsEntity.builder()
-                .userId(100L)
-                .autoAddToShelf(true)
-                .syncEnabled(true)
-                .build();
-
-        settings2 = KoboUserSettingsEntity.builder()
-                .userId(200L)
-                .autoAddToShelf(true)
-                .syncEnabled(true)
-                .build();
+        settings1 = new KoboUserSettings(1L, 100L, "t1", true, 1f, 99f, true, null, false, false);
+        settings2 = new KoboUserSettings(2L, 200L, "t2", true, 1f, 99f, true, null, false, false);
     }
 
     @Test

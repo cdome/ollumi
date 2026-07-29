@@ -13,6 +13,7 @@ import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -46,7 +47,7 @@ public class TelemetryService {
     private final EmailProviderV2Repository emailProviderV2Repository;
     private final EmailRecipientV2Repository emailRecipientV2Repository;
     private final AppSettingService appSettingService;
-    private final KoboUserSettingsRepository koboUserSettingsRepository;
+    private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final UserSettingRepository userSettingRepository;
     private final KoreaderUserRepository koreaderUserRepository;
     private final OpdsUserV2Repository opdsUserV2Repository;

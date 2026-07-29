@@ -7,9 +7,9 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.HardcoverSyncSettings;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoboUserSettingsEntity;
+import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.model.entity.UserSettingEntity;
-import org.booklore.repository.KoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +22,7 @@ public class HardcoverSyncSettingsService {
 
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
-    private final KoboUserSettingsRepository koboUserSettingsRepository;
+    private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
 
     @Transactional
     public HardcoverSyncSettings getCurrentUserSettings() {
@@ -78,15 +78,15 @@ public class HardcoverSyncSettingsService {
 
         boolean shouldSave = false;
         if (apiKeySetting == null || syncEnabledSetting == null) {
-            KoboUserSettingsEntity legacySettings = koboUserSettingsRepository.findByUserId(userId).orElse(null);
+            KoboUserSettings legacySettings = koboUserSettingsRepository.findByUserId(userId);
             if (legacySettings != null) {
                 if (apiKeySetting == null && legacySettings.getHardcoverApiKey() != null && !legacySettings.getHardcoverApiKey().isBlank()) {
                     apiKey = legacySettings.getHardcoverApiKey();
                     upsertSetting(user, UserSettingKey.HARDCOVER_API_KEY, apiKey);
                     shouldSave = true;
                 }
-                if (syncEnabledSetting == null && legacySettings.isHardcoverSyncEnabled()) {
-                    syncEnabled = legacySettings.isHardcoverSyncEnabled();
+                if (syncEnabledSetting == null && legacySettings.getHardcoverSyncEnabled()) {
+                    syncEnabled = legacySettings.getHardcoverSyncEnabled();
                     upsertSetting(user, UserSettingKey.HARDCOVER_SYNC_ENABLED, Boolean.toString(syncEnabled));
                     shouldSave = true;
                 }
