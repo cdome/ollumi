@@ -1,56 +1,55 @@
 package org.booklore.service.kobo;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.BookEntityToKoboSnapshotBookMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookLoreUser.UserPermissions;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoboLibrarySnapshotEntity;
-import org.booklore.model.entity.KoboSnapshotBookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.KoboDeletedBookProgressRepository;
-import org.booklore.repository.KoboLibrarySnapshotRepository;
-import org.booklore.repository.KoboSnapshotBookRepository;
 import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
+import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
+import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
+import org.booklore.repository.jooq.dto.KoboLibrarySnapshot;
+import org.booklore.repository.jooq.dto.KoboSnapshotBook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class KoboLibrarySnapshotServiceTest {
 
     @Mock
-    private KoboLibrarySnapshotRepository koboLibrarySnapshotRepository;
+    private JooqKoboLibrarySnapshotRepository koboLibrarySnapshotRepository;
 
     @Mock
-    private KoboSnapshotBookRepository koboSnapshotBookRepository;
+    private JooqKoboSnapshotBookRepository koboSnapshotBookRepository;
 
     @Mock
     private ShelfRepository shelfRepository;
 
     @Mock
-    private BookEntityToKoboSnapshotBookMapper mapper;
-
-    @Mock
-    private KoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
+    private JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
 
     @Mock
     private KoboCompatibilityService koboCompatibilityService;
@@ -60,6 +59,9 @@ class KoboLibrarySnapshotServiceTest {
 
     @InjectMocks
     private KoboLibrarySnapshotService service;
+
+    @Captor
+    private ArgumentCaptor<List<KoboSnapshotBook>> booksCaptor;
 
     private BookLoreUserEntity owner;
     private BookLoreUserEntity otherUser;
@@ -105,6 +107,14 @@ class KoboLibrarySnapshotServiceTest {
                 .permissions(userPermissions)
                 .build();
         when(authenticationService.getAuthenticatedUser()).thenReturn(mockUser);
+
+        // create() always builds the child books and persists the aggregate via insert(...).
+        // Echo back a snapshot record built from the captured arguments so callers see the userId/id/date.
+        when(koboLibrarySnapshotRepository.insert(anyString(), anyLong(), any(LocalDateTime.class), booksCaptor.capture()))
+                .thenAnswer(invocation -> new KoboLibrarySnapshot(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(2)));
     }
 
     @Test
@@ -119,25 +129,16 @@ class KoboLibrarySnapshotServiceTest {
 
         when(koboCompatibilityService.isBookSupportedForKobo(any())).thenReturn(true);
 
-        doAnswer(invocation -> {
-            BookEntity book = invocation.getArgument(0);
-            return KoboSnapshotBookEntity.builder().bookId(book.getId()).build();
-        }).when(mapper).toKoboSnapshotBook(any(BookEntity.class));
-
-        ArgumentCaptor<KoboLibrarySnapshotEntity> snapshotCaptor = ArgumentCaptor.forClass(KoboLibrarySnapshotEntity.class);
-        when(koboLibrarySnapshotRepository.save(snapshotCaptor.capture()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        KoboLibrarySnapshotEntity created = service.create(owner.getId());
+        KoboLibrarySnapshot created = service.create(owner.getId());
 
         assertThat(created.getUserId()).isEqualTo(owner.getId());
-        assertThat(created.getBooks()).extracting(KoboSnapshotBookEntity::getBookId)
-                .containsExactly(ownersBook.getId());
-        assertThat(created.getBooks()).allMatch(book -> created.equals(book.getSnapshot()));
 
-        KoboLibrarySnapshotEntity saved = snapshotCaptor.getValue();
-        assertThat(saved.getBooks()).extracting(KoboSnapshotBookEntity::getBookId)
+        // The books built for the insert must be exactly the snapshot user's owned books.
+        assertThat(booksCaptor.getValue())
+                .extracting(KoboSnapshotBook::getBookId)
                 .containsExactly(ownersBook.getId());
+        assertThat(booksCaptor.getValue())
+                .allMatch(book -> !book.getSynced());
     }
 
     @Test
@@ -152,11 +153,8 @@ class KoboLibrarySnapshotServiceTest {
 
         when(koboCompatibilityService.isBookSupportedForKobo(ownersBook)).thenReturn(false);
 
-        when(koboLibrarySnapshotRepository.save(any(KoboLibrarySnapshotEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        service.create(owner.getId());
 
-        KoboLibrarySnapshotEntity created = service.create(owner.getId());
-
-        assertThat(created.getBooks()).isEmpty();
+        assertThat(booksCaptor.getValue()).isEmpty();
     }
 }

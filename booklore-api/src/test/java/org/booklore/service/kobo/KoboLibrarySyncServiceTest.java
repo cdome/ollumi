@@ -6,7 +6,7 @@ import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.KoboDeletedBookProgressRepository;
+import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.util.kobo.BookloreSyncTokenGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +39,7 @@ class KoboLibrarySyncServiceTest {
     @Mock
     private KoboEntitlementService entitlementService;
     @Mock
-    private KoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
+    private JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
     @Mock
     private UserBookProgressRepository userBookProgressRepository;
     @Mock

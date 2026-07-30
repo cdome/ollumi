@@ -17,29 +17,32 @@ public interface UserBookProgressRepository extends JpaRepository<UserBookProgre
 
     List<UserBookProgressEntity> findByUserIdAndBookIdIn(Long userId, Set<Long> bookIds);
 
-    @Query("""
-        SELECT ubp FROM UserBookProgressEntity ubp
-        WHERE ubp.user.id = :userId
-          AND ubp.book.id IN (
-              SELECT ksb.bookId FROM KoboSnapshotBookEntity ksb
-              WHERE ksb.snapshot.id = :snapshotId
+    // Native query (not JPQL) so it references the kobo_library_snapshot_book TABLE directly and does
+    // not depend on the KoboSnapshotBook JPA entity, which has been migrated to jOOQ. SELECT ubp.*
+    // still maps to managed UserBookProgressEntity rows.
+    @Query(value = """
+        SELECT ubp.* FROM user_book_progress ubp
+        WHERE ubp.user_id = :userId
+          AND ubp.book_id IN (
+              SELECT ksb.book_id FROM kobo_library_snapshot_book ksb
+              WHERE ksb.snapshot_id = :snapshotId
           )
           AND (
-              (ubp.readStatusModifiedTime IS NOT NULL AND (
-                  ubp.koboStatusSentTime IS NULL
-                  OR ubp.readStatusModifiedTime > ubp.koboStatusSentTime
+              (ubp.read_status_modified_time IS NOT NULL AND (
+                  ubp.kobo_status_sent_time IS NULL
+                  OR ubp.read_status_modified_time > ubp.kobo_status_sent_time
               ))
               OR
-              (ubp.koboProgressReceivedTime IS NOT NULL AND (
-                  ubp.koboProgressSentTime IS NULL
-                  OR ubp.koboProgressReceivedTime > ubp.koboProgressSentTime
+              (ubp.kobo_progress_received_time IS NOT NULL AND (
+                  ubp.kobo_progress_sent_time IS NULL
+                  OR ubp.kobo_progress_received_time > ubp.kobo_progress_sent_time
               ))
               OR
-              (ubp.epubProgressPercent IS NOT NULL
-                  AND ubp.epubProgress IS NOT NULL
-                  AND (ubp.koboProgressSentTime IS NULL OR ubp.lastReadTime > ubp.koboProgressSentTime))
+              (ubp.epub_progress_percent IS NOT NULL
+                  AND ubp.epub_progress IS NOT NULL
+                  AND (ubp.kobo_progress_sent_time IS NULL OR ubp.last_read_time > ubp.kobo_progress_sent_time))
           )
-    """)
+    """, nativeQuery = true)
     List<UserBookProgressEntity> findAllBooksNeedingKoboSync(
             @Param("userId") Long userId,
             @Param("snapshotId") String snapshotId
