@@ -3,12 +3,14 @@ package org.booklore.service.email;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.model.dto.BookLoreUser;
+import org.booklore.model.dto.EmailRecipientV2;
 import org.booklore.model.dto.request.SendBookByEmailRequest;
 import org.booklore.model.entity.*;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.EmailProviderV2Repository;
-import org.booklore.repository.EmailRecipientV2Repository;
 import org.booklore.repository.UserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
+import org.booklore.repository.jooq.JooqEmailRecipientV2Repository;
+import org.booklore.repository.jooq.dto.EmailProviderV2Row;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
 import org.booklore.util.SecurityContextVirtualThread;
@@ -30,7 +32,7 @@ import static org.mockito.Mockito.*;
 class SendEmailV2ServiceTest {
 
     @Mock
-    private EmailProviderV2Repository emailProviderRepository;
+    private JooqEmailProviderV2Repository emailProviderRepository;
 
     @Mock
     private UserEmailProviderPreferenceRepository preferenceRepository;
@@ -39,7 +41,7 @@ class SendEmailV2ServiceTest {
     private BookRepository bookRepository;
 
     @Mock
-    private EmailRecipientV2Repository emailRecipientRepository;
+    private JooqEmailRecipientV2Repository emailRecipientRepository;
 
     @Mock
     private NotificationService notificationService;
@@ -52,8 +54,8 @@ class SendEmailV2ServiceTest {
 
     private BookLoreUser user;
     private BookEntity book;
-    private EmailProviderV2Entity emailProvider;
-    private EmailRecipientV2Entity emailRecipient;
+    private EmailProviderV2Row emailProvider;
+    private EmailRecipientV2 emailRecipient;
     private UserEmailProviderPreferenceEntity preference;
 
     @BeforeEach
@@ -78,19 +80,21 @@ class SendEmailV2ServiceTest {
         book.setLibraryPath(libraryPath);
         book.setBookFiles(List.of(bookFile));
 
-        emailProvider = EmailProviderV2Entity.builder()
-                .id(100L)
-                .userId(1L)
-                .name("Test Provider")
-                .host("smtp.test.com")
-                .port(587)
-                .username("user@test.com")
-                .password("password")
-                .auth(true)
-                .startTls(true)
-                .build();
+        emailProvider = new EmailProviderV2Row(
+                100L,
+                1L,
+                "Test Provider",
+                "smtp.test.com",
+                587,
+                "user@test.com",
+                "password",
+                null,
+                true,
+                true,
+                false,
+                false);
 
-        emailRecipient = EmailRecipientV2Entity.builder()
+        emailRecipient = EmailRecipientV2.builder()
                 .id(200L)
                 .userId(1L)
                 .email("recipient@test.com")
@@ -110,8 +114,8 @@ class SendEmailV2ServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
-        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(Optional.of(emailProvider));
-        when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(Optional.of(emailRecipient));
+        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(emailProvider);
+        when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
             securityMock.when(() -> SecurityContextVirtualThread.runWithSecurityContext(any(Runnable.class)))
@@ -154,7 +158,7 @@ class SendEmailV2ServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
-        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(Optional.empty());
+        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBookQuick(10L));
     }
@@ -164,8 +168,8 @@ class SendEmailV2ServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
-        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(Optional.of(emailProvider));
-        when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(Optional.empty());
+        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(emailProvider);
+        when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBookQuick(10L));
     }
@@ -179,9 +183,9 @@ class SendEmailV2ServiceTest {
                 .build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(Optional.of(emailProvider));
+        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
-        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(Optional.of(emailRecipient));
+        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
             securityMock.when(() -> SecurityContextVirtualThread.runWithSecurityContext(any(Runnable.class)))
@@ -211,10 +215,10 @@ class SendEmailV2ServiceTest {
                 .build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(Optional.empty());
-        when(emailProviderRepository.findSharedProviderById(100L)).thenReturn(Optional.of(emailProvider));
+        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(null);
+        when(emailProviderRepository.findSharedProviderById(100L)).thenReturn(emailProvider);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
-        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(Optional.of(emailRecipient));
+        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
             securityMock.when(() -> SecurityContextVirtualThread.runWithSecurityContext(any(Runnable.class)))
@@ -244,8 +248,8 @@ class SendEmailV2ServiceTest {
                 .build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(Optional.empty());
-        when(emailProviderRepository.findSharedProviderById(100L)).thenReturn(Optional.empty());
+        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(null);
+        when(emailProviderRepository.findSharedProviderById(100L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBook(request));
     }
@@ -259,7 +263,7 @@ class SendEmailV2ServiceTest {
                 .build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(Optional.of(emailProvider));
+        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.empty());
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBook(request));
@@ -274,9 +278,9 @@ class SendEmailV2ServiceTest {
                 .build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(Optional.of(emailProvider));
+        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
-        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(Optional.empty());
+        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBook(request));
     }
@@ -286,8 +290,8 @@ class SendEmailV2ServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
-        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(Optional.of(emailProvider));
-        when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(Optional.of(emailRecipient));
+        when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(emailProvider);
+        when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
             securityMock.when(() -> SecurityContextVirtualThread.runWithSecurityContext(any(Runnable.class)))
@@ -318,9 +322,9 @@ class SendEmailV2ServiceTest {
                 .build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(Optional.of(emailProvider));
+        when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
         when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
-        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(Optional.of(emailRecipient));
+        when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
             // Don't execute the runnable - just capture it

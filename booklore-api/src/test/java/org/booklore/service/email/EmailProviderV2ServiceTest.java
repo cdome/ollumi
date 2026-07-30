@@ -1,18 +1,17 @@
 package org.booklore.service.email;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.EmailProviderV2Mapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.EmailProviderV2;
 import org.booklore.model.dto.request.CreateEmailProviderRequest;
-import org.booklore.model.entity.EmailProviderV2Entity;
-import org.booklore.model.entity.UserEmailProviderPreferenceEntity;
-import org.booklore.repository.EmailProviderV2Repository;
 import org.booklore.repository.UserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
+import org.booklore.repository.jooq.dto.EmailProviderV2Row;
 import org.booklore.service.audit.AuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,20 +20,16 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class EmailProviderV2ServiceTest {
 
     @Mock
-    private EmailProviderV2Repository repository;
+    private JooqEmailProviderV2Repository repository;
 
     @Mock
     private UserEmailProviderPreferenceRepository preferenceRepository;
-
-    @Mock
-    private EmailProviderV2Mapper mapper;
 
     @Mock
     private AuthenticationService authService;
@@ -47,8 +42,7 @@ class EmailProviderV2ServiceTest {
 
     private BookLoreUser adminUser;
     private BookLoreUser regularUser;
-    private EmailProviderV2Entity savedEntity;
-    private EmailProviderV2 providerDto;
+    private EmailProviderV2Row savedRow;
 
     @BeforeEach
     void setUp() {
@@ -60,20 +54,25 @@ class EmailProviderV2ServiceTest {
         regularPerms.setAdmin(false);
         regularUser = BookLoreUser.builder().id(2L).username("user").permissions(regularPerms).build();
 
-        savedEntity = EmailProviderV2Entity.builder()
-                .id(10L)
-                .userId(1L)
-                .host("smtp.test.com")
-                .port(587)
-                .build();
+        // Row returned by insert/update stubs. password is present on the row (the service must
+        // drop it when mapping to the password-less EmailProviderV2 DTO).
+        savedRow = row(10L, 1L, false);
+    }
 
-        providerDto = EmailProviderV2.builder()
-                .id(10L)
-                .userId(1L)
-                .host("smtp.test.com")
-                .port(587)
-                .shared(false)
-                .build();
+    private EmailProviderV2Row row(long id, long userId, boolean shared) {
+        return new EmailProviderV2Row(
+                id,
+                userId,
+                "Test",
+                "smtp.test.com",
+                587,
+                "user@test.com",
+                "secret",
+                null,
+                false,
+                false,
+                false,
+                shared);
     }
 
     @Test
@@ -81,19 +80,25 @@ class EmailProviderV2ServiceTest {
         CreateEmailProviderRequest request = CreateEmailProviderRequest.builder()
                 .name("Test")
                 .host("smtp.test.com")
+                .username("user@test.com")
+                .password("secret")
                 .port(587)
                 .shared(null)
                 .build();
 
         when(authService.getAuthenticatedUser()).thenReturn(adminUser);
-        when(mapper.toEntity(request)).thenReturn(EmailProviderV2Entity.builder().build());
-        when(repository.save(any())).thenReturn(savedEntity);
+        when(repository.insert(any(EmailProviderV2Row.class))).thenReturn(savedRow);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(savedEntity), any())).thenReturn(providerDto);
 
-        emailProviderV2Service.createEmailProvider(request);
+        EmailProviderV2 result = emailProviderV2Service.createEmailProvider(request);
 
-        verify(repository).save(argThat(entity -> !entity.isShared()));
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).insert(captor.capture());
+        assertFalse(captor.getValue().getShared());
+        // returned DTO is mapped from the saved row (password dropped, not present on the DTO type)
+        assertEquals(10L, result.getId());
+        assertEquals("smtp.test.com", result.getHost());
+        assertFalse(result.getDefaultProvider());
     }
 
     @Test
@@ -101,19 +106,21 @@ class EmailProviderV2ServiceTest {
         CreateEmailProviderRequest request = CreateEmailProviderRequest.builder()
                 .name("Test")
                 .host("smtp.test.com")
+                .username("user@test.com")
+                .password("secret")
                 .port(587)
                 .shared(false)
                 .build();
 
         when(authService.getAuthenticatedUser()).thenReturn(adminUser);
-        when(mapper.toEntity(request)).thenReturn(EmailProviderV2Entity.builder().build());
-        when(repository.save(any())).thenReturn(savedEntity);
+        when(repository.insert(any(EmailProviderV2Row.class))).thenReturn(savedRow);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(savedEntity), any())).thenReturn(providerDto);
 
         emailProviderV2Service.createEmailProvider(request);
 
-        verify(repository).save(argThat(entity -> !entity.isShared()));
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).insert(captor.capture());
+        assertFalse(captor.getValue().getShared());
     }
 
     @Test
@@ -121,19 +128,21 @@ class EmailProviderV2ServiceTest {
         CreateEmailProviderRequest request = CreateEmailProviderRequest.builder()
                 .name("Test")
                 .host("smtp.test.com")
+                .username("user@test.com")
+                .password("secret")
                 .port(587)
                 .shared(true)
                 .build();
 
         when(authService.getAuthenticatedUser()).thenReturn(adminUser);
-        when(mapper.toEntity(request)).thenReturn(EmailProviderV2Entity.builder().build());
-        when(repository.save(any())).thenReturn(savedEntity);
+        when(repository.insert(any(EmailProviderV2Row.class))).thenReturn(savedRow);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(savedEntity), any())).thenReturn(providerDto);
 
         emailProviderV2Service.createEmailProvider(request);
 
-        verify(repository).save(argThat(EmailProviderV2Entity::isShared));
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).insert(captor.capture());
+        assertTrue(captor.getValue().getShared());
     }
 
     @Test
@@ -141,19 +150,21 @@ class EmailProviderV2ServiceTest {
         CreateEmailProviderRequest request = CreateEmailProviderRequest.builder()
                 .name("Test")
                 .host("smtp.test.com")
+                .username("user@test.com")
+                .password("secret")
                 .port(587)
                 .shared(true)
                 .build();
 
         when(authService.getAuthenticatedUser()).thenReturn(regularUser);
-        when(mapper.toEntity(request)).thenReturn(EmailProviderV2Entity.builder().build());
-        when(repository.save(any())).thenReturn(savedEntity);
+        when(repository.insert(any(EmailProviderV2Row.class))).thenReturn(row(10L, 2L, false));
         when(preferenceRepository.findByUserId(2L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(savedEntity), any())).thenReturn(providerDto);
 
         emailProviderV2Service.createEmailProvider(request);
 
-        verify(repository).save(argThat(entity -> !entity.isShared()));
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).insert(captor.capture());
+        assertFalse(captor.getValue().getShared());
     }
 
     @Test
@@ -165,23 +176,19 @@ class EmailProviderV2ServiceTest {
                 .shared(null)
                 .build();
 
-        EmailProviderV2Entity existingEntity = EmailProviderV2Entity.builder()
-                .id(10L)
-                .userId(1L)
-                .host("smtp.test.com")
-                .port(587)
-                .shared(true)
-                .build();
+        EmailProviderV2Row existing = row(10L, 1L, true);
 
         when(authService.getAuthenticatedUser()).thenReturn(adminUser);
-        when(repository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(existingEntity));
-        when(repository.save(any())).thenReturn(existingEntity);
+        when(repository.findByIdAndUserId(10L, 1L)).thenReturn(existing);
+        when(repository.update(any(EmailProviderV2Row.class))).thenReturn(existing);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(existingEntity), any())).thenReturn(providerDto);
 
         emailProviderV2Service.updateEmailProvider(10L, request);
 
-        assertFalse(existingEntity.isShared());
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).update(captor.capture());
+        assertEquals(10L, captor.getValue().getId());
+        assertFalse(captor.getValue().getShared());
     }
 
     @Test
@@ -193,23 +200,18 @@ class EmailProviderV2ServiceTest {
                 .shared(true)
                 .build();
 
-        EmailProviderV2Entity existingEntity = EmailProviderV2Entity.builder()
-                .id(10L)
-                .userId(1L)
-                .host("smtp.test.com")
-                .port(587)
-                .shared(false)
-                .build();
+        EmailProviderV2Row existing = row(10L, 1L, false);
 
         when(authService.getAuthenticatedUser()).thenReturn(adminUser);
-        when(repository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(existingEntity));
-        when(repository.save(any())).thenReturn(existingEntity);
+        when(repository.findByIdAndUserId(10L, 1L)).thenReturn(existing);
+        when(repository.update(any(EmailProviderV2Row.class))).thenReturn(existing);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(existingEntity), any())).thenReturn(providerDto);
 
         emailProviderV2Service.updateEmailProvider(10L, request);
 
-        assertTrue(existingEntity.isShared());
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).update(captor.capture());
+        assertTrue(captor.getValue().getShared());
     }
 
     @Test
@@ -221,22 +223,18 @@ class EmailProviderV2ServiceTest {
                 .shared(true)
                 .build();
 
-        EmailProviderV2Entity existingEntity = EmailProviderV2Entity.builder()
-                .id(10L)
-                .userId(2L)
-                .host("smtp.test.com")
-                .port(587)
-                .shared(false)
-                .build();
+        EmailProviderV2Row existing = row(10L, 2L, false);
 
         when(authService.getAuthenticatedUser()).thenReturn(regularUser);
-        when(repository.findByIdAndUserId(10L, 2L)).thenReturn(Optional.of(existingEntity));
-        when(repository.save(any())).thenReturn(existingEntity);
+        when(repository.findByIdAndUserId(10L, 2L)).thenReturn(existing);
+        when(repository.update(any(EmailProviderV2Row.class))).thenReturn(existing);
         when(preferenceRepository.findByUserId(2L)).thenReturn(Optional.empty());
-        when(mapper.toDTO(eq(existingEntity), any())).thenReturn(providerDto);
 
         emailProviderV2Service.updateEmailProvider(10L, request);
 
-        assertFalse(existingEntity.isShared());
+        ArgumentCaptor<EmailProviderV2Row> captor = ArgumentCaptor.forClass(EmailProviderV2Row.class);
+        verify(repository).update(captor.capture());
+        // non-admin: request.shared(true) is ignored, keeps existing shared=false
+        assertFalse(captor.getValue().getShared());
     }
 }

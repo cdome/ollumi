@@ -44,8 +44,8 @@ public class TelemetryService {
     private final TagRepository tagRepository;
     private final MoodRepository moodRepository;
     private final UserRepository userRepository;
-    private final EmailProviderV2Repository emailProviderV2Repository;
-    private final EmailRecipientV2Repository emailRecipientV2Repository;
+    private final org.booklore.repository.jooq.JooqEmailProviderV2Repository emailProviderV2Repository;
+    private final org.booklore.repository.jooq.JooqEmailRecipientV2Repository emailRecipientV2Repository;
     private final AppSettingService appSettingService;
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final UserSettingRepository userSettingRepository;
