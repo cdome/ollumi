@@ -1,6 +1,6 @@
 package org.booklore.crons;
 
-import org.booklore.repository.OidcSessionRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 class OidcSessionCleanupServiceTest {
 
     @Mock
-    private OidcSessionRepository oidcSessionRepository;
+    private JooqOidcSessionRepository oidcSessionRepository;
 
     @InjectMocks
     private OidcSessionCleanupService oidcSessionCleanupService;
@@ -30,10 +30,10 @@ class OidcSessionCleanupServiceTest {
         oidcSessionCleanupService.cleanupOidcSessions();
 
         ArgumentCaptor<Instant> revokedCaptor = ArgumentCaptor.forClass(Instant.class);
-        verify(oidcSessionRepository).deleteByRevokedTrueAndCreatedAtBefore(revokedCaptor.capture());
+        verify(oidcSessionRepository).deleteRevokedCreatedBefore(revokedCaptor.capture());
 
         ArgumentCaptor<Instant> maxAgeCaptor = ArgumentCaptor.forClass(Instant.class);
-        verify(oidcSessionRepository).deleteByCreatedAtBefore(maxAgeCaptor.capture());
+        verify(oidcSessionRepository).deleteCreatedBefore(maxAgeCaptor.capture());
     }
 
     @Test
@@ -41,7 +41,7 @@ class OidcSessionCleanupServiceTest {
         oidcSessionCleanupService.cleanupOidcSessions();
 
         ArgumentCaptor<Instant> revokedCaptor = ArgumentCaptor.forClass(Instant.class);
-        verify(oidcSessionRepository).deleteByRevokedTrueAndCreatedAtBefore(revokedCaptor.capture());
+        verify(oidcSessionRepository).deleteRevokedCreatedBefore(revokedCaptor.capture());
 
         Instant expectedRevoked = Instant.now().minus(7, ChronoUnit.DAYS);
         assertThat(revokedCaptor.getValue()).isBetween(expectedRevoked.minusSeconds(2), expectedRevoked.plusSeconds(2));
@@ -52,7 +52,7 @@ class OidcSessionCleanupServiceTest {
         oidcSessionCleanupService.cleanupOidcSessions();
 
         ArgumentCaptor<Instant> maxAgeCaptor = ArgumentCaptor.forClass(Instant.class);
-        verify(oidcSessionRepository).deleteByCreatedAtBefore(maxAgeCaptor.capture());
+        verify(oidcSessionRepository).deleteCreatedBefore(maxAgeCaptor.capture());
 
         Instant expectedMaxAge = Instant.now().minus(30, ChronoUnit.DAYS);
         assertThat(maxAgeCaptor.getValue()).isBetween(expectedMaxAge.minusSeconds(2), expectedMaxAge.plusSeconds(2));
@@ -63,7 +63,7 @@ class OidcSessionCleanupServiceTest {
         oidcSessionCleanupService.cleanupOidcSessions();
 
         InOrder inOrder = inOrder(oidcSessionRepository);
-        inOrder.verify(oidcSessionRepository).deleteByRevokedTrueAndCreatedAtBefore(org.mockito.ArgumentMatchers.any(Instant.class));
-        inOrder.verify(oidcSessionRepository).deleteByCreatedAtBefore(org.mockito.ArgumentMatchers.any(Instant.class));
+        inOrder.verify(oidcSessionRepository).deleteRevokedCreatedBefore(org.mockito.ArgumentMatchers.any(Instant.class));
+        inOrder.verify(oidcSessionRepository).deleteCreatedBefore(org.mockito.ArgumentMatchers.any(Instant.class));
     }
 }

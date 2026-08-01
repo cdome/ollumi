@@ -6,11 +6,12 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.OidcSessionEntity;
+import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.dto.OidcSession;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.OidcSessionRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -24,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,7 +43,10 @@ class BackchannelLogoutServiceTest {
     private OidcTokenValidator oidcTokenValidator;
 
     @Mock
-    private OidcSessionRepository oidcSessionRepository;
+    private JooqOidcSessionRepository oidcSessionRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @Mock
     private JooqRefreshTokenRepository refreshTokenRepository;
@@ -88,14 +93,14 @@ class BackchannelLogoutServiceTest {
                 .thenReturn(claims);
 
         var user = BookLoreUserEntity.builder().id(1L).username("testuser").build();
-        var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
+        var session = buildSession(10L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         backchannelLogoutService.handleLogoutToken("token");
 
-        verify(oidcSessionRepository).save(session);
-        assertThat(session.isRevoked()).isTrue();
+        verify(oidcSessionRepository).revokeById(10L);
         verify(notificationService).sendMessageToUser(eq("testuser"), eq(Topic.SESSION_REVOKED), any(Map.class));
         verify(auditService).log(eq(AuditAction.BACKCHANNEL_LOGOUT), eq("User"), eq(1L), any(String.class));
     }
@@ -112,13 +117,14 @@ class BackchannelLogoutServiceTest {
                 .thenReturn(claims);
 
         var user = BookLoreUserEntity.builder().id(2L).username("subuser").build();
-        var session = OidcSessionEntity.builder().user(user).oidcSubject("user-sub").revoked(false).build();
+        var session = buildSession(20L, 2L, null, "user-sub");
         when(oidcSessionRepository.findByOidcSubjectAndOidcIssuerAndRevokedFalse("user-sub", "https://issuer.example.com"))
                 .thenReturn(List.of(session));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
 
         backchannelLogoutService.handleLogoutToken("token");
 
-        verify(oidcSessionRepository).save(session);
+        verify(oidcSessionRepository).revokeById(20L);
         verify(oidcSessionRepository, never()).findByOidcSessionIdAndRevokedFalse(any());
         verify(notificationService).sendMessageToUser(eq("subuser"), eq(Topic.SESSION_REVOKED), any(Map.class));
     }
@@ -194,9 +200,10 @@ class BackchannelLogoutServiceTest {
                 .thenReturn(claims);
 
         var user = BookLoreUserEntity.builder().id(1L).username("testuser").build();
-        var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
+        var session = buildSession(30L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -231,9 +238,10 @@ class BackchannelLogoutServiceTest {
                 .thenReturn(claims);
 
         var user = BookLoreUserEntity.builder().id(1L).username("testuser").build();
-        var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
+        var session = buildSession(40L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -253,9 +261,10 @@ class BackchannelLogoutServiceTest {
                 .thenReturn(claims);
 
         var user = BookLoreUserEntity.builder().id(1L).username("wsuser").build();
-        var session = OidcSessionEntity.builder().user(user).oidcSessionId("session-123").revoked(false).build();
+        var session = buildSession(50L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -280,20 +289,25 @@ class BackchannelLogoutServiceTest {
 
         var user1 = BookLoreUserEntity.builder().id(1L).username("user1").build();
         var user2 = BookLoreUserEntity.builder().id(2L).username("user2").build();
-        var session1 = OidcSessionEntity.builder().user(user1).oidcSessionId("shared-sid").revoked(false).build();
-        var session2 = OidcSessionEntity.builder().user(user2).oidcSessionId("shared-sid").revoked(false).build();
+        var session1 = buildSession(60L, 1L, "shared-sid", "user-sub");
+        var session2 = buildSession(61L, 2L, "shared-sid", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("shared-sid"))
                 .thenReturn(List.of(session1, session2));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user1));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user2));
 
         backchannelLogoutService.handleLogoutToken("token");
 
-        assertThat(session1.isRevoked()).isTrue();
-        assertThat(session2.isRevoked()).isTrue();
-        verify(oidcSessionRepository).save(session1);
-        verify(oidcSessionRepository).save(session2);
+        verify(oidcSessionRepository).revokeById(60L);
+        verify(oidcSessionRepository).revokeById(61L);
         verify(notificationService).sendMessageToUser(eq("user1"), eq(Topic.SESSION_REVOKED), any(Map.class));
         verify(notificationService).sendMessageToUser(eq("user2"), eq(Topic.SESSION_REVOKED), any(Map.class));
         verify(auditService, times(2)).log(eq(AuditAction.BACKCHANNEL_LOGOUT), eq("User"), any(Long.class), any(String.class));
+    }
+
+    private OidcSession buildSession(long id, long userId, String oidcSessionId, String oidcSubject) {
+        return new OidcSession(id, userId, oidcSubject, "https://issuer.example.com", oidcSessionId, null,
+                Instant.now(), null, false);
     }
 
 }

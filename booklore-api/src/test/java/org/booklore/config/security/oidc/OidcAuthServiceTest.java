@@ -8,7 +8,7 @@ import org.booklore.model.dto.settings.OidcAutoProvisionDetails;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.OidcSessionRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -42,7 +42,7 @@ class OidcAuthServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private UserProvisioningService userProvisioningService;
     @Mock private AuthenticationService authenticationService;
-    @Mock private OidcSessionRepository oidcSessionRepository;
+    @Mock private JooqOidcSessionRepository oidcSessionRepository;
     @Mock private OidcGroupMappingService oidcGroupMappingService;
     @Mock private AuditService auditService;
 
@@ -89,7 +89,7 @@ class OidcAuthServiceTest {
         var result = oidcAuthService.exchangeCodeForTokens(CODE, CODE_VERIFIER, REDIRECT_URI, NONCE, mockRequest());
 
         assertThat(result).isEqualTo(expectedResponse);
-        verify(oidcSessionRepository).save(any());
+        verify(oidcSessionRepository).insert(eq(1L), eq("sub-123"), eq(ISSUER_URI), isNull(), eq("id-token"));
         verify(auditService).log(any(), eq("User"), eq(1L), contains("OIDC login successful"));
     }
 

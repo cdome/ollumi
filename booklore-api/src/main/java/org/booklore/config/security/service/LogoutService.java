@@ -6,12 +6,12 @@ import org.booklore.config.security.oidc.OidcDiscoveryService;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.response.LogoutResponse;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.OidcSessionEntity;
 import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.OidcSessionRepository;
+
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -27,7 +27,7 @@ import java.time.Instant;
 public class LogoutService {
 
     private final JooqRefreshTokenRepository refreshTokenRepository;
-    private final OidcSessionRepository oidcSessionRepository;
+    private final JooqOidcSessionRepository oidcSessionRepository;
     private final UserRepository userRepository;
     private final AppSettingService appSettingService;
     private final OidcDiscoveryService discoveryService;
@@ -74,12 +74,10 @@ public class LogoutService {
     private String buildOidcLogoutUrl(BookLoreUserEntity user, String origin) {
         try {
             var providerDetails = appSettingService.getAppSettings().getOidcProviderDetails();
-            var session = oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(user.getId());
+            var oidcSession = oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(user.getId());
 
-            if (session.isPresent()) {
-                OidcSessionEntity oidcSession = session.get();
-                oidcSession.setRevoked(true);
-                oidcSessionRepository.save(oidcSession);
+            if (oidcSession != null) {
+                oidcSessionRepository.revokeById(oidcSession.getId());
 
                 var discovery = discoveryService.discover(providerDetails.getIssuerUri());
                 if (discovery.endSessionEndpoint() != null) {

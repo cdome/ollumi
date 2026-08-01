@@ -8,11 +8,11 @@ import org.booklore.model.dto.response.LogoutResponse;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.OidcSessionEntity;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.OidcSessionRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.dto.OidcSession;
 import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -38,7 +38,7 @@ class LogoutServiceTest {
     private JooqRefreshTokenRepository refreshTokenRepository;
 
     @Mock
-    private OidcSessionRepository oidcSessionRepository;
+    private JooqOidcSessionRepository oidcSessionRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -144,17 +144,13 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
 
-        var oidcSession = OidcSessionEntity.builder()
-                .user(user)
-                .idTokenHint("token-hint")
-                .build();
+        var oidcSession = buildSession(5L, user.getId(), "token-hint");
 
-        stubOidcWithSession(oidcSession, "https://idp.example.com/logout");
+        stubOidcWithSession(oidcSession, user.getId(), "https://idp.example.com/logout");
 
         logoutService.logout(mockAuth(), null, "https://app.example.com");
 
-        assertThat(oidcSession.isRevoked()).isTrue();
-        verify(oidcSessionRepository).save(oidcSession);
+        verify(oidcSessionRepository).revokeById(5L);
     }
 
     @Test
@@ -189,7 +185,7 @@ class LogoutServiceTest {
         stubAuthenticated("oidcuser", user);
         stubAppSettings(true, buildProviderDetails());
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(1L))
-                .thenReturn(Optional.empty());
+                .thenReturn(null);
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -201,12 +197,9 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
 
-        var oidcSession = OidcSessionEntity.builder()
-                .user(user)
-                .idTokenHint("hint")
-                .build();
+        var oidcSession = buildSession(6L, user.getId(), "hint");
 
-        stubOidcWithSession(oidcSession, null);
+        stubOidcWithSession(oidcSession, user.getId(), null);
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -288,23 +281,25 @@ class LogoutServiceTest {
         );
     }
 
+    private OidcSession buildSession(long id, Long userId, String idTokenHint) {
+        return new OidcSession(id, userId, "sub", "https://idp.example.com", "sid", idTokenHint,
+                java.time.Instant.now(), null, false);
+    }
+
     private void stubFullOidcFlow(BookLoreUserEntity user, String endSessionEndpoint) {
         stubAppSettings(true, buildProviderDetails());
 
-        var oidcSession = OidcSessionEntity.builder()
-                .user(user)
-                .idTokenHint("id-token-hint-value")
-                .build();
+        var oidcSession = buildSession(1L, user.getId(), "id-token-hint-value");
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(user.getId()))
-                .thenReturn(Optional.of(oidcSession));
+                .thenReturn(oidcSession);
         when(discoveryService.discover("https://idp.example.com")).thenReturn(buildDiscovery(endSessionEndpoint));
     }
 
-    private void stubOidcWithSession(OidcSessionEntity session, String endSessionEndpoint) {
+    private void stubOidcWithSession(OidcSession session, Long userId, String endSessionEndpoint) {
         stubAppSettings(true, buildProviderDetails());
 
-        when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(session.getUser().getId()))
-                .thenReturn(Optional.of(session));
+        when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(userId))
+                .thenReturn(session);
         when(discoveryService.discover("https://idp.example.com")).thenReturn(buildDiscovery(endSessionEndpoint));
     }
 }
