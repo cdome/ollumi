@@ -54,3 +54,13 @@ CREATE TABLE IF NOT EXISTS app_migration
     executed_at   TIMESTAMP NOT NULL,
     description   TEXT
 );
+
+-- Read app-wide by AppSettingService (getSettingsMap/findByName) once its entity was
+-- dropped for jOOQ; the full Spring context loads settings during boot. Empty by
+-- default so tests fall back to built-in defaults, exactly like a fresh install.
+CREATE TABLE IF NOT EXISTS app_settings
+(
+    id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    val  TEXT
+);
