@@ -2,6 +2,7 @@ package org.booklore.mapper.komga;
 
 import org.booklore.context.KomgaCleanContext;
 import org.booklore.model.dto.MagicShelf;
+import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.model.dto.komga.*;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
@@ -351,7 +352,7 @@ public class KomgaMapper {
         return value != null ? value : defaultValue;
     }
 
-    public KomgaUserDto toKomgaUserDto(OpdsUserV2Entity opdsUser) {
+    public KomgaUserDto toKomgaUserDto(OpdsUserV2 opdsUser) {
         return KomgaUserDto.builder()
                 .id(opdsUser.getId().toString())
                 .email(opdsUser.getUsername() + "@booklore.local")
