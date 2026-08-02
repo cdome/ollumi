@@ -16,6 +16,7 @@ import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.progress.ReadingProgressService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -226,7 +227,7 @@ public class BookUpdateService {
     private List<Book> buildBooksWithProgress(List<BookEntity> bookEntities, Long userId) {
         Set<Long> bookIds = bookEntities.stream().map(BookEntity::getId).collect(Collectors.toSet());
         Map<Long, UserBookProgressEntity> progressMap = readingProgressService.fetchUserProgress(userId, bookIds);
-        Map<Long, UserBookFileProgressEntity> fileProgressMap = readingProgressService.fetchUserFileProgress(userId, bookIds);
+        Map<Long, UserBookFileProgressRow> fileProgressMap = readingProgressService.fetchUserFileProgress(userId, bookIds);
 
         return bookEntities.stream()
                 .map(bookEntity -> buildBook(bookEntity, userId, progressMap, fileProgressMap))
@@ -235,7 +236,7 @@ public class BookUpdateService {
 
     private Book buildBook(BookEntity bookEntity, Long userId,
                            Map<Long, UserBookProgressEntity> progressMap,
-                           Map<Long, UserBookFileProgressEntity> fileProgressMap) {
+                           Map<Long, UserBookFileProgressRow> fileProgressMap) {
         Book book = bookMapper.toBook(bookEntity);
         book.setShelves(filterShelvesByUserId(book.getShelves(), userId));
         readingProgressService.enrichBookWithProgress(

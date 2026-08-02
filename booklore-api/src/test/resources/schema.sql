@@ -81,3 +81,19 @@ CREATE TABLE IF NOT EXISTS bookdrop_file
     created_at        TIMESTAMP,
     updated_at        TIMESTAMP
 );
+
+-- Read at boot by MigrateProgressToFileProgressMigration (ApplicationReadyEvent) once its entity was
+-- dropped for jOOQ; the jOOQ repo joins book_file (kept as an entity). Empty by default, so a
+-- full-context boot with no legacy progress rows touches nothing. No FK needed for the empty bridge.
+CREATE TABLE IF NOT EXISTS user_book_file_progress
+(
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id          BIGINT       NOT NULL,
+    book_file_id     BIGINT       NOT NULL,
+    position_data    VARCHAR(1000),
+    position_href    VARCHAR(1000),
+    progress_percent FLOAT,
+    tts_position_cfi VARCHAR(1000),
+    last_read_time   TIMESTAMP,
+    CONSTRAINT uq_user_book_file UNIQUE (user_id, book_file_id)
+);

@@ -9,8 +9,8 @@ import org.booklore.model.dto.response.AttachBookFileResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
 import org.booklore.model.entity.UserBookProgressEntity;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserBookProgressRepository;
@@ -354,7 +354,7 @@ public class BookFileAttachmentService {
 
         UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
                 .orElse(new UserBookProgressEntity());
-        UserBookFileProgressEntity fileProgress = readingProgressService
+        UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 

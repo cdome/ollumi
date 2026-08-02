@@ -11,6 +11,7 @@ import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -91,7 +92,7 @@ public class BookService {
         Set<Long> bookIds = books.stream().map(Book::getId).collect(Collectors.toSet());
         Map<Long, UserBookProgressEntity> progressMap =
                 readingProgressService.fetchUserProgress(user.getId(), bookIds);
-        Map<Long, UserBookFileProgressEntity> fileProgressMap =
+        Map<Long, UserBookFileProgressRow> fileProgressMap =
                 readingProgressService.fetchUserFileProgress(user.getId(), bookIds);
 
         books.forEach(book -> {
@@ -130,7 +131,7 @@ public class BookService {
 
         Map<Long, UserBookProgressEntity> progressMap =
                 readingProgressService.fetchUserProgress(user.getId(), entityIds);
-        Map<Long, UserBookFileProgressEntity> fileProgressMap =
+        Map<Long, UserBookFileProgressRow> fileProgressMap =
                 readingProgressService.fetchUserFileProgress(user.getId(), entityIds);
 
         return books.stream().map(book -> {
@@ -154,7 +155,7 @@ public class BookService {
                 .orElse(new UserBookProgressEntity());
 
         // Fetch file-level progress for the book (most recent across all files)
-        UserBookFileProgressEntity fileProgress = readingProgressService
+        UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 

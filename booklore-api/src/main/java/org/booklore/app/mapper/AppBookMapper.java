@@ -8,6 +8,7 @@ import org.booklore.app.dto.AppMagicShelfSummary;
 import org.booklore.app.dto.AppShelfSummary;
 import org.booklore.model.entity.*;
 import org.booklore.repository.jooq.dto.MagicShelfRow;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.mapstruct.*;
 
@@ -72,7 +73,7 @@ public interface AppBookMapper {
     @Mapping(target = "cbxProgress", source = "progress", qualifiedByName = "mapCbxProgress")
     @Mapping(target = "audiobookProgress", source = "fileProgress", qualifiedByName = "mapAudiobookProgress")
     @Mapping(target = "koreaderProgress", source = "progress", qualifiedByName = "mapKoreaderProgress")
-    AppBookDetail toDetail(BookEntity book, UserBookProgressEntity progress, UserBookFileProgressEntity fileProgress);
+    AppBookDetail toDetail(BookEntity book, UserBookProgressEntity progress, UserBookFileProgressRow fileProgress);
 
     @Named("mapAuthors")
     default List<String> mapAuthors(List<AuthorEntity> authors) {
@@ -199,10 +200,9 @@ public interface AppBookMapper {
     }
 
     @Named("mapAudiobookProgress")
-    default AppBookDetail.AudiobookProgress mapAudiobookProgress(UserBookFileProgressEntity fileProgress) {
+    default AppBookDetail.AudiobookProgress mapAudiobookProgress(UserBookFileProgressRow fileProgress) {
         if (fileProgress == null) return null;
-        if (fileProgress.getBookFile() == null ||
-            fileProgress.getBookFile().getBookType() != BookFileType.AUDIOBOOK) {
+        if (fileProgress.getBookType() != BookFileType.AUDIOBOOK) {
             return null;
         }
 

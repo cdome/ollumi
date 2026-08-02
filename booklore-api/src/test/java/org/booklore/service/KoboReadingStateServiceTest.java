@@ -29,8 +29,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import org.booklore.model.entity.BookFileEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
-import org.booklore.repository.UserBookFileProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 
 import java.time.Instant;
 import java.util.List;
@@ -68,7 +68,7 @@ class KoboReadingStateServiceTest {
     private HardcoverSyncService hardcoverSyncService;
 
     @Mock
-    private UserBookFileProgressRepository fileProgressRepository;
+    private JooqUserBookFileProgressRepository fileProgressRepository;
 
     @InjectMocks
     private KoboReadingStateService service;
@@ -651,7 +651,9 @@ class KoboReadingStateServiceTest {
         BookFileEntity primaryFile = BookFileEntity.builder().id(10L).build();
         testBook.setBookFiles(List.of(primaryFile));
 
-        UserBookFileProgressEntity fileProgress = new UserBookFileProgressEntity();
+        UserBookFileProgressRow fileProgress = new UserBookFileProgressRow();
+        fileProgress.setId(1L);
+        fileProgress.setBookFileId(10L);
         fileProgress.setLastReadTime(Instant.now().plusSeconds(3600));
 
         UserBookProgressEntity existingProgress = new UserBookProgressEntity();

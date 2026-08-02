@@ -14,7 +14,9 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.kobo.KoboReadingStateService;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,7 @@ class ReadingProgressServiceTest {
     @Mock
     private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
-    private UserBookFileProgressRepository userBookFileProgressRepository;
+    private JooqUserBookFileProgressRepository userBookFileProgressRepository;
     @Mock
     private BookRepository bookRepository;
     @Mock
@@ -87,11 +89,11 @@ class ReadingProgressServiceTest {
 
     @Test
     void fetchUserFileProgress_emptyBookIds_shouldReturnEmptyMap() {
-        Map<Long, UserBookFileProgressEntity> result =
+        Map<Long, UserBookFileProgressRow> result =
                 readingProgressService.fetchUserFileProgress(1L, Collections.emptySet());
 
         assertTrue(result.isEmpty());
-        verify(userBookFileProgressRepository, never()).findByUserIdAndBookFileBookIdIn(anyLong(), anySet());
+        verify(userBookFileProgressRepository, never()).findByUserIdAndBookFileBookIdIn(anyLong(), anyCollection());
     }
 
     @Test
@@ -99,27 +101,18 @@ class ReadingProgressServiceTest {
         Long userId = 1L;
         Set<Long> bookIds = Set.of(1L);
 
-        BookEntity book = new BookEntity();
-        book.setId(1L);
-
-        BookFileEntity bookFile1 = new BookFileEntity();
-        bookFile1.setBook(book);
-
-        BookFileEntity bookFile2 = new BookFileEntity();
-        bookFile2.setBook(book);
-
-        UserBookFileProgressEntity progress1 = new UserBookFileProgressEntity();
-        progress1.setBookFile(bookFile1);
+        UserBookFileProgressRow progress1 = new UserBookFileProgressRow();
+        progress1.setBookId(1L);
         progress1.setLastReadTime(Instant.now().minusSeconds(100));
 
-        UserBookFileProgressEntity progress2 = new UserBookFileProgressEntity();
-        progress2.setBookFile(bookFile2);
+        UserBookFileProgressRow progress2 = new UserBookFileProgressRow();
+        progress2.setBookId(1L);
         progress2.setLastReadTime(Instant.now());
 
         when(userBookFileProgressRepository.findByUserIdAndBookFileBookIdIn(userId, bookIds))
                 .thenReturn(List.of(progress1, progress2));
 
-        Map<Long, UserBookFileProgressEntity> result =
+        Map<Long, UserBookFileProgressRow> result =
                 readingProgressService.fetchUserFileProgress(userId, bookIds);
 
         assertEquals(1, result.size());
@@ -153,11 +146,8 @@ class ReadingProgressServiceTest {
         progress.setEpubProgressPercent(30.0f);
         progress.setLastReadTime(Instant.now().minusSeconds(100));
 
-        BookFileEntity bookFile = new BookFileEntity();
-        bookFile.setBookType(BookFileType.EPUB);
-
-        UserBookFileProgressEntity fileProgress = new UserBookFileProgressEntity();
-        fileProgress.setBookFile(bookFile);
+        UserBookFileProgressRow fileProgress = new UserBookFileProgressRow();
+        fileProgress.setBookType(BookFileType.EPUB);
         fileProgress.setPositionData("new-cfi");
         fileProgress.setProgressPercent(50.0f);
         fileProgress.setLastReadTime(Instant.now());

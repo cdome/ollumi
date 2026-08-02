@@ -12,10 +12,10 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.BookCoverService;
@@ -211,7 +211,7 @@ public class BookFileDetachmentService {
 
         UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
                 .orElse(new UserBookProgressEntity());
-        UserBookFileProgressEntity fileProgress = readingProgressService
+        UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 

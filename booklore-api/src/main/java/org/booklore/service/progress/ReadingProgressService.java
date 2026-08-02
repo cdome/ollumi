@@ -20,7 +20,9 @@ import org.booklore.model.enums.ResetProgressType;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateService;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +45,7 @@ public class ReadingProgressService {
 
     private final UserBookProgressRepository userBookProgressRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
-    private final UserBookFileProgressRepository userBookFileProgressRepository;
+    private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
     private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final BookFileRepository bookFileRepository;
@@ -59,17 +61,17 @@ public class ReadingProgressService {
                 .collect(Collectors.toMap(p -> p.getBook().getId(), p -> p));
     }
 
-    public Map<Long, UserBookFileProgressEntity> fetchUserFileProgress(Long userId, Set<Long> bookIds) {
+    public Map<Long, UserBookFileProgressRow> fetchUserFileProgress(Long userId, Set<Long> bookIds) {
         if (bookIds.isEmpty()) {
             return Collections.emptyMap();
         }
 
-        List<UserBookFileProgressEntity> fileProgressList =
+        List<UserBookFileProgressRow> fileProgressList =
                 userBookFileProgressRepository.findByUserIdAndBookFileBookIdIn(userId, bookIds);
 
         return fileProgressList.stream()
                 .collect(Collectors.toMap(
-                        p -> p.getBookFile().getBook().getId(),
+                        p -> p.getBookId(),
                         p -> p,
                         (existing, replacement) -> {
                             if (existing.getLastReadTime() == null) return replacement;
@@ -80,7 +82,7 @@ public class ReadingProgressService {
                 ));
     }
 
-    public Optional<UserBookFileProgressEntity> fetchUserFileProgressForFile(Long userId, Long bookFileId) {
+    public Optional<UserBookFileProgressRow> fetchUserFileProgressForFile(Long userId, Long bookFileId) {
         return userBookFileProgressRepository.findByUserIdAndBookFileId(userId, bookFileId);
     }
 
@@ -91,7 +93,7 @@ public class ReadingProgressService {
     }
 
     public void enrichBookWithProgress(Book book, UserBookProgressEntity progress,
-                                        UserBookFileProgressEntity fileProgress) {
+                                        UserBookFileProgressRow fileProgress) {
         if (progress != null) {
             book.setReadStatus(progress.getReadStatus() == null ?
                     String.valueOf(ReadStatus.UNSET) : String.valueOf(progress.getReadStatus()));
@@ -148,8 +150,8 @@ public class ReadingProgressService {
         }
     }
 
-    private void setBookProgressFromFileProgress(Book book, UserBookFileProgressEntity fileProgress) {
-        BookFileType type = fileProgress.getBookFile() != null ? fileProgress.getBookFile().getBookType() : null;
+    private void setBookProgressFromFileProgress(Book book, UserBookFileProgressRow fileProgress) {
+        BookFileType type = fileProgress.getBookType();
         if (type == null) return;
 
         switch (type) {
@@ -293,15 +295,15 @@ public class ReadingProgressService {
     }
 
     private void saveToUserBookFileProgress(BookLoreUserEntity user, BookFileProgress fileProgress, Instant now) {
-        UserBookFileProgressEntity entity = userBookFileProgressRepository
+        UserBookFileProgressRow entity = userBookFileProgressRepository
                 .findByUserIdAndBookFileId(user.getId(), fileProgress.bookFileId())
-                .orElseGet(UserBookFileProgressEntity::new);
+                .orElseGet(UserBookFileProgressRow::new);
 
         BookFileEntity bookFile = bookFileRepository.findById(fileProgress.bookFileId())
                 .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book file not found"));
 
-        entity.setUser(user);
-        entity.setBookFile(bookFile);
+        entity.setUserId(user.getId());
+        entity.setBookFileId(bookFile.getId());
         entity.setPositionData(fileProgress.positionData());
         entity.setPositionHref(fileProgress.positionHref());
         entity.setProgressPercent(fileProgress.progressPercent());
@@ -313,12 +315,12 @@ public class ReadingProgressService {
 
     private void saveToUserBookFileProgressFromLegacy(BookLoreUserEntity user, BookFileEntity bookFile,
                                                        UserBookProgressEntity progress, Instant now) {
-        UserBookFileProgressEntity entity = userBookFileProgressRepository
+        UserBookFileProgressRow entity = userBookFileProgressRepository
                 .findByUserIdAndBookFileId(user.getId(), bookFile.getId())
-                .orElseGet(UserBookFileProgressEntity::new);
+                .orElseGet(UserBookFileProgressRow::new);
 
-        entity.setUser(user);
-        entity.setBookFile(bookFile);
+        entity.setUserId(user.getId());
+        entity.setBookFileId(bookFile.getId());
         entity.setLastReadTime(now);
 
         switch (bookFile.getBookType()) {

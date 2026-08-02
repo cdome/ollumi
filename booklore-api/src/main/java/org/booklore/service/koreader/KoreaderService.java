@@ -8,6 +8,8 @@ import org.booklore.model.dto.progress.KoreaderProgress;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.util.koreader.EpubCfiService;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +28,7 @@ import java.util.Map;
 public class KoreaderService {
 
     private final UserBookProgressRepository progressRepository;
-    private final UserBookFileProgressRepository fileProgressRepository;
+    private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final KoreaderUserRepository koreaderUserRepository;
@@ -95,12 +97,12 @@ public class KoreaderService {
     private void saveToFileProgress(BookLoreUserEntity user, BookEntity book, UserBookProgressEntity progress) {
         try {
             BookFileEntity primaryFile = book.getPrimaryBookFile();
-            UserBookFileProgressEntity fileProgress = fileProgressRepository
+            UserBookFileProgressRow fileProgress = fileProgressRepository
                     .findByUserIdAndBookFileId(user.getId(), primaryFile.getId())
-                    .orElseGet(UserBookFileProgressEntity::new);
+                    .orElseGet(UserBookFileProgressRow::new);
 
-            fileProgress.setUser(user);
-            fileProgress.setBookFile(primaryFile);
+            fileProgress.setUserId(user.getId());
+            fileProgress.setBookFileId(primaryFile.getId());
             fileProgress.setLastReadTime(progress.getLastReadTime());
 
             // Map progress based on book type

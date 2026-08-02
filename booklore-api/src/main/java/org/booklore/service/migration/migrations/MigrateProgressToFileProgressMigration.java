@@ -1,11 +1,11 @@
 package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookFileEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.UserBookFileProgressRepository;
 import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.migration.Migration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ import java.util.Optional;
 public class MigrateProgressToFileProgressMigration implements Migration {
 
     private final UserBookProgressRepository userBookProgressRepository;
-    private final UserBookFileProgressRepository userBookFileProgressRepository;
+    private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
 
     @Override
     public String getKey() {
@@ -60,7 +60,7 @@ public class MigrateProgressToFileProgressMigration implements Migration {
                 BookFileEntity bookFile = bookFileOpt.get();
 
                 // Check if file progress already exists
-                Optional<UserBookFileProgressEntity> existingFileProgress =
+                Optional<UserBookFileProgressRow> existingFileProgress =
                         userBookFileProgressRepository.findByUserIdAndBookFileId(
                                 progress.getUser().getId(), bookFile.getId());
 
@@ -71,7 +71,7 @@ public class MigrateProgressToFileProgressMigration implements Migration {
                     continue;
                 }
 
-                UserBookFileProgressEntity fileProgress = createFileProgress(progress, bookFile);
+                UserBookFileProgressRow fileProgress = createFileProgress(progress, bookFile);
                 userBookFileProgressRepository.save(fileProgress);
                 migratedCount++;
             } catch (Exception e) {
@@ -131,10 +131,10 @@ public class MigrateProgressToFileProgressMigration implements Migration {
         return Optional.empty();
     }
 
-    private UserBookFileProgressEntity createFileProgress(UserBookProgressEntity progress, BookFileEntity bookFile) {
-        UserBookFileProgressEntity fileProgress = new UserBookFileProgressEntity();
-        fileProgress.setUser(progress.getUser());
-        fileProgress.setBookFile(bookFile);
+    private UserBookFileProgressRow createFileProgress(UserBookProgressEntity progress, BookFileEntity bookFile) {
+        UserBookFileProgressRow fileProgress = new UserBookFileProgressRow();
+        fileProgress.setUserId(progress.getUser().getId());
+        fileProgress.setBookFileId(bookFile.getId());
         fileProgress.setLastReadTime(progress.getLastReadTime());
 
         // Map progress data based on book type

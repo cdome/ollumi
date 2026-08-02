@@ -9,11 +9,12 @@ import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.dto.response.kobo.KoboReadingStateResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +50,7 @@ public class KoboReadingStateService {
 
     private final JooqKoboReadingStateRepository repository;
     private final UserBookProgressRepository progressRepository;
-    private final UserBookFileProgressRepository fileProgressRepository;
+    private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
@@ -267,7 +268,7 @@ public class KoboReadingStateService {
             return false;
         }
 
-        UserBookFileProgressEntity fileProgress = book.getPrimaryBookFile() != null
+        UserBookFileProgressRow fileProgress = book.getPrimaryBookFile() != null
                 ? fileProgressRepository.findByUserIdAndBookFileId(userId, book.getPrimaryBookFile().getId()).orElse(null)
                 : null;
 
