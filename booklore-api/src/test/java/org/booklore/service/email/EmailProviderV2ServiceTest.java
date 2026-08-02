@@ -4,7 +4,7 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.EmailProviderV2;
 import org.booklore.model.dto.request.CreateEmailProviderRequest;
-import org.booklore.repository.UserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.JooqUserEmailProviderPreferenceRepository;
 import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
 import org.booklore.repository.jooq.dto.EmailProviderV2Row;
 import org.booklore.service.audit.AuditService;
@@ -29,7 +29,7 @@ class EmailProviderV2ServiceTest {
     private JooqEmailProviderV2Repository repository;
 
     @Mock
-    private UserEmailProviderPreferenceRepository preferenceRepository;
+    private JooqUserEmailProviderPreferenceRepository preferenceRepository;
 
     @Mock
     private AuthenticationService authService;

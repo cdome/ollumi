@@ -8,13 +8,13 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.repository.jooq.dto.EmailProviderV2Row;
 import org.booklore.model.dto.EmailRecipientV2;
-import org.booklore.model.entity.UserEmailProviderPreferenceEntity;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
 import org.booklore.repository.jooq.JooqEmailRecipientV2Repository;
-import org.booklore.repository.UserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.JooqUserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.dto.UserEmailProviderPreference;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
 import org.booklore.util.SecurityContextVirtualThread;
@@ -39,7 +39,7 @@ import java.util.Properties;
 public class SendEmailV2Service {
 
     private final JooqEmailProviderV2Repository emailProviderRepository;
-    private final UserEmailProviderPreferenceRepository preferenceRepository;
+    private final JooqUserEmailProviderPreferenceRepository preferenceRepository;
     private final BookRepository bookRepository;
     private final JooqEmailRecipientV2Repository emailRecipientRepository;
     private final NotificationService notificationService;
@@ -204,7 +204,7 @@ public class SendEmailV2Service {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
 
         Long defaultProviderId = preferenceRepository.findByUserId(user.getId())
-                .map(UserEmailProviderPreferenceEntity::getDefaultProviderId)
+                .map(UserEmailProviderPreference::getDefaultProviderId)
                 .orElseThrow(ApiError.DEFAULT_EMAIL_PROVIDER_NOT_FOUND::createException);
 
         EmailProviderV2Row provider = emailProviderRepository.findAccessibleProvider(defaultProviderId, user.getId());

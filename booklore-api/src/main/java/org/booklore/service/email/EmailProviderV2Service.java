@@ -5,10 +5,10 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.EmailProviderV2;
 import org.booklore.model.dto.request.CreateEmailProviderRequest;
-import org.booklore.model.entity.UserEmailProviderPreferenceEntity;
-import org.booklore.repository.UserEmailProviderPreferenceRepository;
 import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
+import org.booklore.repository.jooq.JooqUserEmailProviderPreferenceRepository;
 import org.booklore.repository.jooq.dto.EmailProviderV2Row;
+import org.booklore.repository.jooq.dto.UserEmailProviderPreference;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class EmailProviderV2Service {
 
     private final JooqEmailProviderV2Repository repository;
-    private final UserEmailProviderPreferenceRepository preferenceRepository;
+    private final JooqUserEmailProviderPreferenceRepository preferenceRepository;
     private final AuthenticationService authService;
     private final AuditService auditService;
 
@@ -125,21 +125,18 @@ public class EmailProviderV2Service {
             throw ApiError.EMAIL_PROVIDER_NOT_FOUND.createException(id);
         }
 
-        List<UserEmailProviderPreferenceEntity> preferencesUsingProvider =
-                preferenceRepository.findAll().stream()
-                        .filter(pref -> pref.getDefaultProviderId().equals(id))
-                        .toList();
+        List<UserEmailProviderPreference> preferencesUsingProvider =
+                preferenceRepository.findAllByDefaultProviderId(id);
 
-        for (UserEmailProviderPreferenceEntity preference : preferencesUsingProvider) {
+        for (UserEmailProviderPreference preference : preferencesUsingProvider) {
             List<EmailProviderV2Row> availableProviders = getAccessibleProvidersForUser(preference.getUserId());
             availableProviders.removeIf(p -> p.getId() == id);
 
             if (!availableProviders.isEmpty()) {
                 EmailProviderV2Row newDefault = availableProviders.get(ThreadLocalRandom.current().nextInt(availableProviders.size()));
-                preference.setDefaultProviderId(newDefault.getId());
-                preferenceRepository.save(preference);
+                preferenceRepository.updateDefaultProviderById(preference.getId(), newDefault.getId());
             } else {
-                preferenceRepository.delete(preference);
+                preferenceRepository.deleteById(preference.getId());
             }
         }
 
@@ -149,17 +146,12 @@ public class EmailProviderV2Service {
 
     private Long getDefaultProviderIdForUser(Long userId) {
         return preferenceRepository.findByUserId(userId)
-                .map(UserEmailProviderPreferenceEntity::getDefaultProviderId)
+                .map(UserEmailProviderPreference::getDefaultProviderId)
                 .orElse(null);
     }
 
     private void setDefaultProviderForUser(Long userId, Long providerId) {
-        UserEmailProviderPreferenceEntity preference = preferenceRepository.findByUserId(userId)
-                .orElse(UserEmailProviderPreferenceEntity.builder()
-                        .userId(userId)
-                        .build());
-        preference.setDefaultProviderId(providerId);
-        preferenceRepository.save(preference);
+        preferenceRepository.upsertDefaultProvider(userId, providerId);
     }
 
     private List<EmailProviderV2Row> getAccessibleProvidersForUser(Long userId) {

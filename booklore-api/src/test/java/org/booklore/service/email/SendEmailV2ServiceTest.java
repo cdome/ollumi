@@ -7,7 +7,8 @@ import org.booklore.model.dto.EmailRecipientV2;
 import org.booklore.model.dto.request.SendBookByEmailRequest;
 import org.booklore.model.entity.*;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.JooqUserEmailProviderPreferenceRepository;
+import org.booklore.repository.jooq.dto.UserEmailProviderPreference;
 import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
 import org.booklore.repository.jooq.JooqEmailRecipientV2Repository;
 import org.booklore.repository.jooq.dto.EmailProviderV2Row;
@@ -35,7 +36,7 @@ class SendEmailV2ServiceTest {
     private JooqEmailProviderV2Repository emailProviderRepository;
 
     @Mock
-    private UserEmailProviderPreferenceRepository preferenceRepository;
+    private JooqUserEmailProviderPreferenceRepository preferenceRepository;
 
     @Mock
     private BookRepository bookRepository;
@@ -56,7 +57,7 @@ class SendEmailV2ServiceTest {
     private BookEntity book;
     private EmailProviderV2Row emailProvider;
     private EmailRecipientV2 emailRecipient;
-    private UserEmailProviderPreferenceEntity preference;
+    private UserEmailProviderPreference preference;
 
     @BeforeEach
     void setUp() {
@@ -102,11 +103,7 @@ class SendEmailV2ServiceTest {
                 .defaultRecipient(true)
                 .build();
 
-        preference = UserEmailProviderPreferenceEntity.builder()
-                .id(1L)
-                .userId(1L)
-                .defaultProviderId(100L)
-                .build();
+        preference = new UserEmailProviderPreference(1L, 1L, 100L);
     }
 
     @Test
