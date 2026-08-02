@@ -5,7 +5,7 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.TaskCreateRequest;
 import org.booklore.model.dto.response.TaskCreateResponse;
 import org.booklore.model.enums.TaskType;
-import org.booklore.repository.MetadataFetchJobRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.task.TaskStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 class TempFetchedMetadataCleanupTaskTest {
 
     @Mock
-    private MetadataFetchJobRepository metadataFetchJobRepository;
+    private JooqMetadataFetchJobRepository metadataFetchJobRepository;
 
     @InjectMocks
     private TempFetchedMetadataCleanupTask tempFetchedMetadataCleanupTask;

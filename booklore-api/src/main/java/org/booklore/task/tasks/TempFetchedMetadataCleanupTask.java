@@ -6,7 +6,7 @@ import org.booklore.model.dto.request.TaskCreateRequest;
 import org.booklore.model.dto.response.TaskCreateResponse;
 import org.booklore.model.enums.TaskType;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.MetadataFetchJobRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.task.TaskStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +22,7 @@ import java.util.UUID;
 @Slf4j
 public class TempFetchedMetadataCleanupTask implements Task {
 
-    private final MetadataFetchJobRepository metadataFetchJobRepository;
+    private final JooqMetadataFetchJobRepository metadataFetchJobRepository;
 
     @Override
     public void validatePermissions(BookLoreUser user, TaskCreateRequest request) {

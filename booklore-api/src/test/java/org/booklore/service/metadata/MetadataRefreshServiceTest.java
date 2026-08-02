@@ -13,13 +13,12 @@ import org.booklore.model.MetadataUpdateWrapper;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.MetadataFetchJobEntity;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.MetadataFetchJobRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.parser.BookParser;
@@ -44,7 +43,7 @@ import static org.mockito.Mockito.*;
 class MetadataRefreshServiceTest {
 
     @Mock private LibraryRepository libraryRepository;
-    @Mock private MetadataFetchJobRepository metadataFetchJobRepository;
+    @Mock private JooqMetadataFetchJobRepository metadataFetchJobRepository;
     @Mock private BookMapper bookMapper;
     @Mock private BookMetadataUpdater bookMetadataUpdater;
     @Mock private NotificationService notificationService;
