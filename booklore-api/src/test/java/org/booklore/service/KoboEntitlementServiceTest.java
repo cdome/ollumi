@@ -11,12 +11,12 @@ import org.booklore.model.dto.settings.KoboSettings;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.MagicShelfEntity;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.MagicShelfRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
@@ -82,7 +82,7 @@ class KoboEntitlementServiceTest {
     private ShelfRepository shelfRepository;
 
     @Mock
-    private MagicShelfRepository magicShelfRepository;
+    private JooqMagicShelfRepository magicShelfRepository;
 
     @Mock
     private MagicShelfBookService magicShelfBookService;
@@ -193,15 +193,9 @@ class KoboEntitlementServiceTest {
         ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1, book2)).build();
         ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").bookEntities(Set.of(book1)).build();
 
-        MagicShelfEntity magicShelf = MagicShelfEntity.builder()
-                .id(201L)
-                .userId(user.getId())
-                .name("Sci-Fi Books")
-                .icon("pi-book")
-                .filterJson("{}")
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
+        MagicShelfRow magicShelf = new MagicShelfRow(
+                201L, user.getId(), "Sci-Fi Books", "pi-book", null, "{}", false,
+                LocalDateTime.now(), LocalDateTime.now());
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
@@ -335,15 +329,8 @@ class KoboEntitlementServiceTest {
 
         LocalDateTime createdAt = LocalDateTime.of(2024, 1, 15, 10, 30, 0);
         LocalDateTime updatedAt = LocalDateTime.of(2024, 6, 20, 14, 45, 0);
-        MagicShelfEntity magicShelf = MagicShelfEntity.builder()
-                .id(201L)
-                .userId(user.getId())
-                .name("Fantasy")
-                .icon("pi-book")
-                .filterJson("{}")
-                .createdAt(createdAt)
-                .updatedAt(updatedAt)
-                .build();
+        MagicShelfRow magicShelf = new MagicShelfRow(
+                201L, user.getId(), "Fantasy", "pi-book", null, "{}", false, createdAt, updatedAt);
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))

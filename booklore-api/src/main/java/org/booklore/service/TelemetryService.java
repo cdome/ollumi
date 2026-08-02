@@ -13,6 +13,7 @@ import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
@@ -39,7 +40,7 @@ public class TelemetryService {
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AuthorRepository authorRepository;
     private final ShelfRepository shelfRepository;
-    private final MagicShelfRepository magicShelfRepository;
+    private final JooqMagicShelfRepository magicShelfRepository;
     private final CategoryRepository categoryRepository;
     private final TagRepository tagRepository;
     private final MoodRepository moodRepository;

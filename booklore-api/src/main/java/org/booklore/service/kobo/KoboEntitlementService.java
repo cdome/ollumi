@@ -11,8 +11,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.MagicShelfRepository;
 import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
@@ -46,7 +46,7 @@ public class KoboEntitlementService {
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
     private final ShelfRepository shelfRepository;
-    private final MagicShelfRepository magicShelfRepository;
+    private final JooqMagicShelfRepository magicShelfRepository;
     private final MagicShelfBookService magicShelfBookService;
     private final KoboSettingsService koboSettingsService;
 

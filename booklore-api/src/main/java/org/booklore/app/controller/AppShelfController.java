@@ -8,10 +8,10 @@ import org.booklore.app.dto.AppShelfSummary;
 import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.app.service.AppBookService;
 import org.booklore.model.dto.BookLoreUser;
-import org.booklore.model.entity.MagicShelfEntity;
 import org.booklore.model.entity.ShelfEntity;
-import org.booklore.repository.MagicShelfRepository;
 import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,7 +29,7 @@ public class AppShelfController {
 
     private final AuthenticationService authenticationService;
     private final ShelfRepository shelfRepository;
-    private final MagicShelfRepository magicShelfRepository;
+    private final JooqMagicShelfRepository magicShelfRepository;
     private final AppBookMapper mobileBookMapper;
     private final AppBookService mobileBookService;
 
@@ -53,21 +53,21 @@ public class AppShelfController {
         Long userId = user.getId();
 
         // Get user's own magic shelves
-        List<MagicShelfEntity> userShelves = magicShelfRepository.findAllByUserId(userId);
+        List<MagicShelfRow> userShelves = magicShelfRepository.findAllByUserId(userId);
 
         // Get public magic shelves
-        List<MagicShelfEntity> publicShelves = magicShelfRepository.findAllByIsPublicIsTrue();
+        List<MagicShelfRow> publicShelves = magicShelfRepository.findAllPublic();
 
         // Combine and deduplicate (user's shelves that are also public shouldn't appear twice)
         Set<Long> seenIds = new HashSet<>();
-        List<MagicShelfEntity> allShelves = new ArrayList<>();
+        List<MagicShelfRow> allShelves = new ArrayList<>();
 
-        for (MagicShelfEntity shelf : userShelves) {
+        for (MagicShelfRow shelf : userShelves) {
             if (seenIds.add(shelf.getId())) {
                 allShelves.add(shelf);
             }
         }
-        for (MagicShelfEntity shelf : publicShelves) {
+        for (MagicShelfRow shelf : publicShelves) {
             if (seenIds.add(shelf.getId())) {
                 allShelves.add(shelf);
             }

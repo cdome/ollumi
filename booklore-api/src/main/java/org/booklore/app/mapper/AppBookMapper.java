@@ -7,6 +7,7 @@ import org.booklore.app.dto.AppLibrarySummary;
 import org.booklore.app.dto.AppMagicShelfSummary;
 import org.booklore.app.dto.AppShelfSummary;
 import org.booklore.model.entity.*;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.booklore.model.enums.BookFileType;
 import org.mapstruct.*;
 
@@ -330,7 +331,7 @@ public interface AppBookMapper {
                 .build();
     }
 
-    default AppMagicShelfSummary toMagicShelfSummary(MagicShelfEntity magicShelf) {
+    default AppMagicShelfSummary toMagicShelfSummary(MagicShelfRow magicShelf) {
         if (magicShelf == null) {
             return null;
         }

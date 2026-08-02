@@ -4,29 +4,33 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.service.audit.AuditService;
 import org.booklore.model.dto.MagicShelf;
-import org.booklore.model.entity.MagicShelfEntity;
 import org.booklore.model.enums.IconType;
-import org.booklore.repository.MagicShelfRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class MagicShelfServiceTest {
 
     @Mock
-    private MagicShelfRepository magicShelfRepository;
+    private JooqMagicShelfRepository magicShelfRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -44,6 +48,11 @@ class MagicShelfServiceTest {
         user = BookLoreUser.builder().id(1L).isDefaultPassword(false).permissions(permissions).build();
     }
 
+    private MagicShelfRow row(Long id, String name, String icon, IconType iconType, String filterJson, boolean isPublic) {
+        return new MagicShelfRow(id, 1L, name, icon, iconType, filterJson, isPublic,
+                LocalDateTime.now(), LocalDateTime.now());
+    }
+
     @Test
     void createShelf_withNullIcon_shouldPersistNullIconValues() {
         MagicShelf dto = new MagicShelf();
@@ -55,21 +64,16 @@ class MagicShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(magicShelfRepository.existsByUserIdAndName(1L, "Unread Books")).thenReturn(false);
-        when(magicShelfRepository.save(any(MagicShelfEntity.class))).thenAnswer(invocation -> {
-            MagicShelfEntity entity = invocation.getArgument(0);
-            entity.setId(1L);
-            return entity;
-        });
+        when(magicShelfRepository.insert(anyLong(), anyString(), any(), any(), anyString(), anyBoolean()))
+                .thenReturn(row(1L, "Unread Books", null, null, "{\"status\": \"unread\"}", false));
 
         MagicShelf result = magicShelfService.createOrUpdateShelf(dto);
 
-        ArgumentCaptor<MagicShelfEntity> captor = ArgumentCaptor.forClass(MagicShelfEntity.class);
-        verify(magicShelfRepository).save(captor.capture());
-
-        MagicShelfEntity saved = captor.getValue();
-        assertNull(saved.getIcon());
-        assertNull(saved.getIconType());
-        assertEquals("Unread Books", saved.getName());
+        verify(magicShelfRepository).insert(eq(1L), eq("Unread Books"), isNull(), isNull(),
+                eq("{\"status\": \"unread\"}"), eq(false));
+        assertNull(result.getIcon());
+        assertNull(result.getIconType());
+        assertEquals("Unread Books", result.getName());
     }
 
     @Test
@@ -83,14 +87,13 @@ class MagicShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(magicShelfRepository.existsByUserIdAndName(1L, "Favorites")).thenReturn(false);
-        when(magicShelfRepository.save(any(MagicShelfEntity.class))).thenAnswer(invocation -> {
-            MagicShelfEntity entity = invocation.getArgument(0);
-            entity.setId(1L);
-            return entity;
-        });
+        when(magicShelfRepository.insert(anyLong(), anyString(), any(), any(), anyString(), anyBoolean()))
+                .thenReturn(row(1L, "Favorites", "star", IconType.PRIME_NG, "{\"rating\": 5}", false));
 
         MagicShelf result = magicShelfService.createOrUpdateShelf(dto);
 
+        verify(magicShelfRepository).insert(eq(1L), eq("Favorites"), eq("star"), eq(IconType.PRIME_NG),
+                eq("{\"rating\": 5}"), eq(false));
         assertNotNull(result);
         assertEquals("star", result.getIcon());
         assertEquals(IconType.PRIME_NG, result.getIconType());
@@ -98,14 +101,7 @@ class MagicShelfServiceTest {
 
     @Test
     void updateShelf_withNullIcon_shouldClearIconValues() {
-        MagicShelfEntity existing = MagicShelfEntity.builder()
-                .id(1L)
-                .userId(1L)
-                .name("Old Shelf")
-                .icon("star")
-                .iconType(IconType.PRIME_NG)
-                .filterJson("{\"status\": \"reading\"}")
-                .build();
+        MagicShelfRow existing = row(1L, "Old Shelf", "star", IconType.PRIME_NG, "{\"status\": \"reading\"}", false);
 
         MagicShelf dto = new MagicShelf();
         dto.setId(1L);
@@ -117,29 +113,18 @@ class MagicShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(magicShelfRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(magicShelfRepository.save(any(MagicShelfEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(magicShelfRepository.update(anyLong(), anyLong(), anyString(), any(), any(), anyString(), anyBoolean()))
+                .thenReturn(row(1L, "Updated Shelf", null, null, "{\"status\": \"updated\"}", false));
 
         magicShelfService.createOrUpdateShelf(dto);
 
-        ArgumentCaptor<MagicShelfEntity> captor = ArgumentCaptor.forClass(MagicShelfEntity.class);
-        verify(magicShelfRepository).save(captor.capture());
-
-        MagicShelfEntity saved = captor.getValue();
-        assertNull(saved.getIcon());
-        assertNull(saved.getIconType());
-        assertEquals("Updated Shelf", saved.getName());
+        verify(magicShelfRepository).update(eq(1L), eq(1L), eq("Updated Shelf"), isNull(), isNull(),
+                eq("{\"status\": \"updated\"}"), eq(false));
     }
 
     @Test
     void updateShelf_withIcon_shouldPreserveIconValues() {
-        MagicShelfEntity existing = MagicShelfEntity.builder()
-                .id(1L)
-                .userId(1L)
-                .name("Old Shelf")
-                .icon("star")
-                .iconType(IconType.PRIME_NG)
-                .filterJson("{\"status\": \"reading\"}")
-                .build();
+        MagicShelfRow existing = row(1L, "Old Shelf", "star", IconType.PRIME_NG, "{\"status\": \"reading\"}", false);
 
         MagicShelf dto = new MagicShelf();
         dto.setId(1L);
@@ -151,28 +136,18 @@ class MagicShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(magicShelfRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(magicShelfRepository.save(any(MagicShelfEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(magicShelfRepository.update(anyLong(), anyLong(), anyString(), any(), any(), anyString(), anyBoolean()))
+                .thenReturn(row(1L, "Updated Shelf", "bookmark", IconType.CUSTOM_SVG, "{\"status\": \"updated\"}", false));
 
         magicShelfService.createOrUpdateShelf(dto);
 
-        ArgumentCaptor<MagicShelfEntity> captor = ArgumentCaptor.forClass(MagicShelfEntity.class);
-        verify(magicShelfRepository).save(captor.capture());
-
-        MagicShelfEntity saved = captor.getValue();
-        assertEquals("bookmark", saved.getIcon());
-        assertEquals(IconType.CUSTOM_SVG, saved.getIconType());
+        verify(magicShelfRepository).update(eq(1L), eq(1L), eq("Updated Shelf"), eq("bookmark"),
+                eq(IconType.CUSTOM_SVG), eq("{\"status\": \"updated\"}"), eq(false));
     }
 
     @Test
     void updateShelf_fromIconToNull_shouldAllowRemovingIcon() {
-        MagicShelfEntity existing = MagicShelfEntity.builder()
-                .id(1L)
-                .userId(1L)
-                .name("Shelf With Icon")
-                .icon("heart")
-                .iconType(IconType.PRIME_NG)
-                .filterJson("{}")
-                .build();
+        MagicShelfRow existing = row(1L, "Shelf With Icon", "heart", IconType.PRIME_NG, "{}", false);
 
         MagicShelf dto = new MagicShelf();
         dto.setId(1L);
@@ -184,7 +159,8 @@ class MagicShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(magicShelfRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(magicShelfRepository.save(any(MagicShelfEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(magicShelfRepository.update(anyLong(), anyLong(), anyString(), any(), any(), anyString(), anyBoolean()))
+                .thenReturn(row(1L, "Shelf With Icon", null, null, "{}", false));
 
         MagicShelf result = magicShelfService.createOrUpdateShelf(dto);
 

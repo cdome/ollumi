@@ -11,12 +11,12 @@ import org.booklore.model.dto.GroupRule;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.MagicShelfEntity;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.MagicShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookRuleEvaluator;
 import org.booklore.repository.jooq.JooqMagicShelfBookRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.booklore.service.restriction.ContentRestrictionService;
 import org.jooq.Condition;
 import org.jooq.impl.DSL;
@@ -42,7 +42,7 @@ import static org.booklore.jooq.tables.Book.BOOK;
 @Service
 public class MagicShelfBookService {
 
-    private final MagicShelfRepository magicShelfRepository;
+    private final JooqMagicShelfRepository magicShelfRepository;
     private final BookRepository bookRepository;
     private final JooqMagicShelfBookRepository jooqMagicShelfBookRepository;
     private final BookMapper bookMapper;
@@ -54,7 +54,7 @@ public class MagicShelfBookService {
 
     @Transactional(readOnly = true)
     public Page<Book> getBooksByMagicShelfId(Long userId, Long magicShelfId, int page, int size) {
-        MagicShelfEntity shelf = validateMagicShelfAccess(userId, magicShelfId);
+        MagicShelfRow shelf = validateMagicShelfAccess(userId, magicShelfId);
         try {
             Condition condition = buildShelfCondition(shelf, userId);
             Pageable pageable = PageRequest.of(Math.max(page, 0), size);
@@ -79,7 +79,7 @@ public class MagicShelfBookService {
     }
 
     public List<Long> getBookIdsByMagicShelfId(Long userId, Long magicShelfId, int limit) {
-        MagicShelfEntity shelf = validateMagicShelfAccess(userId, magicShelfId);
+        MagicShelfRow shelf = validateMagicShelfAccess(userId, magicShelfId);
         try {
             Condition condition = buildShelfCondition(shelf, userId);
 
@@ -99,14 +99,14 @@ public class MagicShelfBookService {
                 .orElse("Magic Shelf Books");
     }
 
-    private Condition buildShelfCondition(MagicShelfEntity shelf, Long userId) {
+    private Condition buildShelfCondition(MagicShelfRow shelf, Long userId) {
         GroupRule groupRule = objectMapper.readValue(shelf.getFilterJson(), GroupRule.class);
         return ruleEvaluator.toCondition(groupRule, userId)
                 .and(libraryFilterCondition(userId));
     }
 
-    private MagicShelfEntity validateMagicShelfAccess(Long userId, Long magicShelfId) {
-        MagicShelfEntity shelf = magicShelfRepository.findById(magicShelfId)
+    private MagicShelfRow validateMagicShelfAccess(Long userId, Long magicShelfId) {
+        MagicShelfRow shelf = magicShelfRepository.findById(magicShelfId)
                 .orElseThrow(() -> ApiError.MAGIC_SHELF_NOT_FOUND.createException(magicShelfId));
 
         if (userId == null) {
@@ -124,7 +124,7 @@ public class MagicShelfBookService {
             throw ApiError.FORBIDDEN.createException("You are not allowed to access this resource");
         }
 
-        boolean isOwner = shelf.getUserId().equals(userId);
+        boolean isOwner = shelf.getUserId() == userId.longValue();
         boolean isPublic = shelf.isPublic();
         boolean isAdmin = entity.getPermissions().isPermissionAdmin();
 
