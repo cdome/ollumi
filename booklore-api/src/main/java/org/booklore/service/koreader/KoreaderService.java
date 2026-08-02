@@ -8,7 +8,9 @@ import org.booklore.model.dto.progress.KoreaderProgress;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.util.koreader.EpubCfiService;
@@ -31,13 +33,13 @@ public class KoreaderService {
     private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
-    private final KoreaderUserRepository koreaderUserRepository;
+    private final JooqKoreaderUserRepository koreaderUserRepository;
     private final HardcoverSyncService hardcoverSyncService;
     private final EpubCfiService epubCfiService;
 
     public ResponseEntity<Map<String, String>> authorizeUser() {
         KoreaderUserDetails authDetails = getAuthDetails();
-        KoreaderUserEntity koreaderUser = findKoreaderUser(authDetails.getUsername());
+        KoreaderUserRow koreaderUser = findKoreaderUser(authDetails.getUsername());
         validatePassword(koreaderUser, authDetails);
 
         log.info("User '{}' authorized", authDetails.getUsername());
@@ -199,7 +201,7 @@ public class KoreaderService {
         return authDetails;
     }
 
-    private KoreaderUserEntity findKoreaderUser(String username) {
+    private KoreaderUserRow findKoreaderUser(String username) {
         return koreaderUserRepository.findByUsername(username)
                 .orElseThrow(() -> {
                     log.warn("KOReader user '{}' not found", username);
@@ -207,7 +209,7 @@ public class KoreaderService {
                 });
     }
 
-    private void validatePassword(KoreaderUserEntity koreaderUser, KoreaderUserDetails authDetails) {
+    private void validatePassword(KoreaderUserRow koreaderUser, KoreaderUserDetails authDetails) {
         if (koreaderUser.getPasswordMD5() == null ||
                 !koreaderUser.getPasswordMD5().equalsIgnoreCase(authDetails.getPassword())) {
             log.warn("Password mismatch for user '{}'", authDetails.getUsername());

@@ -17,6 +17,7 @@ import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
+import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.service.appsettings.AppSettingService;
 import lombok.AllArgsConstructor;
@@ -51,7 +52,7 @@ public class TelemetryService {
     private final AppSettingService appSettingService;
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final UserSettingRepository userSettingRepository;
-    private final KoreaderUserRepository koreaderUserRepository;
+    private final JooqKoreaderUserRepository koreaderUserRepository;
     private final JooqOpdsUserV2Repository opdsUserV2Repository;
     private final InstallationService installationService;
 

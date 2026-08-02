@@ -97,3 +97,19 @@ CREATE TABLE IF NOT EXISTS user_book_file_progress
     last_read_time   TIMESTAMP,
     CONSTRAINT uq_user_book_file UNIQUE (user_id, book_file_id)
 );
+
+-- Counted at boot-adjacent telemetry / used by KOReader auth once its entity was dropped for jOOQ.
+-- FK mirrors prod's ON DELETE CASCADE (V134) so user-deletion cascade holds in full-context tests too.
+CREATE TABLE IF NOT EXISTS koreader_user
+(
+    id                        BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username                  VARCHAR(100) NOT NULL,
+    password                  VARCHAR(255) NOT NULL,
+    password_md5              VARCHAR(255) NOT NULL,
+    created_at                TIMESTAMP,
+    updated_at                TIMESTAMP,
+    sync_enabled              TINYINT      NOT NULL DEFAULT 0,
+    sync_with_booklore_reader TINYINT      NOT NULL DEFAULT 0,
+    booklore_user_id          BIGINT,
+    CONSTRAINT fk_koreader_booklore_user FOREIGN KEY (booklore_user_id) REFERENCES users (id) ON DELETE CASCADE
+);

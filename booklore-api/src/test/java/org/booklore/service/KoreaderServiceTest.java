@@ -9,13 +9,13 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.progress.KoreaderProgress;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoreaderUserEntity;
+import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
-import org.booklore.repository.KoreaderUserRepository;
+import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.koreader.KoreaderService;
 import org.junit.jupiter.api.*;
@@ -44,7 +44,7 @@ class KoreaderServiceTest {
     @Mock
     UserRepository userRepo;
     @Mock
-    KoreaderUserRepository koreaderUserRepo;
+    JooqKoreaderUserRepository koreaderUserRepo;
     @Mock
     HardcoverSyncService hardcoverSyncService;
 
@@ -74,7 +74,7 @@ class KoreaderServiceTest {
 
     @Test
     void authorizeUser_success() {
-        var userEntity = new KoreaderUserEntity();
+        var userEntity = new KoreaderUserRow();
         userEntity.setPasswordMD5("MD5PWD");
         when(koreaderUserRepo.findByUsername("u"))
                 .thenReturn(Optional.of(userEntity));
@@ -94,7 +94,7 @@ class KoreaderServiceTest {
 
     @Test
     void authorizeUser_badPassword() {
-        var userEntity = new KoreaderUserEntity();
+        var userEntity = new KoreaderUserRow();
         userEntity.setPasswordMD5("OTHER");
         when(koreaderUserRepo.findByUsername("u"))
                 .thenReturn(Optional.of(userEntity));

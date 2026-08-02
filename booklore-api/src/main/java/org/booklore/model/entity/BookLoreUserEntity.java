@@ -76,9 +76,6 @@ public class BookLoreUserEntity {
     @Builder.Default
     private Set<UserSettingEntity> settings = new HashSet<>();
 
-    @OneToOne(mappedBy = "bookLoreUser", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private KoreaderUserEntity koreaderUser;
-
     @BatchSize(size = 20)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
