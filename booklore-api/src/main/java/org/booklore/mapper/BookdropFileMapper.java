@@ -2,7 +2,7 @@ package org.booklore.mapper;
 
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.BookdropFile;
-import org.booklore.model.entity.BookdropFileEntity;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -12,7 +12,7 @@ public interface BookdropFileMapper {
 
     @Mapping(target = "originalMetadata", source = "originalMetadata", qualifiedByName = "jsonToBookMetadata")
     @Mapping(target = "fetchedMetadata", source = "fetchedMetadata", qualifiedByName = "jsonToBookMetadata")
-    BookdropFile toDto(BookdropFileEntity entity);
+    BookdropFile toDto(BookdropFileRow row);
 
     @Named("jsonToBookMetadata")
     default BookMetadata jsonToBookMetadata(String json) {

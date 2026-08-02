@@ -16,16 +16,17 @@ import org.booklore.model.dto.response.BookdropFileResult;
 import org.booklore.model.dto.response.BookdropFinalizeResult;
 import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookdropFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.model.enums.BookdropFileStatus;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.BookdropFileRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileMovingHelper;
 import org.booklore.service.fileprocessor.BookFileProcessor;
@@ -61,7 +62,7 @@ import java.util.stream.Stream;
 @Transactional
 public class BookDropService {
 
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
     private final LibraryRepository libraryRepository;
     private final BookRepository bookRepository;
     private final BookdropMonitoringService bookdropMonitoringService;
@@ -79,14 +80,14 @@ public class BookDropService {
     private static final int CHUNK_SIZE = 100;
 
     public BookdropFileNotification getFileNotificationSummary() {
-        long pendingCount = bookdropFileRepository.countByStatus(BookdropFileEntity.Status.PENDING_REVIEW);
+        long pendingCount = bookdropFileRepository.countByStatus(BookdropFileStatus.PENDING_REVIEW);
         long totalCount = bookdropFileRepository.count();
         return new BookdropFileNotification((int) pendingCount, (int) totalCount, Instant.now().toString());
     }
 
     public Page<BookdropFile> getFilesByStatus(String status, Pageable pageable) {
         if ("pending".equalsIgnoreCase(status)) {
-            return bookdropFileRepository.findAllByStatus(BookdropFileEntity.Status.PENDING_REVIEW, pageable).map(mapper::toDto);
+            return bookdropFileRepository.findAllByStatus(BookdropFileStatus.PENDING_REVIEW, pageable).map(mapper::toDto);
         } else {
             return bookdropFileRepository.findAll(pageable).map(mapper::toDto);
         }
@@ -126,11 +127,11 @@ public class BookDropService {
                 return;
             }
 
-            List<BookdropFileEntity> filesToDelete = getFilesToDelete(selectAll, excludedIds, selectedIds);
+            List<BookdropFileRow> filesToDelete = getFilesToDelete(selectAll, excludedIds, selectedIds);
             deleteFilesAndCovers(filesToDelete, deletedFiles, deletedCovers);
             deleteEmptyDirectories(bookdropPath, deletedDirs);
 
-            bookdropFileRepository.deleteAllByIdInBatch(filesToDelete.stream().map(BookdropFileEntity::getId).toList());
+            bookdropFileRepository.deleteAllById(filesToDelete.stream().map(BookdropFileRow::getId).toList());
             log.info("Deleted {} bookdrop DB entries", filesToDelete.size());
 
             bookdropNotificationService.sendBookdropFileSummaryNotification();
@@ -234,11 +235,11 @@ public class BookDropService {
 
                 log.info("Processing chunk {}/{} ({} files): IDs={}", (i / CHUNK_SIZE + 1), (int) Math.ceil((double) ids.size() / CHUNK_SIZE), chunk.size(), chunk);
 
-                List<BookdropFileEntity> chunkFiles = bookdropFileRepository.findAllById(chunk);
-                Map<Long, BookdropFileEntity> fileMap = chunkFiles.stream().collect(Collectors.toMap(BookdropFileEntity::getId, Function.identity()));
+                List<BookdropFileRow> chunkFiles = bookdropFileRepository.findAllById(chunk);
+                Map<Long, BookdropFileRow> fileMap = chunkFiles.stream().collect(Collectors.toMap(BookdropFileRow::getId, Function.identity()));
 
                 for (Long id : chunk) {
-                    BookdropFileEntity file = fileMap.get(id);
+                    BookdropFileRow file = fileMap.get(id);
                     if (file == null) {
                         log.warn("File ID {} missing in DB during finalizeImport chunk processing", id);
                         failedCount.incrementAndGet();
@@ -261,9 +262,9 @@ public class BookDropService {
                                                Long defaultPathId) {
         Set<Long> affectedLibraries = new HashSet<>();
 
-        List<BookdropFileEntity> files = bookdropFileRepository.findAllById(ids);
+        List<BookdropFileRow> files = bookdropFileRepository.findAllById(ids);
 
-        for (BookdropFileEntity fileEntity : files) {
+        for (BookdropFileRow fileEntity : files) {
             try {
                 FileProcessingContext context = prepareFileProcessingContext(fileEntity, metadataById.get(fileEntity.getId()), defaultLibraryId, defaultPathId);
                 affectedLibraries.add(context.libraryId());
@@ -313,7 +314,7 @@ public class BookDropService {
                 results.getTotalFiles());
     }
 
-    private void processFile(BookdropFileEntity fileEntity,
+    private void processFile(BookdropFileRow fileEntity,
                              BookdropFinalizeRequest.BookdropFinalizeFile fileReq,
                              Long defaultLibraryId,
                              Long defaultPathId,
@@ -339,7 +340,7 @@ public class BookDropService {
         }
     }
 
-    private FileProcessingContext prepareFileProcessingContext(BookdropFileEntity fileEntity,
+    private FileProcessingContext prepareFileProcessingContext(BookdropFileRow fileEntity,
                                                                BookdropFinalizeRequest.BookdropFinalizeFile fileReq,
                                                                Long defaultLibraryId,
                                                                Long defaultPathId) throws Exception {
@@ -370,7 +371,7 @@ public class BookDropService {
         return new FileProcessingContext(libraryId, pathId, metadata);
     }
 
-    private BookdropFileResult moveFile(long libraryId, long pathId, BookMetadata metadata, BookdropFileEntity bookdropFile) {
+    private BookdropFileResult moveFile(long libraryId, long pathId, BookMetadata metadata, BookdropFileRow bookdropFile) {
         LibraryEntity library = libraryRepository.findById(libraryId)
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
 
@@ -396,7 +397,7 @@ public class BookDropService {
         log.debug("Preparing to move file id={}, name={}, source={}, target={}, library={}, path={}", bookdropFile.getId(), bookdropFile.getFileName(), source, target, library.getName(), path.getPath());
 
         if (!Files.exists(source)) {
-            bookdropFileRepository.deleteAllByIdInBatch(List.of(bookdropFile.getId()));
+            bookdropFileRepository.deleteById(bookdropFile.getId());
             log.warn("Source file [id={}] not found at '{}'. Deleting entry from DB.", bookdropFile.getId(), source);
             bookdropNotificationService.sendBookdropFileSummaryNotification();
             return failureResult(targetFile.getName(), "Source file does not exist in bookdrop folder");
@@ -410,7 +411,7 @@ public class BookDropService {
         return performFileMove(bookdropFile, source, target, library, path, metadata);
     }
 
-    private BookdropFileResult performFileMove(BookdropFileEntity bookdropFile, Path source, Path target, LibraryEntity library, LibraryPathEntity path, BookMetadata metadata) {
+    private BookdropFileResult performFileMove(BookdropFileRow bookdropFile, Path source, Path target, LibraryEntity library, LibraryPathEntity path, BookMetadata metadata) {
         Path tempPath = null;
         try {
             String suffix = "";
@@ -457,7 +458,7 @@ public class BookDropService {
         }
     }
 
-    private BookdropFileResult processMovedFile(BookdropFileEntity bookdropFile,
+    private BookdropFileResult processMovedFile(BookdropFileRow bookdropFile,
                                                 File targetFile,
                                                 LibraryEntity library,
                                                 LibraryPathEntity path,
@@ -497,8 +498,8 @@ public class BookDropService {
                 .build();
     }
 
-    private void cleanupBookdropData(BookdropFileEntity bookdropFile) {
-        bookdropFileRepository.deleteAllByIdInBatch(List.of(bookdropFile.getId()));
+    private void cleanupBookdropData(BookdropFileRow bookdropFile) {
+        bookdropFileRepository.deleteById(bookdropFile.getId());
         bookdropNotificationService.sendBookdropFileSummaryNotification();
 
         Path cachedCoverPath = Paths.get(appProperties.getPathConfig(), "bookdrop_temp", bookdropFile.getId() + ".jpg");
@@ -560,22 +561,22 @@ public class BookDropService {
         return processor.processFile(libraryFile);
     }
 
-    private List<BookdropFileEntity> getFilesToDelete(boolean selectAll, List<Long> excludedIds, List<Long> selectedIds) {
+    private List<BookdropFileRow> getFilesToDelete(boolean selectAll, List<Long> excludedIds, List<Long> selectedIds) {
         if (selectAll) {
-            List<BookdropFileEntity> filesToDelete = bookdropFileRepository.findAll().stream()
+            List<BookdropFileRow> filesToDelete = bookdropFileRepository.findAll().stream()
                     .filter(f -> excludedIds == null || !excludedIds.contains(f.getId()))
                     .toList();
             log.info("Discarding all files except excluded IDs: {}", excludedIds);
             return filesToDelete;
         } else {
-            List<BookdropFileEntity> filesToDelete = bookdropFileRepository.findAllById(selectedIds == null ? List.of() : selectedIds);
+            List<BookdropFileRow> filesToDelete = bookdropFileRepository.findAllById(selectedIds == null ? List.of() : selectedIds);
             log.info("Discarding selected files: {}", selectedIds);
             return filesToDelete;
         }
     }
 
-    private void deleteFilesAndCovers(List<BookdropFileEntity> filesToDelete, AtomicInteger deletedFiles, AtomicInteger deletedCovers) {
-        for (BookdropFileEntity entity : filesToDelete) {
+    private void deleteFilesAndCovers(List<BookdropFileRow> filesToDelete, AtomicInteger deletedFiles, AtomicInteger deletedCovers) {
+        for (BookdropFileRow entity : filesToDelete) {
             Path filePath = Path.of(entity.getFilePath());
             if (Files.exists(filePath) && Files.isRegularFile(filePath)) {
                 try {

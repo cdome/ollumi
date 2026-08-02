@@ -64,3 +64,20 @@ CREATE TABLE IF NOT EXISTS app_settings
     name VARCHAR(255) NOT NULL,
     val  TEXT
 );
+
+-- Scanned at boot by BookdropMonitoringService.@PostConstruct (findAllFilePathsIn) once its
+-- entity was dropped for jOOQ; a full Spring context can reach that query if the bookdrop
+-- folder contains files. Empty by default so the scan tracks nothing, exactly like a fresh
+-- install. No UNIQUE on file_path: H2 cannot index a LOB/TEXT column and the table stays empty.
+CREATE TABLE IF NOT EXISTS bookdrop_file
+(
+    id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+    file_path         TEXT         NOT NULL,
+    file_name         VARCHAR(512) NOT NULL,
+    file_size         BIGINT,
+    status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING_REVIEW',
+    original_metadata TEXT,
+    fetched_metadata  TEXT,
+    created_at        TIMESTAMP,
+    updated_at        TIMESTAMP
+);
