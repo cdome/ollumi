@@ -98,6 +98,24 @@ CREATE TABLE IF NOT EXISTS user_book_file_progress
     CONSTRAINT uq_user_book_file UNIQUE (user_id, book_file_id)
 );
 
+-- Queried on the book read path by ContentRestrictionService.filterByContent (applyRestrictions/
+-- applyRestrictionsToDtos) once its entity was dropped for jOOQ; full-context tests reach that query
+-- whenever they read books for a user. Empty by default so no book is filtered (no restrictions),
+-- exactly like a fresh install. FK mirrors prod's ON DELETE CASCADE (V111).
+-- NOTE: `value` is a reserved keyword in H2 (MariaDB tolerates it unquoted), so it must be
+-- quoted here. jOOQ renders identifiers quoted-lowercase, so the quoted column still matches.
+CREATE TABLE IF NOT EXISTS user_content_restriction
+(
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id          BIGINT       NOT NULL,
+    restriction_type VARCHAR(20)  NOT NULL,
+    mode             VARCHAR(15)  NOT NULL,
+    "value"          VARCHAR(255) NOT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ucr_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_restriction UNIQUE (user_id, restriction_type, "value")
+);
+
 -- Counted at boot-adjacent telemetry / used by KOReader auth once its entity was dropped for jOOQ.
 -- FK mirrors prod's ON DELETE CASCADE (V134) so user-deletion cascade holds in full-context tests too.
 CREATE TABLE IF NOT EXISTS koreader_user

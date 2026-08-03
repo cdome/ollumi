@@ -2,16 +2,16 @@ package org.booklore.service.restriction;
 
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookMetadata;
+import org.booklore.model.dto.ContentRestriction;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.MoodEntity;
 import org.booklore.model.entity.TagEntity;
-import org.booklore.model.entity.UserContentRestrictionEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
-import org.booklore.repository.UserContentRestrictionRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserContentRestrictionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ContentRestrictionServiceTest {
 
-    @Mock private UserContentRestrictionRepository restrictionRepository;
+    @Mock private JooqUserContentRestrictionRepository restrictionRepository;
     @Mock private UserRepository userRepository;
     @InjectMocks private ContentRestrictionService service;
 
@@ -99,7 +99,7 @@ class ContentRestrictionServiceTest {
         assertThat(fromDtos).containsExactlyInAnyOrderElementsOf(fromEntities);
     }
 
-    private void mockRestrictions(UserContentRestrictionEntity... restrictions) {
+    private void mockRestrictions(ContentRestriction... restrictions) {
         when(restrictionRepository.findByUserId(USER)).thenReturn(List.of(restrictions));
     }
 
@@ -150,7 +150,7 @@ class ContentRestrictionServiceTest {
         return Book.builder().id(d.id()).metadata(m).build();
     }
 
-    private UserContentRestrictionEntity restriction(ContentRestrictionType type, ContentRestrictionMode mode, String value) {
-        return UserContentRestrictionEntity.builder().restrictionType(type).mode(mode).value(value).build();
+    private ContentRestriction restriction(ContentRestrictionType type, ContentRestrictionMode mode, String value) {
+        return ContentRestriction.builder().restrictionType(type).mode(mode).value(value).build();
     }
 }

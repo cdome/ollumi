@@ -7,13 +7,11 @@ import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ContentRestriction;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.UserContentRestrictionEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
-import org.booklore.repository.UserContentRestrictionRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserContentRestrictionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,26 +26,23 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContentRestrictionService {
 
-    private final UserContentRestrictionRepository restrictionRepository;
+    private final JooqUserContentRestrictionRepository restrictionRepository;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<ContentRestriction> getUserRestrictions(Long userId) {
-        return restrictionRepository.findByUserId(userId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return restrictionRepository.findByUserId(userId);
     }
 
     @Transactional(readOnly = true)
     public ContentRestriction getRestriction(Long restrictionId) {
         return restrictionRepository.findById(restrictionId)
-                .map(this::toDto)
                 .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Content restriction not found"));
     }
 
     @Transactional
     public ContentRestriction addRestriction(Long userId, ContentRestriction restriction) {
-        BookLoreUserEntity user = userRepository.findById(userId)
+        userRepository.findById(userId)
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
         if (restrictionRepository.existsByUserIdAndRestrictionTypeAndValue(
@@ -55,35 +50,17 @@ public class ContentRestrictionService {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Restriction already exists");
         }
 
-        UserContentRestrictionEntity entity = UserContentRestrictionEntity.builder()
-                .user(user)
-                .restrictionType(restriction.getRestrictionType())
-                .mode(restriction.getMode())
-                .value(restriction.getValue())
-                .build();
-
-        return toDto(restrictionRepository.save(entity));
+        return restrictionRepository.insert(userId, restriction.getRestrictionType(), restriction.getMode(), restriction.getValue());
     }
 
     @Transactional
     public List<ContentRestriction> updateRestrictions(Long userId, List<ContentRestriction> restrictions) {
-        BookLoreUserEntity user = userRepository.findById(userId)
+        userRepository.findById(userId)
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
         restrictionRepository.deleteByUserId(userId);
 
-        List<UserContentRestrictionEntity> entities = restrictions.stream()
-                .map(r -> UserContentRestrictionEntity.builder()
-                        .user(user)
-                        .restrictionType(r.getRestrictionType())
-                        .mode(r.getMode())
-                        .value(r.getValue())
-                        .build())
-                .collect(Collectors.toList());
-
-        return restrictionRepository.saveAll(entities).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return restrictionRepository.insertAll(userId, restrictions);
     }
 
     @Transactional
@@ -111,7 +88,7 @@ public class ContentRestrictionService {
     }
 
     private <T> List<T> filterByContent(List<T> books, Long userId, Function<T, BookContent> toContent) {
-        List<UserContentRestrictionEntity> restrictions = restrictionRepository.findByUserId(userId);
+        List<ContentRestriction> restrictions = restrictionRepository.findByUserId(userId);
 
         if (restrictions.isEmpty()) {
             return books;
@@ -172,7 +149,7 @@ public class ContentRestrictionService {
         return stream == null ? Set.of() : stream.collect(Collectors.toSet());
     }
 
-    private Set<String> getValuesForTypeAndMode(List<UserContentRestrictionEntity> restrictions,
+    private Set<String> getValuesForTypeAndMode(List<ContentRestriction> restrictions,
                                                  ContentRestrictionType type,
                                                  ContentRestrictionMode mode) {
         return restrictions.stream()
@@ -181,7 +158,7 @@ public class ContentRestrictionService {
                 .collect(Collectors.toSet());
     }
 
-    private Integer getMaxAgeRating(List<UserContentRestrictionEntity> restrictions) {
+    private Integer getMaxAgeRating(List<ContentRestriction> restrictions) {
         return restrictions.stream()
                 .filter(r -> r.getRestrictionType() == ContentRestrictionType.AGE_RATING)
                 .filter(r -> r.getMode() == ContentRestrictionMode.EXCLUDE)
@@ -249,16 +226,5 @@ public class ContentRestrictionService {
             return true;
         }
         return content.ageRating() < maxAgeRating;
-    }
-
-    private ContentRestriction toDto(UserContentRestrictionEntity entity) {
-        return ContentRestriction.builder()
-                .id(entity.getId())
-                .userId(entity.getUser().getId())
-                .restrictionType(entity.getRestrictionType())
-                .mode(entity.getMode())
-                .value(entity.getValue())
-                .createdAt(entity.getCreatedAt())
-                .build();
     }
 }
