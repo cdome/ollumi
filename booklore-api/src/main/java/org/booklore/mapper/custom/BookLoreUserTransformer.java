@@ -7,8 +7,9 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.settings.SidebarSortOption;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.UserSettingEntity;
 import org.booklore.model.enums.UserPermission;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
+import org.booklore.repository.jooq.dto.UserSettingRow;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -23,6 +24,7 @@ public class BookLoreUserTransformer {
 
     private final ObjectMapper objectMapper;
     private final LibraryMapper libraryMapper;
+    private final JooqUserSettingRepository userSettingRepository;
 
     public BookLoreUser toDTO(BookLoreUserEntity userEntity) {
         BookLoreUser.UserPermissions permissions = new BookLoreUser.UserPermissions();
@@ -38,7 +40,7 @@ public class BookLoreUserTransformer {
 
         BookLoreUser.UserSettings userSettings = new BookLoreUser.UserSettings();
 
-        for (UserSettingEntity settingEntity : userEntity.getSettings()) {
+        for (UserSettingRow settingEntity : userSettingRepository.findByUserId(userEntity.getId())) {
             String key = settingEntity.getSettingKey();
             String value = settingEntity.getSettingValue();
 

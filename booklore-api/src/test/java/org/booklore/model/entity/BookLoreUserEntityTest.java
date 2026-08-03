@@ -11,9 +11,6 @@ class BookLoreUserEntityTest {
 
         assertThat(user.getShelves())
                 .isNotNull()
-                .isEmpty(); 
-        assertThat(user.getSettings())
-                .isNotNull()
                 .isEmpty();
 
         assertThat(user.isDefaultPassword()).isFalse();

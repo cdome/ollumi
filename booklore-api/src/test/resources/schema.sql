@@ -153,6 +153,22 @@ CREATE TABLE IF NOT EXISTS user_book_progress
     CONSTRAINT fk_ubp_book FOREIGN KEY (book_id) REFERENCES book (id) ON DELETE CASCADE
 );
 
+-- Read on the auth/DTO path by BookLoreUserTransformer (findByUserId, per authenticated request) and
+-- written by the default-settings initializer once its entity was dropped for jOOQ; full-context tests
+-- reach it on login/user setup. FK mirrors prod's ON DELETE CASCADE (V14). setting_value is JSON in
+-- prod MariaDB; TEXT is the H2 equivalent.
+CREATE TABLE IF NOT EXISTS user_settings
+(
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id       BIGINT       NOT NULL,
+    setting_key   VARCHAR(100) NOT NULL,
+    setting_value TEXT         NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_user_setting UNIQUE (user_id, setting_key),
+    CONSTRAINT fk_user_setting_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
 -- Counted at boot-adjacent telemetry / used by KOReader auth once its entity was dropped for jOOQ.
 -- FK mirrors prod's ON DELETE CASCADE (V134) so user-deletion cascade holds in full-context tests too.
 CREATE TABLE IF NOT EXISTS koreader_user

@@ -12,7 +12,7 @@ import org.booklore.model.dto.request.UserUpdateRequest;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.UserSettingEntity;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.LibraryRepository;
@@ -34,6 +34,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final LibraryRepository libraryRepository;
+    private final JooqUserSettingRepository userSettingRepository;
     private final AuthenticationService authenticationService;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
@@ -137,7 +138,7 @@ public class UserService {
 
     @Transactional
     public void updateUserSetting(Long userId, UpdateUserSettingRequest request) {
-        BookLoreUserEntity user = userRepository.findByIdWithSettings(userId).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        userRepository.findByIdWithSettings(userId).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
         String key = request.getKey();
         Object value = request.getValue();
@@ -153,30 +154,16 @@ public class UserService {
             throw ApiError.INVALID_INPUT.createException("Unknown setting key: " + key);
         }
 
-        UserSettingEntity setting = user.getSettings().stream()
-                .filter(s -> s.getSettingKey().equals(key))
-                .findFirst()
-                .orElseGet(() -> {
-                    UserSettingEntity newSetting = new UserSettingEntity();
-                    newSetting.setUser(user);
-                    newSetting.setSettingKey(key);
-                    user.getSettings().add(newSetting);
-                    return newSetting;
-                });
-
+        String serializedValue;
         try {
-            String serializedValue;
-            if (settingKey.isJson()) {
-                serializedValue = objectMapper.writeValueAsString(value);
-            } else {
-                serializedValue = value.toString();
-            }
-            setting.setSettingValue(serializedValue);
+            serializedValue = settingKey.isJson()
+                    ? objectMapper.writeValueAsString(value)
+                    : value.toString();
         } catch (Exception e) {
             throw ApiError.INVALID_INPUT.createException("Could not serialize setting value.");
         }
 
-        userRepository.save(user);
+        userSettingRepository.upsertSetting(userId, key, serializedValue);
     }
 
     private boolean meetsMinimumPasswordRequirements(String password) {

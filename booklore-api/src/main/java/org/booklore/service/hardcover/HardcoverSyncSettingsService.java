@@ -6,10 +6,10 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.HardcoverSyncSettings;
 import org.booklore.model.dto.settings.UserSettingKey;
-import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.dto.KoboUserSettings;
-import org.booklore.model.entity.UserSettingEntity;
+import org.booklore.repository.jooq.dto.UserSettingRow;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +23,7 @@ public class HardcoverSyncSettingsService {
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
+    private final JooqUserSettingRepository userSettingRepository;
 
     @Transactional
     public HardcoverSyncSettings getCurrentUserSettings() {
@@ -32,9 +33,9 @@ public class HardcoverSyncSettingsService {
 
     @Transactional
     public HardcoverSyncSettings getSettingsForUserId(Long userId) {
-        BookLoreUserEntity user = userRepository.findByIdWithSettings(userId)
+        userRepository.findByIdWithSettings(userId)
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
-        return readSettings(user, userId);
+        return readSettings(userId);
     }
 
     @Transactional
@@ -49,7 +50,7 @@ public class HardcoverSyncSettingsService {
             throw ApiError.INVALID_INPUT.createException("Hardcover settings cannot be null.");
         }
 
-        BookLoreUserEntity user = userRepository.findByIdWithSettings(userId)
+        userRepository.findByIdWithSettings(userId)
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
         String apiKey = settings.getHardcoverApiKey();
@@ -58,10 +59,8 @@ public class HardcoverSyncSettingsService {
         } else {
             apiKey = apiKey.trim();
         }
-        upsertSetting(user, UserSettingKey.HARDCOVER_API_KEY, apiKey);
-        upsertSetting(user, UserSettingKey.HARDCOVER_SYNC_ENABLED, Boolean.toString(settings.isHardcoverSyncEnabled()));
-
-        userRepository.save(user);
+        upsertSetting(userId, UserSettingKey.HARDCOVER_API_KEY, apiKey);
+        upsertSetting(userId, UserSettingKey.HARDCOVER_SYNC_ENABLED, Boolean.toString(settings.isHardcoverSyncEnabled()));
 
         HardcoverSyncSettings updated = new HardcoverSyncSettings();
         updated.setHardcoverApiKey(apiKey);
@@ -69,31 +68,26 @@ public class HardcoverSyncSettingsService {
         return updated;
     }
 
-    private HardcoverSyncSettings readSettings(BookLoreUserEntity user, Long userId) {
-        UserSettingEntity apiKeySetting = findSetting(user, UserSettingKey.HARDCOVER_API_KEY).orElse(null);
-        UserSettingEntity syncEnabledSetting = findSetting(user, UserSettingKey.HARDCOVER_SYNC_ENABLED).orElse(null);
+    private HardcoverSyncSettings readSettings(Long userId) {
+        UserSettingRow apiKeySetting = findSetting(userId, UserSettingKey.HARDCOVER_API_KEY).orElse(null);
+        UserSettingRow syncEnabledSetting = findSetting(userId, UserSettingKey.HARDCOVER_SYNC_ENABLED).orElse(null);
 
         String apiKey = apiKeySetting != null ? apiKeySetting.getSettingValue() : null;
         boolean syncEnabled = syncEnabledSetting != null && Boolean.parseBoolean(syncEnabledSetting.getSettingValue());
 
-        boolean shouldSave = false;
+        // One-time migration from the legacy kobo_user_settings columns to user_settings rows.
         if (apiKeySetting == null || syncEnabledSetting == null) {
             KoboUserSettings legacySettings = koboUserSettingsRepository.findByUserId(userId);
             if (legacySettings != null) {
                 if (apiKeySetting == null && legacySettings.getHardcoverApiKey() != null && !legacySettings.getHardcoverApiKey().isBlank()) {
                     apiKey = legacySettings.getHardcoverApiKey();
-                    upsertSetting(user, UserSettingKey.HARDCOVER_API_KEY, apiKey);
-                    shouldSave = true;
+                    upsertSetting(userId, UserSettingKey.HARDCOVER_API_KEY, apiKey);
                 }
                 if (syncEnabledSetting == null && legacySettings.getHardcoverSyncEnabled()) {
                     syncEnabled = legacySettings.getHardcoverSyncEnabled();
-                    upsertSetting(user, UserSettingKey.HARDCOVER_SYNC_ENABLED, Boolean.toString(syncEnabled));
-                    shouldSave = true;
+                    upsertSetting(userId, UserSettingKey.HARDCOVER_SYNC_ENABLED, Boolean.toString(syncEnabled));
                 }
             }
-        }
-        if (shouldSave) {
-            userRepository.save(user);
         }
 
         HardcoverSyncSettings settings = new HardcoverSyncSettings();
@@ -102,21 +96,11 @@ public class HardcoverSyncSettingsService {
         return settings;
     }
 
-    private Optional<UserSettingEntity> findSetting(BookLoreUserEntity user, UserSettingKey key) {
-        return user.getSettings().stream()
-                .filter(setting -> key.getDbKey().equals(setting.getSettingKey()))
-                .findFirst();
+    private Optional<UserSettingRow> findSetting(Long userId, UserSettingKey key) {
+        return userSettingRepository.findByUserIdAndKey(userId, key.getDbKey());
     }
 
-    private void upsertSetting(BookLoreUserEntity user, UserSettingKey key, String value) {
-        UserSettingEntity setting = findSetting(user, key)
-                .orElseGet(() -> {
-                    UserSettingEntity newSetting = new UserSettingEntity();
-                    newSetting.setUser(user);
-                    newSetting.setSettingKey(key.getDbKey());
-                    user.getSettings().add(newSetting);
-                    return newSetting;
-                });
-        setting.setSettingValue(value);
+    private void upsertSetting(Long userId, UserSettingKey key, String value) {
+        userSettingRepository.upsertSetting(userId, key.getDbKey(), value);
     }
 }
