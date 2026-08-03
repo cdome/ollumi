@@ -4,11 +4,14 @@ import org.assertj.core.api.Assertions.assertThat
 import org.booklore.jooq.tables.Book.BOOK
 import org.booklore.jooq.tables.BookFile.BOOK_FILE
 import org.booklore.jooq.tables.BookMetadata.BOOK_METADATA
+import org.booklore.jooq.tables.KoboLibrarySnapshot.KOBO_LIBRARY_SNAPSHOT
+import org.booklore.jooq.tables.KoboLibrarySnapshotBook.KOBO_LIBRARY_SNAPSHOT_BOOK
 import org.booklore.jooq.tables.Library.LIBRARY
 import org.booklore.jooq.tables.UserBookProgress.USER_BOOK_PROGRESS
 import org.booklore.jooq.tables.Users.USERS
 import org.booklore.model.enums.ReadStatus
 import org.booklore.repository.jooq.dto.CompletionTimelineEntry
+import org.booklore.repository.jooq.dto.UserBookProgressRow
 import org.booklore.test.AbstractIntegrationTest
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -254,6 +257,106 @@ class JooqUserBookProgressRepositoryTest : AbstractIntegrationTest() {
 
         repository.bulkUpdatePersonalRating(user1Id, listOf(book1Id), null)
         assertThat(fetchProgress(user1Id, book1Id)[ubp.PERSONAL_RATING] as Byte?).isNull()
+    }
+
+    // =============================================================
+    // Row CRUD: find / save / saveAll / findAllBooksNeedingKoboSync
+    // =============================================================
+
+    @Test
+    fun `save inserts a new row and findByUserIdAndBookId round-trips fields`() {
+        val row = UserBookProgressRow().apply {
+            userId = user2Id
+            bookId = book2Id
+            readStatus = ReadStatus.READING
+            epubProgress = "cfi/6/4"
+            epubProgressHref = "ch1.html"
+            epubProgressPercent = 33.5f
+            personalRating = 4
+            lastReadTime = Instant.parse("2026-04-01T12:00:00Z")
+            koboProgressPercent = 12.0f
+        }
+
+        val saved = repository.save(row)
+        assertThat(saved.id).isNotNull()
+
+        val r = repository.findByUserIdAndBookId(user2Id, book2Id).get()
+        assertThat(r.id).isEqualTo(saved.id)
+        assertThat(r.userId).isEqualTo(user2Id)
+        assertThat(r.bookId).isEqualTo(book2Id)
+        assertThat(r.readStatus).isEqualTo(ReadStatus.READING)
+        assertThat(r.epubProgress).isEqualTo("cfi/6/4")
+        assertThat(r.epubProgressHref).isEqualTo("ch1.html")
+        assertThat(r.epubProgressPercent).isEqualTo(33.5f)
+        assertThat(r.personalRating).isEqualTo(4)
+        assertThat(r.lastReadTime).isEqualTo(Instant.parse("2026-04-01T12:00:00Z"))
+        assertThat(r.koboProgressPercent).isEqualTo(12.0f)
+    }
+
+    @Test
+    fun `save updates in place by id and preserves untouched columns`() {
+        val existing = repository.findByUserIdAndBookId(user1Id, book1Id).get()
+        val id = existing.id
+        existing.readStatus = ReadStatus.READING
+        existing.personalRating = 2
+        repository.save(existing)
+
+        val after = repository.findByUserIdAndBookId(user1Id, book1Id).get()
+        assertThat(after.id).isEqualTo(id)
+        assertThat(after.readStatus).isEqualTo(ReadStatus.READING)
+        assertThat(after.personalRating).isEqualTo(2)
+        // columns not touched by the save are preserved
+        assertThat(after.epubProgressPercent).isEqualTo(100.0f)
+        assertThat(after.koreaderProgressPercent).isEqualTo(55.0f)
+        assertThat(after.koboProgressPercent).isEqualTo(10.0f)
+        // no duplicate row was created
+        assertThat(dsl.fetchCount(ubp, ubp.USER_ID.eq(user1Id).and(ubp.BOOK_ID.eq(book1Id)))).isEqualTo(1)
+    }
+
+    @Test
+    fun `findByUserIdAndBookIdIn returns the user's rows and empty for empty input`() {
+        val rows = repository.findByUserIdAndBookIdIn(user1Id, setOf(book1Id, book2Id, 999_999L))
+        assertThat(rows.mapNotNull { it.bookId }).containsExactlyInAnyOrder(book1Id, book2Id)
+        assertThat(repository.findByUserIdAndBookIdIn(user1Id, emptySet())).isEmpty()
+    }
+
+    @Test
+    fun `saveAll inserts multiple new rows`() {
+        val saved = repository.saveAll(
+            listOf(
+                UserBookProgressRow().apply { userId = user2Id; bookId = book2Id; readStatus = ReadStatus.READING },
+                UserBookProgressRow().apply { userId = user2Id; bookId = book3Id; readStatus = ReadStatus.READ },
+            )
+        )
+        assertThat(saved.map { it.id }).doesNotContainNull()
+        assertThat(repository.findByUserIdAndBookIdIn(user2Id, setOf(book2Id, book3Id))).hasSize(2)
+    }
+
+    @Test
+    fun `findAllBooksNeedingKoboSync returns rows with unsent changes and excludes already-synced ones`() {
+        val snapshotId = "snap-1"
+        dsl.insertInto(KOBO_LIBRARY_SNAPSHOT)
+            .set(KOBO_LIBRARY_SNAPSHOT.ID, snapshotId)
+            .set(KOBO_LIBRARY_SNAPSHOT.USER_ID, user1Id)
+            .set(KOBO_LIBRARY_SNAPSHOT.CREATED_DATE, LocalDateTime.now())
+            .execute()
+        for (b in listOf(book2Id, book4Id)) {
+            dsl.insertInto(KOBO_LIBRARY_SNAPSHOT_BOOK)
+                .set(KOBO_LIBRARY_SNAPSHOT_BOOK.SNAPSHOT_ID, snapshotId)
+                .set(KOBO_LIBRARY_SNAPSHOT_BOOK.BOOK_ID, b)
+                .execute()
+        }
+        // book2: read_status_modified_time set (from setUp) + kobo_status_sent_time NULL -> needs sync.
+        // book4: mark kobo status sent AFTER a modification -> already synced, excluded.
+        dsl.update(ubp)
+            .set(ubp.READ_STATUS_MODIFIED_TIME, LocalDateTime.of(2026, 5, 10, 9, 0))
+            .set(ubp.KOBO_STATUS_SENT_TIME, LocalDateTime.of(2026, 5, 11, 9, 0))
+            .where(ubp.USER_ID.eq(user1Id)).and(ubp.BOOK_ID.eq(book4Id))
+            .execute()
+
+        val needing = repository.findAllBooksNeedingKoboSync(user1Id, snapshotId)
+
+        assertThat(needing.mapNotNull { it.bookId }).containsExactly(book2Id)
     }
 
     // =============================================================

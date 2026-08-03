@@ -116,6 +116,43 @@ CREATE TABLE IF NOT EXISTS user_content_restriction
     CONSTRAINT uk_user_restriction UNIQUE (user_id, restriction_type, "value")
 );
 
+-- Read on the book read path by ReadingProgressService/BookService/AppBookService (findByUserIdAndBookIdIn
+-- to enrich Book DTOs) once its entity was dropped for jOOQ; full-context tests reach it whenever they read
+-- books. Empty by default so no progress is enriched, exactly like a fresh install. FKs mirror prod's
+-- ON DELETE CASCADE (V1) so user/book deletion cascades in full-context tests too.
+CREATE TABLE IF NOT EXISTS user_book_progress
+(
+    id                          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id                     BIGINT NOT NULL,
+    book_id                     BIGINT NOT NULL,
+    last_read_time              TIMESTAMP,
+    pdf_progress                INT,
+    pdf_progress_percent        DOUBLE,
+    epub_progress               VARCHAR(1000),
+    epub_progress_href          VARCHAR(1000),
+    epub_progress_percent       DOUBLE,
+    cbx_progress                INT,
+    cbx_progress_percent        DOUBLE,
+    koreader_progress           VARCHAR(1000),
+    koreader_progress_percent   DOUBLE,
+    koreader_device             VARCHAR(100),
+    koreader_device_id          VARCHAR(100),
+    kobo_progress_percent       DOUBLE,
+    kobo_location               VARCHAR(1000),
+    kobo_location_type          VARCHAR(50),
+    kobo_location_source        VARCHAR(512),
+    read_status                 VARCHAR(50),
+    date_finished               TIMESTAMP,
+    koreader_last_sync_time     TIMESTAMP,
+    kobo_progress_received_time TIMESTAMP,
+    kobo_status_sent_time       TIMESTAMP,
+    kobo_progress_sent_time     TIMESTAMP,
+    read_status_modified_time   TIMESTAMP,
+    personal_rating             TINYINT,
+    CONSTRAINT fk_ubp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_ubp_book FOREIGN KEY (book_id) REFERENCES book (id) ON DELETE CASCADE
+);
+
 -- Counted at boot-adjacent telemetry / used by KOReader auth once its entity was dropped for jOOQ.
 -- FK mirrors prod's ON DELETE CASCADE (V134) so user-deletion cascade holds in full-context tests too.
 CREATE TABLE IF NOT EXISTS koreader_user

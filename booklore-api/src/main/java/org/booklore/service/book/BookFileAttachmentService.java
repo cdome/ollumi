@@ -9,11 +9,11 @@ import org.booklore.model.dto.response.AttachBookFileResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -38,7 +38,7 @@ public class BookFileAttachmentService {
 
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final MonitoringRegistrationService monitoringRegistrationService;
@@ -352,8 +352,8 @@ public class BookFileAttachmentService {
         BookEntity refreshedTarget = bookRepository.findByIdWithBookFiles(bookId)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
-        UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
-                .orElse(new UserBookProgressEntity());
+        UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
+                .orElse(new UserBookProgressRow());
         UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);

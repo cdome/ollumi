@@ -23,6 +23,7 @@ import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateService;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +44,6 @@ public class ReadingProgressService {
     private static final float READING_THRESHOLD = 0.1f;
     private static final float COMPLETED_THRESHOLD = 99.5f;
 
-    private final UserBookProgressRepository userBookProgressRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
     private final BookRepository bookRepository;
@@ -56,9 +56,9 @@ public class ReadingProgressService {
 
     // ==================== Methods from UserProgressService ====================
 
-    public Map<Long, UserBookProgressEntity> fetchUserProgress(Long userId, Set<Long> bookIds) {
-        return userBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds).stream()
-                .collect(Collectors.toMap(p -> p.getBook().getId(), p -> p));
+    public Map<Long, UserBookProgressRow> fetchUserProgress(Long userId, Set<Long> bookIds) {
+        return jooqUserBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds).stream()
+                .collect(Collectors.toMap(p -> p.getBookId(), p -> p));
     }
 
     public Map<Long, UserBookFileProgressRow> fetchUserFileProgress(Long userId, Set<Long> bookIds) {
@@ -88,11 +88,11 @@ public class ReadingProgressService {
 
     // ==================== Methods from BookProgressUtil ====================
 
-    public void enrichBookWithProgress(Book book, UserBookProgressEntity progress) {
+    public void enrichBookWithProgress(Book book, UserBookProgressRow progress) {
         enrichBookWithProgress(book, progress, null);
     }
 
-    public void enrichBookWithProgress(Book book, UserBookProgressEntity progress,
+    public void enrichBookWithProgress(Book book, UserBookProgressRow progress,
                                         UserBookFileProgressRow fileProgress) {
         if (progress != null) {
             book.setReadStatus(progress.getReadStatus() == null ?
@@ -114,7 +114,7 @@ public class ReadingProgressService {
         }
     }
 
-    private void setBookProgress(Book book, UserBookProgressEntity progress) {
+    private void setBookProgress(Book book, UserBookProgressRow progress) {
         if (progress.getKoboProgressPercent() != null) {
             book.setKoboProgress(KoboProgress.builder()
                     .percentage(roundToOneDecimal(progress.getKoboProgressPercent()))
@@ -209,12 +209,12 @@ public class ReadingProgressService {
         BookLoreUserEntity userEntity = findUserOrThrow(user.getId());
         Instant now = Instant.now();
 
-        UserBookProgressEntity progress = userBookProgressRepository
+        UserBookProgressRow progress = jooqUserBookProgressRepository
                 .findByUserIdAndBookId(user.getId(), book.getId())
-                .orElseGet(UserBookProgressEntity::new);
+                .orElseGet(UserBookProgressRow::new);
 
-        progress.setUser(userEntity);
-        progress.setBook(book);
+        progress.setUserId(userEntity.getId());
+        progress.setBookId(book.getId());
         progress.setLastReadTime(now);
 
         Float percentage = null;
@@ -272,7 +272,7 @@ public class ReadingProgressService {
             progress.setDateFinished(request.getDateFinished());
         }
 
-        userBookProgressRepository.save(progress);
+        jooqUserBookProgressRepository.save(progress);
 
         if (percentage != null) {
             hardcoverSyncService.syncProgressToHardcover(book.getId(), percentage, user.getId());
@@ -314,7 +314,7 @@ public class ReadingProgressService {
     }
 
     private void saveToUserBookFileProgressFromLegacy(BookLoreUserEntity user, BookFileEntity bookFile,
-                                                       UserBookProgressEntity progress, Instant now) {
+                                                       UserBookProgressRow progress, Instant now) {
         UserBookFileProgressRow entity = userBookFileProgressRepository
                 .findByUserIdAndBookFileId(user.getId(), bookFile.getId())
                 .orElseGet(UserBookFileProgressRow::new);
@@ -348,7 +348,7 @@ public class ReadingProgressService {
         userBookFileProgressRepository.save(entity);
     }
 
-    private void updateProgressFromFileProgress(UserBookProgressEntity progress, BookFileType bookType,
+    private void updateProgressFromFileProgress(UserBookProgressRow progress, BookFileType bookType,
                                                  BookFileProgress fileProgress) {
         switch (bookType) {
             case PDF -> {
@@ -368,12 +368,12 @@ public class ReadingProgressService {
             }
             case AUDIOBOOK -> {
                 // Audiobook progress is stored only in UserBookFileProgressEntity
-                // No legacy columns in UserBookProgressEntity for audiobooks
+                // No legacy columns in user_book_progress for audiobooks
             }
         }
     }
 
-    private Float updateProgressByBookType(UserBookProgressEntity progress, BookFileType bookType, ReadProgressRequest request) {
+    private Float updateProgressByBookType(UserBookProgressRow progress, BookFileType bookType, ReadProgressRequest request) {
         return switch (bookType) {
             case EPUB, FB2, MOBI, AZW3 -> updateEbookProgress(progress, request.getEpubProgress());
             case PDF -> updatePdfProgress(progress, request.getPdfProgress());
@@ -382,7 +382,7 @@ public class ReadingProgressService {
         };
     }
 
-    private Float updateEbookProgress(UserBookProgressEntity progress, EpubProgress epubProgress) {
+    private Float updateEbookProgress(UserBookProgressRow progress, EpubProgress epubProgress) {
         if (epubProgress == null) return null;
 
         progress.setEpubProgress(epubProgress.getCfi());
@@ -392,7 +392,7 @@ public class ReadingProgressService {
         return Math.round(percentage * 10f) / 10f;
     }
 
-    private Float updatePdfProgress(UserBookProgressEntity progress, PdfProgress pdfProgress) {
+    private Float updatePdfProgress(UserBookProgressRow progress, PdfProgress pdfProgress) {
         if (pdfProgress == null) return null;
 
         progress.setPdfProgress(pdfProgress.getPage());
@@ -400,7 +400,7 @@ public class ReadingProgressService {
         return Math.round(percentage * 10f) / 10f;
     }
 
-    private Float updateCbxProgress(UserBookProgressEntity progress, CbxProgress cbxProgress) {
+    private Float updateCbxProgress(UserBookProgressRow progress, CbxProgress cbxProgress) {
         if (cbxProgress == null) return null;
 
         progress.setCbxProgress(cbxProgress.getPage());
@@ -417,14 +417,14 @@ public class ReadingProgressService {
         return Math.round(percentage * 10f) / 10f;
     }
 
-    private void setProgressPercent(UserBookProgressEntity progress, BookFileType type, Float percentage) {
+    private void setProgressPercent(UserBookProgressRow progress, BookFileType type, Float percentage) {
         switch (type) {
             case EPUB, FB2, MOBI, AZW3 -> progress.setEpubProgressPercent(percentage);
             case PDF -> progress.setPdfProgressPercent(percentage);
             case CBX -> progress.setCbxProgressPercent(percentage);
             case AUDIOBOOK -> {
                 // Audiobook progress percentage is stored in UserBookFileProgressEntity
-                // No legacy column exists in UserBookProgressEntity for audiobooks
+                // No legacy column exists in user_book_progress for audiobooks
             }
         }
     }

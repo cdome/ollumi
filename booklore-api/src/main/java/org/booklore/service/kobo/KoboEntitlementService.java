@@ -13,7 +13,8 @@ import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.opds.MagicShelfBookService;
@@ -41,7 +42,7 @@ public class KoboEntitlementService {
     private final BookQueryService bookQueryService;
     private final AppSettingService appSettingService;
     private final KoboCompatibilityService koboCompatibilityService;
-    private final UserBookProgressRepository progressRepository;
+    private final JooqUserBookProgressRepository progressRepository;
     private final JooqKoboReadingStateRepository readingStateRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
@@ -103,7 +104,7 @@ public class KoboEntitlementService {
                 .collect(Collectors.toList());
     }
 
-    public List<ChangedReadingState> generateChangedReadingStates(List<UserBookProgressEntity> progressEntries) {
+    public List<ChangedReadingState> generateChangedReadingStates(List<UserBookProgressRow> progressEntries) {
         OffsetDateTime now = getCurrentUtc();
         String timestamp = now.toString();
 
@@ -178,8 +179,8 @@ public class KoboEntitlementService {
                 .build();
     }
 
-    private ChangedReadingState buildChangedReadingState(UserBookProgressEntity progress, String timestamp, OffsetDateTime now) {
-        String entitlementId = String.valueOf(progress.getBook().getId());
+    private ChangedReadingState buildChangedReadingState(UserBookProgressRow progress, String timestamp, OffsetDateTime now) {
+        String entitlementId = String.valueOf(progress.getBookId());
 
         boolean twoWaySync = koboSettingsService.getCurrentUserSettings().isTwoWayProgressSync();
         KoboReadingState.CurrentBookmark bookmark = (progress.getKoboProgressPercent() != null || (twoWaySync && progress.getEpubProgressPercent() != null))
@@ -213,7 +214,7 @@ public class KoboEntitlementService {
                         .findFirstByEntitlementIdWithNullUserOrderByPriority(entitlementId)))
                 .orElse(null);
 
-        Optional<UserBookProgressEntity> userProgress = progressRepository
+        Optional<UserBookProgressRow> userProgress = progressRepository
                 .findByUserIdAndBookId(authenticationService.getAuthenticatedUser().getId(), book.getId());
 
         boolean twoWaySync = koboSettingsService.getCurrentUserSettings().isTwoWayProgressSync();

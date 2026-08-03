@@ -12,7 +12,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -37,7 +36,6 @@ class ReadingSessionServiceTest {
     @Mock JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock BookRepository bookRepository;
     @Mock UserRepository userRepository;
-    @Mock UserBookProgressRepository userBookProgressRepository;
 
     @InjectMocks
     ReadingSessionService service;

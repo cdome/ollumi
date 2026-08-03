@@ -17,6 +17,7 @@ import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.progress.ReadingProgressService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +43,6 @@ public class BookUpdateService {
     private final ShelfRepository shelfRepository;
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
@@ -156,20 +156,17 @@ public class BookUpdateService {
         if (newProgressBookIds.isEmpty()) return;
 
         BookLoreUserEntity userEntity = findUserOrThrow(userId);
-        List<UserBookProgressEntity> newProgressEntities = newProgressBookIds.stream()
+        List<UserBookProgressRow> newProgressEntities = newProgressBookIds.stream()
                 .map(bookId -> createProgressEntity(userEntity, bookId, status, now, dateFinished))
                 .collect(Collectors.toList());
 
-        userBookProgressRepository.saveAll(newProgressEntities);
+        jooqUserBookProgressRepository.saveAll(newProgressEntities);
     }
 
-    private UserBookProgressEntity createProgressEntity(BookLoreUserEntity user, Long bookId, ReadStatus status, Instant now, Instant dateFinished) {
-        UserBookProgressEntity progress = new UserBookProgressEntity();
-        progress.setUser(user);
-
-        BookEntity bookEntity = new BookEntity();
-        bookEntity.setId(bookId);
-        progress.setBook(bookEntity);
+    private UserBookProgressRow createProgressEntity(BookLoreUserEntity user, Long bookId, ReadStatus status, Instant now, Instant dateFinished) {
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(user.getId());
+        progress.setBookId(bookId);
 
         progress.setReadStatus(status);
         progress.setReadStatusModifiedTime(now);
@@ -185,20 +182,17 @@ public class BookUpdateService {
         if (newProgressBookIds.isEmpty()) return;
 
         BookLoreUserEntity userEntity = findUserOrThrow(userId);
-        List<UserBookProgressEntity> newProgressEntities = newProgressBookIds.stream()
+        List<UserBookProgressRow> newProgressEntities = newProgressBookIds.stream()
                 .map(bookId -> createProgressEntityWithRating(userEntity, bookId, rating))
                 .collect(Collectors.toList());
 
-        userBookProgressRepository.saveAll(newProgressEntities);
+        jooqUserBookProgressRepository.saveAll(newProgressEntities);
     }
 
-    private UserBookProgressEntity createProgressEntityWithRating(BookLoreUserEntity user, Long bookId, Integer rating) {
-        UserBookProgressEntity progress = new UserBookProgressEntity();
-        progress.setUser(user);
-
-        BookEntity bookEntity = new BookEntity();
-        bookEntity.setId(bookId);
-        progress.setBook(bookEntity);
+    private UserBookProgressRow createProgressEntityWithRating(BookLoreUserEntity user, Long bookId, Integer rating) {
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(user.getId());
+        progress.setBookId(bookId);
 
         progress.setPersonalRating(rating);
         return progress;
@@ -226,7 +220,7 @@ public class BookUpdateService {
 
     private List<Book> buildBooksWithProgress(List<BookEntity> bookEntities, Long userId) {
         Set<Long> bookIds = bookEntities.stream().map(BookEntity::getId).collect(Collectors.toSet());
-        Map<Long, UserBookProgressEntity> progressMap = readingProgressService.fetchUserProgress(userId, bookIds);
+        Map<Long, UserBookProgressRow> progressMap = readingProgressService.fetchUserProgress(userId, bookIds);
         Map<Long, UserBookFileProgressRow> fileProgressMap = readingProgressService.fetchUserFileProgress(userId, bookIds);
 
         return bookEntities.stream()
@@ -235,7 +229,7 @@ public class BookUpdateService {
     }
 
     private Book buildBook(BookEntity bookEntity, Long userId,
-                           Map<Long, UserBookProgressEntity> progressMap,
+                           Map<Long, UserBookProgressRow> progressMap,
                            Map<Long, UserBookFileProgressRow> fileProgressMap) {
         Book book = bookMapper.toBook(bookEntity);
         book.setShelves(filterShelvesByUserId(book.getShelves(), userId));

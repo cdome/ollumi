@@ -6,12 +6,12 @@ import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
@@ -47,7 +47,7 @@ class KoboReadingStateServiceTest {
     private JooqKoboReadingStateRepository repository;
 
     @Mock
-    private UserBookProgressRepository progressRepository;
+    private JooqUserBookProgressRepository progressRepository;
     
     @Mock
     private BookRepository bookRepository;
@@ -107,9 +107,9 @@ class KoboReadingStateServiceTest {
         testSettings.setProgressMarkAsFinishedThreshold(99f);
 
         Instant originalFinishedDate = Instant.parse("2025-01-15T10:30:00Z");
-        UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-        existingProgress.setUser(testUserEntity);
-        existingProgress.setBook(testBook);
+        UserBookProgressRow existingProgress = new UserBookProgressRow();
+        existingProgress.setUserId(testUserEntity.getId());
+        existingProgress.setBookId(testBook.getId());
         existingProgress.setKoboProgressPercent(99.5f);
         existingProgress.setReadStatus(ReadStatus.READ);
         existingProgress.setDateFinished(originalFinishedDate);
@@ -128,12 +128,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
-        ArgumentCaptor<UserBookProgressEntity> progressCaptor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
         when(progressRepository.save(progressCaptor.capture())).thenReturn(existingProgress);
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity savedProgress = progressCaptor.getValue();
+        UserBookProgressRow savedProgress = progressCaptor.getValue();
         assertEquals(100.0f, savedProgress.getKoboProgressPercent());
         assertEquals(ReadStatus.READ, savedProgress.getReadStatus());
         assertEquals(originalFinishedDate, savedProgress.getDateFinished(), 
@@ -147,9 +147,9 @@ class KoboReadingStateServiceTest {
         testSettings.setProgressMarkAsFinishedThreshold(99f);
 
         Instant originalFinishedDate = Instant.parse("2025-01-15T10:30:00Z");
-        UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-        existingProgress.setUser(testUserEntity);
-        existingProgress.setBook(testBook);
+        UserBookProgressRow existingProgress = new UserBookProgressRow();
+        existingProgress.setUserId(testUserEntity.getId());
+        existingProgress.setBookId(testBook.getId());
         existingProgress.setKoboProgressPercent(12.0f);
         existingProgress.setReadStatus(ReadStatus.READING);
         existingProgress.setDateFinished(originalFinishedDate);
@@ -168,12 +168,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
-        ArgumentCaptor<UserBookProgressEntity> progressCaptor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
         when(progressRepository.save(progressCaptor.capture())).thenReturn(existingProgress);
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity savedProgress = progressCaptor.getValue();
+        UserBookProgressRow savedProgress = progressCaptor.getValue();
         assertEquals(12.0f, savedProgress.getKoboProgressPercent());
         assertEquals(ReadStatus.READING, savedProgress.getReadStatus());
         assertEquals(originalFinishedDate, savedProgress.getDateFinished(), 
@@ -218,7 +218,7 @@ class KoboReadingStateServiceTest {
     @DisplayName("Should construct reading state from UserBookProgress when no Kobo state exists")
     void testGetReadingState_ConstructFromProgress() {
         String entitlementId = "100";
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setKoboProgressPercent(75.5f);
         progress.setKoboLocation("epubcfi(/6/4[chap01ref]!/4/2/1:3)");
         progress.setKoboLocationType("EpubCfi");
@@ -265,7 +265,7 @@ class KoboReadingStateServiceTest {
     @DisplayName("Should return null when no Kobo reading state exists and UserBookProgress has no Kobo data")
     void testGetReadingState_NoKoboDataInProgress() {
         String entitlementId = "100";
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setKoboProgressPercent(null);
         progress.setKoboLocation(null);
 
@@ -328,12 +328,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
-        ArgumentCaptor<UserBookProgressEntity> progressCaptor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-        when(progressRepository.save(progressCaptor.capture())).thenReturn(new UserBookProgressEntity());
+        ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+        when(progressRepository.save(progressCaptor.capture())).thenReturn(new UserBookProgressRow());
 
         assertDoesNotThrow(() -> service.saveReadingState(List.of(readingState)));
 
-        UserBookProgressEntity savedProgress = progressCaptor.getValue();
+        UserBookProgressRow savedProgress = progressCaptor.getValue();
         assertNull(savedProgress.getKoboProgressPercent());
         assertNotNull(savedProgress.getKoboProgressReceivedTime());
     }
@@ -356,12 +356,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
-        ArgumentCaptor<UserBookProgressEntity> progressCaptor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-        when(progressRepository.save(progressCaptor.capture())).thenReturn(new UserBookProgressEntity());
+        ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+        when(progressRepository.save(progressCaptor.capture())).thenReturn(new UserBookProgressRow());
 
         assertDoesNotThrow(() -> service.saveReadingState(List.of(readingState)));
 
-        UserBookProgressEntity savedProgress = progressCaptor.getValue();
+        UserBookProgressRow savedProgress = progressCaptor.getValue();
         assertNull(savedProgress.getKoboProgressPercent());
     }
 
@@ -516,7 +516,7 @@ class KoboReadingStateServiceTest {
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(existingState);
 
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setEpubProgress("epubcfi(/6/20)");
         progress.setEpubProgressPercent(65f);
         progress.setLastReadTime(Instant.parse("2025-06-01T10:00:00Z"));
@@ -570,9 +570,9 @@ class KoboReadingStateServiceTest {
         BookFileEntity primaryFile = BookFileEntity.builder().id(10L).build();
         testBook.setBookFiles(List.of(primaryFile));
 
-        UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-        existingProgress.setUser(testUserEntity);
-        existingProgress.setBook(testBook);
+        UserBookProgressRow existingProgress = new UserBookProgressRow();
+        existingProgress.setUserId(testUserEntity.getId());
+        existingProgress.setBookId(testBook.getId());
 
         KoboReadingState.CurrentBookmark.Location location = KoboReadingState.CurrentBookmark.Location.builder()
                 .value("epubcfi(/6/8)")
@@ -597,12 +597,12 @@ class KoboReadingStateServiceTest {
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
         when(fileProgressRepository.findByUserIdAndBookFileId(1L, 10L)).thenReturn(Optional.empty());
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
         when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity saved = captor.getValue();
+        UserBookProgressRow saved = captor.getValue();
         assertEquals(55f, saved.getEpubProgressPercent());
         assertEquals("chapter3.xhtml", saved.getEpubProgressHref());
         assertNull(saved.getEpubProgress());
@@ -614,9 +614,9 @@ class KoboReadingStateServiceTest {
         testSettings.setTwoWayProgressSync(false);
         String entitlementId = "100";
 
-        UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-        existingProgress.setUser(testUserEntity);
-        existingProgress.setBook(testBook);
+        UserBookProgressRow existingProgress = new UserBookProgressRow();
+        existingProgress.setUserId(testUserEntity.getId());
+        existingProgress.setBookId(testBook.getId());
         existingProgress.setEpubProgressPercent(40f);
         existingProgress.setEpubProgress("epubcfi(/6/4)");
 
@@ -632,12 +632,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
         when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity saved = captor.getValue();
+        UserBookProgressRow saved = captor.getValue();
         assertEquals(40f, saved.getEpubProgressPercent());
         assertEquals("epubcfi(/6/4)", saved.getEpubProgress());
     }
@@ -656,9 +656,9 @@ class KoboReadingStateServiceTest {
         fileProgress.setBookFileId(10L);
         fileProgress.setLastReadTime(Instant.now().plusSeconds(3600));
 
-        UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-        existingProgress.setUser(testUserEntity);
-        existingProgress.setBook(testBook);
+        UserBookProgressRow existingProgress = new UserBookProgressRow();
+        existingProgress.setUserId(testUserEntity.getId());
+        existingProgress.setBookId(testBook.getId());
         existingProgress.setEpubProgressPercent(80f);
         existingProgress.setEpubProgress("epubcfi(/6/20)");
 
@@ -676,12 +676,12 @@ class KoboReadingStateServiceTest {
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
         when(fileProgressRepository.findByUserIdAndBookFileId(1L, 10L)).thenReturn(Optional.of(fileProgress));
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
         when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity saved = captor.getValue();
+        UserBookProgressRow saved = captor.getValue();
         assertEquals(80f, saved.getEpubProgressPercent());
         assertEquals("epubcfi(/6/20)", saved.getEpubProgress());
     }
@@ -692,7 +692,7 @@ class KoboReadingStateServiceTest {
         testSettings.setTwoWayProgressSync(true);
         String entitlementId = "100";
 
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setKoboProgressPercent(null);
         progress.setKoboLocation(null);
         progress.setEpubProgressPercent(60f);
@@ -727,7 +727,7 @@ class KoboReadingStateServiceTest {
         testSettings.setTwoWayProgressSync(false);
         String entitlementId = "100";
 
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setKoboProgressPercent(null);
         progress.setKoboLocation(null);
         progress.setEpubProgressPercent(60f);
@@ -765,12 +765,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-        when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressEntity());
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+        when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressRow());
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity saved = captor.getValue();
+        UserBookProgressRow saved = captor.getValue();
         assertEquals("epubcfi(/6/4[chap01ref]!/4/2/1:3)", saved.getKoboLocation());
         assertEquals("EpubCfi", saved.getKoboLocationType());
         assertEquals("Kobo", saved.getKoboLocationSource());
@@ -795,12 +795,12 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-        when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressEntity());
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+        when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressRow());
 
         service.saveReadingState(List.of(readingState));
 
-        UserBookProgressEntity saved = captor.getValue();
+        UserBookProgressRow saved = captor.getValue();
         assertEquals(ReadStatus.READ, saved.getReadStatus());
         assertNotNull(saved.getDateFinished());
     }
@@ -824,8 +824,8 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-        when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressEntity());
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+        when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressRow());
 
         service.saveReadingState(List.of(readingState));
 
@@ -837,9 +837,9 @@ class KoboReadingStateServiceTest {
     void testSyncKoboProgress_triggersHardcover() {
         String entitlementId = "100";
 
-        UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-        existingProgress.setUser(testUserEntity);
-        existingProgress.setBook(testBook);
+        UserBookProgressRow existingProgress = new UserBookProgressRow();
+        existingProgress.setUserId(testUserEntity.getId());
+        existingProgress.setBookId(testBook.getId());
         existingProgress.setKoboProgressPercent(30f);
 
         KoboReadingState readingState = KoboReadingState.builder()
@@ -854,7 +854,7 @@ class KoboReadingStateServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
-        ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
         when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
         service.saveReadingState(List.of(readingState));
@@ -882,7 +882,7 @@ class KoboReadingStateServiceTest {
         when(bookRepository.findById(200L)).thenReturn(Optional.of(book2));
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
         when(progressRepository.findByUserIdAndBookId(eq(1L), anyLong())).thenReturn(Optional.empty());
-        when(progressRepository.save(any())).thenReturn(new UserBookProgressEntity());
+        when(progressRepository.save(any())).thenReturn(new UserBookProgressRow());
 
         assertDoesNotThrow(() -> service.saveReadingState(List.of(state1, state2)));
 

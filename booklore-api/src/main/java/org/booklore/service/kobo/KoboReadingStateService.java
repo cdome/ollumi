@@ -9,12 +9,13 @@ import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.dto.response.kobo.KoboReadingStateResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +50,7 @@ public class KoboReadingStateService {
     private static final Pattern SURROUNDING_DOUBLE_QUOTES_PATTERN = Pattern.compile("^\"|\"$");
 
     private final JooqKoboReadingStateRepository repository;
-    private final UserBookProgressRepository progressRepository;
+    private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
@@ -206,11 +207,11 @@ public class KoboReadingStateService {
                 return;
             }
 
-            UserBookProgressEntity progress = progressRepository.findByUserIdAndBookId(userId, bookId)
+            UserBookProgressRow progress = progressRepository.findByUserIdAndBookId(userId, bookId)
                     .orElseGet(() -> {
-                        UserBookProgressEntity newProgress = new UserBookProgressEntity();
-                        newProgress.setUser(userOpt.get());
-                        newProgress.setBook(book);
+                        UserBookProgressRow newProgress = new UserBookProgressRow();
+                        newProgress.setUserId(userOpt.get().getId());
+                        newProgress.setBookId(book.getId());
                         return newProgress;
                     });
 
@@ -257,7 +258,7 @@ public class KoboReadingStateService {
         }
     }
 
-    private boolean crossPopulateEpubFieldsFromKobo(UserBookProgressEntity progress,
+    private boolean crossPopulateEpubFieldsFromKobo(UserBookProgressRow progress,
                                                       KoboReadingState.CurrentBookmark bookmark,
                                                       BookEntity book, Long userId, Instant now) {
         if (bookmark == null || bookmark.getProgressPercent() == null) {
@@ -487,7 +488,7 @@ public class KoboReadingStateService {
         return value == null || value.trim().isEmpty() || "null".equalsIgnoreCase(value.trim());
     }
 
-    private void updateReadStatusFromKoboProgress(UserBookProgressEntity userProgress, Instant now) {
+    private void updateReadStatusFromKoboProgress(UserBookProgressRow userProgress, Instant now) {
         if (shouldPreserveCurrentStatus(userProgress, now)) {
             return;
         }
@@ -502,7 +503,7 @@ public class KoboReadingStateService {
         }
     }
 
-    private boolean shouldPreserveCurrentStatus(UserBookProgressEntity progress, Instant now) {
+    private boolean shouldPreserveCurrentStatus(UserBookProgressRow progress, Instant now) {
         Instant statusModifiedTime = progress.getReadStatusModifiedTime();
         if (statusModifiedTime == null) {
             return false;

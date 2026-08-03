@@ -10,12 +10,12 @@ import org.booklore.model.dto.progress.KoreaderProgress;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.dto.KoreaderUserRow;
-import org.booklore.model.entity.UserBookProgressEntity;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.koreader.KoreaderService;
 import org.junit.jupiter.api.*;
@@ -38,7 +38,7 @@ import java.util.Optional;
 class KoreaderServiceTest {
 
     @Mock
-    UserBookProgressRepository progressRepo;
+    JooqUserBookProgressRepository progressRepo;
     @Mock
     BookRepository bookRepo;
     @Mock
@@ -107,7 +107,7 @@ class KoreaderServiceTest {
         var book = new BookEntity();
         book.setId(99L);
         when(bookRepo.findByCurrentHash("h")).thenReturn(Optional.of(book));
-        var prog = new UserBookProgressEntity();
+        var prog = new UserBookProgressRow();
         prog.setKoreaderProgress("p");
         prog.setKoreaderProgressPercent(0.5F);
         when(progressRepo.findByUserIdAndBookId(42L, 99L))
@@ -129,9 +129,11 @@ class KoreaderServiceTest {
     @Test
     void getProgress_noProgress() {
         when(details.isSyncEnabled()).thenReturn(true);
+        var book = new BookEntity();
+        book.setId(77L);
         when(bookRepo.findByCurrentHash("h"))
-                .thenReturn(Optional.of(new BookEntity()));
-        when(progressRepo.findByUserIdAndBookId(anyLong(), isNull()))
+                .thenReturn(Optional.of(book));
+        when(progressRepo.findByUserIdAndBookId(anyLong(), anyLong()))
                 .thenReturn(Optional.empty());
         assertThrows(APIException.class, () -> service.getProgress("h"));
     }
@@ -149,7 +151,7 @@ class KoreaderServiceTest {
         book.setId(100L);
         when(bookRepo.findByCurrentHash("hash123")).thenReturn(Optional.of(book));
 
-        var prog = new UserBookProgressEntity();
+        var prog = new UserBookProgressRow();
         prog.setKoreaderProgress("progress/path");
         prog.setKoreaderProgressPercent(0.75F);
         Instant syncTime = Instant.ofEpochSecond(1762209924L);
@@ -171,7 +173,7 @@ class KoreaderServiceTest {
         book.setId(101L);
         when(bookRepo.findByCurrentHash("hash456")).thenReturn(Optional.of(book));
 
-        var prog = new UserBookProgressEntity();
+        var prog = new UserBookProgressRow();
         prog.setKoreaderProgress("progress/path2");
         prog.setKoreaderProgressPercent(0.25F);
         prog.setKoreaderLastSyncTime(null);
@@ -201,7 +203,7 @@ class KoreaderServiceTest {
                 .document("h").progress("x").percentage(0.6F).device("d").device_id("id").build();
         service.saveProgress("h", dto);
 
-        ArgumentCaptor<UserBookProgressEntity> cap = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+        ArgumentCaptor<UserBookProgressRow> cap = ArgumentCaptor.forClass(UserBookProgressRow.class);
         verify(progressRepo).save(cap.capture());
         var saved = cap.getValue();
         assertEquals("x", saved.getKoreaderProgress());
@@ -220,7 +222,7 @@ class KoreaderServiceTest {
         var user = new BookLoreUserEntity();
         user.setId(42L);
         when(userRepo.findById(42L)).thenReturn(Optional.of(user));
-        var existing = new UserBookProgressEntity();
+        var existing = new UserBookProgressRow();
         when(progressRepo.findByUserIdAndBookId(42L, 8L))
                 .thenReturn(Optional.of(existing));
 
@@ -242,7 +244,7 @@ class KoreaderServiceTest {
         var user = new BookLoreUserEntity();
         user.setId(42L);
         when(userRepo.findById(42L)).thenReturn(Optional.of(user));
-        var existing = new UserBookProgressEntity();
+        var existing = new UserBookProgressRow();
         existing.setKoreaderProgressPercent(0.4F);
         existing.setReadStatus(ReadStatus.READING);
         when(progressRepo.findByUserIdAndBookId(42L, 8L))

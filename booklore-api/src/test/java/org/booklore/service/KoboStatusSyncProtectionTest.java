@@ -6,11 +6,11 @@ import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
@@ -43,7 +43,7 @@ class KoboStatusSyncProtectionTest {
     @Mock
     private JooqKoboReadingStateRepository repository;
     @Mock
-    private UserBookProgressRepository progressRepository;
+    private JooqUserBookProgressRepository progressRepository;
     @Mock
     private BookRepository bookRepository;
     @Mock
@@ -95,9 +95,9 @@ class KoboStatusSyncProtectionTest {
         @Test
         @DisplayName("User marks book READ in BookLore -> Kobo sends 50% progress before sync completes -> READ status preserved until synced")
         void preserveManualReadStatus_WhenKoboSendsProgress() {
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.READ);
             existingProgress.setReadStatusModifiedTime(Instant.now().minusSeconds(60));
             existingProgress.setKoboStatusSentTime(null); // Not yet sent to Kobo
@@ -112,12 +112,12 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
 
-            UserBookProgressEntity saved = captor.getValue();
+            UserBookProgressRow saved = captor.getValue();
             assertEquals(ReadStatus.READ, saved.getReadStatus(), 
                 "READ status must be preserved until it has been synced to Kobo");
         }
@@ -125,9 +125,9 @@ class KoboStatusSyncProtectionTest {
         @Test
         @DisplayName("User marks book UNREAD in BookLore -> Kobo sends 100% progress before sync -> UNREAD preserved until synced")
         void preserveManualUnreadStatus_WhenKoboReports100Percent() {
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.UNREAD);
             existingProgress.setReadStatusModifiedTime(Instant.now().minusSeconds(30));
             existingProgress.setKoboStatusSentTime(null);
@@ -142,12 +142,12 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
 
-            UserBookProgressEntity saved = captor.getValue();
+            UserBookProgressRow saved = captor.getValue();
             assertEquals(ReadStatus.UNREAD, saved.getReadStatus(),
                 "UNREAD status must be preserved until it has been synced to Kobo");
         }
@@ -158,9 +158,9 @@ class KoboStatusSyncProtectionTest {
             Instant sentTime = Instant.now().minusSeconds(120);
             Instant modifiedTime = Instant.now().minusSeconds(60); // Modified AFTER sent
 
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.ABANDONED);
             existingProgress.setReadStatusModifiedTime(modifiedTime);
             existingProgress.setKoboStatusSentTime(sentTime);
@@ -175,7 +175,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
@@ -195,9 +195,9 @@ class KoboStatusSyncProtectionTest {
             Instant sentTime = Instant.now().minusSeconds(5);
             Instant modifiedTime = sentTime.minusSeconds(10);
 
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.READ);
             existingProgress.setReadStatusModifiedTime(modifiedTime);
             existingProgress.setKoboStatusSentTime(sentTime);
@@ -212,7 +212,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
@@ -227,9 +227,9 @@ class KoboStatusSyncProtectionTest {
             Instant sentTime = Instant.now().minusSeconds(15);
             Instant modifiedTime = sentTime.minusSeconds(10);
 
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.READ);
             existingProgress.setReadStatusModifiedTime(modifiedTime);
             existingProgress.setKoboStatusSentTime(sentTime);
@@ -244,7 +244,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
@@ -259,9 +259,9 @@ class KoboStatusSyncProtectionTest {
             Instant sentTime = Instant.now().minusSeconds(11);
             Instant modifiedTime = sentTime.minusSeconds(5);
 
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.WONT_READ);
             existingProgress.setReadStatusModifiedTime(modifiedTime);
             existingProgress.setKoboStatusSentTime(sentTime);
@@ -276,7 +276,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
@@ -293,9 +293,9 @@ class KoboStatusSyncProtectionTest {
         @Test
         @DisplayName("No manual status set -> Kobo progress determines status")
         void setStatusFromProgress_WhenNoManualStatus() {
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(null);
             existingProgress.setReadStatusModifiedTime(null);
             existingProgress.setKoboStatusSentTime(null);
@@ -310,7 +310,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
@@ -331,12 +331,12 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-            when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressEntity());
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+            when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressRow());
 
             service.saveReadingState(List.of(readingState));
 
-            UserBookProgressEntity saved = captor.getValue();
+            UserBookProgressRow saved = captor.getValue();
             assertEquals(ReadStatus.READ, saved.getReadStatus());
             assertNotNull(saved.getDateFinished());
         }
@@ -356,8 +356,8 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
-            when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressEntity());
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
+            when(progressRepository.save(captor.capture())).thenReturn(new UserBookProgressRow());
 
             service.saveReadingState(List.of(readingState));
 
@@ -375,9 +375,9 @@ class KoboStatusSyncProtectionTest {
             Instant sentTime = Instant.now().minusSeconds(300); // 5 minutes ago
             Instant modifiedTime = sentTime.minusSeconds(60);
 
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.READ);
             existingProgress.setReadStatusModifiedTime(modifiedTime);
             existingProgress.setKoboStatusSentTime(sentTime);
@@ -392,7 +392,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", readingState);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(readingState));
@@ -412,9 +412,9 @@ class KoboStatusSyncProtectionTest {
             Instant sentTime = Instant.now().minusSeconds(2);
             Instant modifiedTime = sentTime.minusSeconds(5);
 
-            UserBookProgressEntity existingProgress = new UserBookProgressEntity();
-            existingProgress.setUser(testUserEntity);
-            existingProgress.setBook(testBook);
+            UserBookProgressRow existingProgress = new UserBookProgressRow();
+            existingProgress.setUserId(testUserEntity.getId());
+            existingProgress.setBookId(testBook.getId());
             existingProgress.setReadStatus(ReadStatus.READ);
             existingProgress.setReadStatusModifiedTime(modifiedTime);
             existingProgress.setKoboStatusSentTime(sentTime);
@@ -431,7 +431,7 @@ class KoboStatusSyncProtectionTest {
             setupMocksForSave("100", firstRequest);
             when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
             
-            ArgumentCaptor<UserBookProgressEntity> captor = ArgumentCaptor.forClass(UserBookProgressEntity.class);
+            ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
             when(progressRepository.save(captor.capture())).thenReturn(existingProgress);
 
             service.saveReadingState(List.of(firstRequest));

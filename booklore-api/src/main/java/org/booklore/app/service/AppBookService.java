@@ -15,11 +15,12 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.opds.MagicShelfBookService;
 import org.jooq.Condition;
 import org.springframework.data.domain.Page;
@@ -46,7 +47,7 @@ public class AppBookService {
     private final JooqAppBookRepository jooqAppBookRepository;
     private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     private final JooqAppBookDetailRepository jooqAppBookDetailRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
     private final ShelfRepository shelfRepository;
     private final AuthenticationService authenticationService;
     private final MagicShelfBookService magicShelfBookService;
@@ -148,7 +149,7 @@ public class AppBookService {
         List<Long> allIds = jooqAppBookRepository.findAllBookIds(condition);
         if (allIds.isEmpty()) return Collections.emptyList();
 
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMap(userId, new LinkedHashSet<>(allIds));
+        Map<Long, UserBookProgressRow> progressMap = getProgressMap(userId, new LinkedHashSet<>(allIds));
 
         List<Long> topIds = allIds.stream()
                 .filter(progressMap::containsKey)
@@ -185,7 +186,7 @@ public class AppBookService {
         List<Long> allIds = jooqAppBookRepository.findAllBookIds(condition);
         if (allIds.isEmpty()) return Collections.emptyList();
 
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMap(userId, new LinkedHashSet<>(allIds));
+        Map<Long, UserBookProgressRow> progressMap = getProgressMap(userId, new LinkedHashSet<>(allIds));
 
         List<Long> topIds = allIds.stream()
                 .filter(progressMap::containsKey)
@@ -411,7 +412,7 @@ public class AppBookService {
 
     @Transactional
     public void updateReadStatus(Long bookId, ReadStatus status) {
-        UserBookProgressEntity progress = validateAccessAndGetProgress(bookId);
+        UserBookProgressRow progress = validateAccessAndGetProgress(bookId);
 
         progress.setReadStatus(status);
         progress.setReadStatusModifiedTime(Instant.now());
@@ -425,13 +426,13 @@ public class AppBookService {
 
     @Transactional
     public void updatePersonalRating(Long bookId, Integer rating) {
-        UserBookProgressEntity progress = validateAccessAndGetProgress(bookId);
+        UserBookProgressRow progress = validateAccessAndGetProgress(bookId);
 
         progress.setPersonalRating(rating);
         userBookProgressRepository.save(progress);
     }
 
-    private UserBookProgressEntity validateAccessAndGetProgress(Long bookId) {
+    private UserBookProgressRow validateAccessAndGetProgress(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         Long userId = user.getId();
         Set<Long> accessibleLibraryIds = getAccessibleLibraryIds(user);
@@ -452,11 +453,11 @@ public class AppBookService {
         }
     }
 
-    private UserBookProgressEntity createNewProgress(Long userId, BookEntity book) {
-        return UserBookProgressEntity.builder()
-                .user(BookLoreUserEntity.builder().id(userId).build())
-                .book(book)
-                .build();
+    private UserBookProgressRow createNewProgress(Long userId, BookEntity book) {
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(userId);
+        progress.setBookId(book.getId());
+        return progress;
     }
 
     private Set<Long> getAccessibleLibraryIds(BookLoreUser user) {
@@ -471,13 +472,13 @@ public class AppBookService {
                 .collect(Collectors.toSet());
     }
 
-    private Map<Long, UserBookProgressEntity> getProgressMap(Long userId, Set<Long> bookIds) {
+    private Map<Long, UserBookProgressRow> getProgressMap(Long userId, Set<Long> bookIds) {
         if (bookIds.isEmpty()) {
             return Collections.emptyMap();
         }
         return userBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds).stream()
                 .collect(Collectors.toMap(
-                        p -> p.getBook().getId(),
+                        p -> p.getBookId(),
                         Function.identity()
                 ));
     }

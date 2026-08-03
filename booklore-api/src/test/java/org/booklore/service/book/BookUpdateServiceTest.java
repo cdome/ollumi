@@ -47,8 +47,6 @@ class BookUpdateServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private UserBookProgressRepository userBookProgressRepository;
-    @Mock
     private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
     private AuthenticationService authenticationService;
@@ -74,7 +72,6 @@ class BookUpdateServiceTest {
                 shelfRepository,
                 bookMapper,
                 userRepository,
-                userBookProgressRepository,
                 jooqUserBookProgressRepository,
                 authenticationService,
                 bookQueryService,
@@ -182,7 +179,7 @@ class BookUpdateServiceTest {
 
         List<BookStatusUpdateResponse> result = bookUpdateService.updateReadStatus(bookIds, "READ");
         verify(jooqUserBookProgressRepository).bulkUpdateReadStatus(eq(1L), eq(existing), eq(ReadStatus.READ), any(), any());
-        verify(userBookProgressRepository).saveAll(anyList());
+        verify(jooqUserBookProgressRepository).saveAll(anyList());
         assertEquals(3, result.size());
         assertEquals(ReadStatus.READ, result.getFirst().getReadStatus());
     }
@@ -240,7 +237,7 @@ class BookUpdateServiceTest {
 
         List<PersonalRatingUpdateResponse> result = bookUpdateService.updatePersonalRating(bookIds, 5);
         verify(jooqUserBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(existing), eq(5));
-        verify(userBookProgressRepository).saveAll(anyList());
+        verify(jooqUserBookProgressRepository).saveAll(anyList());
         assertEquals(3, result.size());
         assertEquals(5, result.getFirst().getPersonalRating());
     }

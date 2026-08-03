@@ -1,23 +1,153 @@
 package org.booklore.repository.jooq
 
+import org.booklore.jooq.tables.KoboLibrarySnapshotBook.KOBO_LIBRARY_SNAPSHOT_BOOK
 import org.booklore.jooq.tables.UserBookProgress.USER_BOOK_PROGRESS
+import org.booklore.jooq.tables.records.UserBookProgressRecord
 import org.booklore.model.enums.ReadStatus
 import org.booklore.repository.jooq.dto.BookCompletionHeatmapEntry
 import org.booklore.repository.jooq.dto.CompletionTimelineEntry
 import org.booklore.repository.jooq.dto.ProgressPercents
 import org.booklore.repository.jooq.dto.RatingDistributionEntry
 import org.booklore.repository.jooq.dto.StatusDistributionEntry
+import org.booklore.repository.jooq.dto.UserBookProgressRow
 import org.jooq.DSLContext
 import org.jooq.impl.DSL.*
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.Optional
 
 @Repository
 class JooqUserBookProgressRepository(private val dsl: DSLContext) {
 
     private val ubp = USER_BOOK_PROGRESS
+
+    // ========================================================================
+    // Row CRUD (replaces the JPA find/save/saveAll write path)
+    // ========================================================================
+
+    fun findByUserIdAndBookId(userId: Long, bookId: Long): Optional<UserBookProgressRow> =
+        Optional.ofNullable(
+            dsl.selectFrom(ubp)
+                .where(ubp.USER_ID.eq(userId).and(ubp.BOOK_ID.eq(bookId)))
+                .fetchOne()
+                ?.let { toRow(it) }
+        )
+
+    fun findByUserIdAndBookIdIn(userId: Long, bookIds: Set<Long>): List<UserBookProgressRow> {
+        if (bookIds.isEmpty()) return emptyList()
+        return dsl.selectFrom(ubp)
+            .where(ubp.USER_ID.eq(userId).and(ubp.BOOK_ID.`in`(bookIds)))
+            .fetch { toRow(it) }
+    }
+
+    fun findAll(): List<UserBookProgressRow> =
+        dsl.selectFrom(ubp).fetch { toRow(it) }
+
+    /**
+     * jOOQ translation of the former native findAllBooksNeedingKoboSync: rows for the given user
+     * whose book is in the snapshot and which have unsent read-status / kobo-progress / epub-progress
+     * changes. Returns rows carrying their id so callers can mutate + save() them back.
+     */
+    fun findAllBooksNeedingKoboSync(userId: Long, snapshotId: String): List<UserBookProgressRow> {
+        val ksb = KOBO_LIBRARY_SNAPSHOT_BOOK
+        return dsl.selectFrom(ubp)
+            .where(ubp.USER_ID.eq(userId))
+            .and(ubp.BOOK_ID.`in`(select(ksb.BOOK_ID).from(ksb).where(ksb.SNAPSHOT_ID.eq(snapshotId))))
+            .and(
+                ubp.READ_STATUS_MODIFIED_TIME.isNotNull
+                    .and(ubp.KOBO_STATUS_SENT_TIME.isNull.or(ubp.READ_STATUS_MODIFIED_TIME.gt(ubp.KOBO_STATUS_SENT_TIME)))
+                    .or(
+                        ubp.KOBO_PROGRESS_RECEIVED_TIME.isNotNull
+                            .and(ubp.KOBO_PROGRESS_SENT_TIME.isNull.or(ubp.KOBO_PROGRESS_RECEIVED_TIME.gt(ubp.KOBO_PROGRESS_SENT_TIME)))
+                    )
+                    .or(
+                        ubp.EPUB_PROGRESS_PERCENT.isNotNull
+                            .and(ubp.EPUB_PROGRESS.isNotNull)
+                            .and(ubp.KOBO_PROGRESS_SENT_TIME.isNull.or(ubp.LAST_READ_TIME.gt(ubp.KOBO_PROGRESS_SENT_TIME)))
+                    )
+            )
+            .fetch { toRow(it) }
+    }
+
+    /** Upsert: id present -> UPDATE all columns by id; else INSERT and stamp the generated id back onto the row. */
+    fun save(row: UserBookProgressRow): UserBookProgressRow {
+        val r = dsl.newRecord(ubp)
+        applyToRecord(row, r)
+        if (row.id != null) {
+            r.id = row.id
+            r.update()
+        } else {
+            r.insert()
+            row.id = r.id
+        }
+        return row
+    }
+
+    fun saveAll(rows: List<UserBookProgressRow>): List<UserBookProgressRow> = rows.map { save(it) }
+
+    private fun applyToRecord(row: UserBookProgressRow, r: UserBookProgressRecord) {
+        r.userId = row.userId
+        r.bookId = row.bookId
+        r.lastReadTime = row.lastReadTime?.toUtcLocalDateTime()
+        r.pdfProgress = row.pdfProgress
+        r.pdfProgressPercent = row.pdfProgressPercent?.toDouble()
+        r.epubProgress = row.epubProgress
+        r.epubProgressHref = row.epubProgressHref
+        r.epubProgressPercent = row.epubProgressPercent?.toDouble()
+        r.cbxProgress = row.cbxProgress
+        r.cbxProgressPercent = row.cbxProgressPercent?.toDouble()
+        r.koreaderProgress = row.koreaderProgress
+        r.koreaderProgressPercent = row.koreaderProgressPercent?.toDouble()
+        r.koreaderDevice = row.koreaderDevice
+        r.koreaderDeviceId = row.koreaderDeviceId
+        r.koboProgressPercent = row.koboProgressPercent?.toDouble()
+        r.koboLocation = row.koboLocation
+        r.koboLocationType = row.koboLocationType
+        r.koboLocationSource = row.koboLocationSource
+        r.readStatus = row.readStatus?.name
+        r.dateFinished = row.dateFinished?.toUtcLocalDateTime()
+        r.koreaderLastSyncTime = row.koreaderLastSyncTime?.toUtcLocalDateTime()
+        r.koboProgressReceivedTime = row.koboProgressReceivedTime?.toUtcLocalDateTime()
+        r.koboStatusSentTime = row.koboStatusSentTime?.toUtcLocalDateTime()
+        r.koboProgressSentTime = row.koboProgressSentTime?.toUtcLocalDateTime()
+        r.readStatusModifiedTime = row.readStatusModifiedTime?.toUtcLocalDateTime()
+        r.personalRating = row.personalRating?.toByte()
+    }
+
+    private fun toRow(r: UserBookProgressRecord): UserBookProgressRow =
+        UserBookProgressRow(
+            id = r.id,
+            userId = r.userId,
+            bookId = r.bookId,
+            lastReadTime = r.lastReadTime?.toUtcInstant(),
+            pdfProgress = r.pdfProgress,
+            pdfProgressPercent = r.pdfProgressPercent?.toFloat(),
+            epubProgress = r.epubProgress,
+            epubProgressHref = r.epubProgressHref,
+            epubProgressPercent = r.epubProgressPercent?.toFloat(),
+            cbxProgress = r.cbxProgress,
+            cbxProgressPercent = r.cbxProgressPercent?.toFloat(),
+            koreaderProgress = r.koreaderProgress,
+            koreaderProgressPercent = r.koreaderProgressPercent?.toFloat(),
+            koreaderDevice = r.koreaderDevice,
+            koreaderDeviceId = r.koreaderDeviceId,
+            koboProgressPercent = r.koboProgressPercent?.toFloat(),
+            koboLocation = r.koboLocation,
+            koboLocationType = r.koboLocationType,
+            koboLocationSource = r.koboLocationSource,
+            readStatus = r.readStatus?.let { ReadStatus.valueOf(it) },
+            dateFinished = r.dateFinished?.toUtcInstant(),
+            koreaderLastSyncTime = r.koreaderLastSyncTime?.toUtcInstant(),
+            koboProgressReceivedTime = r.koboProgressReceivedTime?.toUtcInstant(),
+            koboStatusSentTime = r.koboStatusSentTime?.toUtcInstant(),
+            koboProgressSentTime = r.koboProgressSentTime?.toUtcInstant(),
+            readStatusModifiedTime = r.readStatusModifiedTime?.toUtcInstant(),
+            personalRating = r.personalRating?.toInt(),
+        )
+
+    private fun LocalDateTime.toUtcInstant(): Instant = this.toInstant(ZoneOffset.UTC)
 
     // ========================================================================
     // Statistics

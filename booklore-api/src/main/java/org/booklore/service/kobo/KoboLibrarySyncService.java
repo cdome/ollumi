@@ -8,9 +8,9 @@ import org.booklore.model.dto.BookloreSyncToken;
 import org.booklore.model.dto.kobo.*;
 import org.booklore.repository.jooq.dto.KoboLibrarySnapshot;
 import org.booklore.repository.jooq.dto.KoboSnapshotBook;
-import org.booklore.model.entity.UserBookProgressEntity;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.util.RequestUtils;
 import org.booklore.util.kobo.BookloreSyncTokenGenerator;
 import org.springframework.data.domain.Page;
@@ -34,7 +34,7 @@ public class KoboLibrarySyncService {
     private final KoboLibrarySnapshotService koboLibrarySnapshotService;
     private final KoboEntitlementService entitlementService;
     private final JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
     private final KoboServerProxy koboServerProxy;
     private final ObjectMapper objectMapper;
     private final KoboSettingsService koboSettingsService;
@@ -160,7 +160,7 @@ public class KoboLibrarySyncService {
     }
 
     private List<ChangedReadingState> syncReadingStatesToKobo(Long userId, String snapshotId) {
-        List<UserBookProgressEntity> booksNeedingSync =
+        List<UserBookProgressRow> booksNeedingSync =
                 userBookProgressRepository.findAllBooksNeedingKoboSync(userId, snapshotId);
 
         if (!koboSettingsService.getCurrentUserSettings().isTwoWayProgressSync()) {
@@ -176,7 +176,7 @@ public class KoboLibrarySyncService {
         List<ChangedReadingState> changedStates = entitlementService.generateChangedReadingStates(booksNeedingSync);
 
         Instant sentTime = Instant.now();
-        for (UserBookProgressEntity progress : booksNeedingSync) {
+        for (UserBookProgressRow progress : booksNeedingSync) {
             if (needsStatusSync(progress)) {
                 progress.setKoboStatusSentTime(sentTime);
             }
@@ -190,7 +190,7 @@ public class KoboLibrarySyncService {
         return changedStates;
     }
 
-    private boolean needsStatusSync(UserBookProgressEntity progress) {
+    private boolean needsStatusSync(UserBookProgressRow progress) {
         Instant modifiedTime = progress.getReadStatusModifiedTime();
         if (modifiedTime == null) {
             return false;
@@ -199,13 +199,13 @@ public class KoboLibrarySyncService {
         return sentTime == null || modifiedTime.isAfter(sentTime);
     }
 
-    private boolean needsKoboProgressSync(UserBookProgressEntity progress) {
+    private boolean needsKoboProgressSync(UserBookProgressRow progress) {
         Instant sentTime = progress.getKoboProgressSentTime();
         Instant receivedTime = progress.getKoboProgressReceivedTime();
         return receivedTime != null && (sentTime == null || receivedTime.isAfter(sentTime));
     }
 
-    private boolean needsProgressSync(UserBookProgressEntity progress) {
+    private boolean needsProgressSync(UserBookProgressRow progress) {
         if (needsKoboProgressSync(progress)) {
             return true;
         }

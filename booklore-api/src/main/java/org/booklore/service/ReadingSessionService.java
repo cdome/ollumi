@@ -12,7 +12,6 @@ import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -45,7 +44,6 @@ public class ReadingSessionService {
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
 
     private String getTimezoneOffset() {
         ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(Instant.now());

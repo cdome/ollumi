@@ -10,8 +10,10 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.util.koreader.EpubCfiService;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +31,7 @@ import java.util.Map;
 @Service
 public class KoreaderService {
 
-    private final UserBookProgressRepository progressRepository;
+    private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
@@ -49,7 +51,7 @@ public class KoreaderService {
     public KoreaderProgress getProgress(String bookHash) {
         KoreaderUserDetails authDetails = getAuthDetailsWithSyncCheck();
         BookEntity book = findBookByHash(bookHash);
-        UserBookProgressEntity progress = findUserProgress(authDetails.getBookLoreUserId(), book.getId());
+        UserBookProgressRow progress = findUserProgress(authDetails.getBookLoreUserId(), book.getId());
 
         log.info("getProgress: fetched progress='{}' percentage={} for userId={} bookHash={}",
                 progress.getKoreaderProgress(), progress.getKoreaderProgressPercent(),
@@ -75,7 +77,7 @@ public class KoreaderService {
         BookEntity book = findBookByHash(bookHash);
         BookLoreUserEntity user = findBookLoreUser(authDetails.getBookLoreUserId());
 
-        UserBookProgressEntity userProgress = getOrCreateUserProgress(user, book);
+        UserBookProgressRow userProgress = getOrCreateUserProgress(user, book);
         Float previousProgressPercent = userProgress.getKoreaderProgressPercent();
         ReadStatus previousReadStatus = userProgress.getReadStatus();
         updateProgressData(userProgress, koProgress, authDetails.isSyncWithBookloreReader(), book);
@@ -96,7 +98,7 @@ public class KoreaderService {
         }
     }
 
-    private void saveToFileProgress(BookLoreUserEntity user, BookEntity book, UserBookProgressEntity progress) {
+    private void saveToFileProgress(BookLoreUserEntity user, BookEntity book, UserBookProgressRow progress) {
         try {
             BookFileEntity primaryFile = book.getPrimaryBookFile();
             UserBookFileProgressRow fileProgress = fileProgressRepository
@@ -132,7 +134,7 @@ public class KoreaderService {
         }
     }
 
-    private void updateProgressData(UserBookProgressEntity userProgress, KoreaderProgress koProgress, boolean syncWithBookloreReader, BookEntity book) {
+    private void updateProgressData(UserBookProgressRow userProgress, KoreaderProgress koProgress, boolean syncWithBookloreReader, BookEntity book) {
         userProgress.setKoreaderProgress(koProgress.getProgress());
         userProgress.setKoreaderProgressPercent(koProgress.getPercentage());
         userProgress.setKoreaderDevice(koProgress.getDevice());
@@ -161,7 +163,7 @@ public class KoreaderService {
         updateReadStatus(userProgress, koProgress.getPercentage());
     }
 
-    private void updateReadStatus(UserBookProgressEntity userProgress, Float progressFraction) {
+    private void updateReadStatus(UserBookProgressRow userProgress, Float progressFraction) {
         if (progressFraction == null) {
             return;
         }
@@ -227,17 +229,17 @@ public class KoreaderService {
                 .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("User not found with id " + userId));
     }
 
-    private UserBookProgressEntity findUserProgress(long userId, Long bookId) {
+    private UserBookProgressRow findUserProgress(long userId, Long bookId) {
         return progressRepository.findByUserIdAndBookId(userId, bookId)
                 .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("No progress found for user and book"));
     }
 
-    private UserBookProgressEntity getOrCreateUserProgress(BookLoreUserEntity user, BookEntity book) {
+    private UserBookProgressRow getOrCreateUserProgress(BookLoreUserEntity user, BookEntity book) {
         return progressRepository.findByUserIdAndBookId(user.getId(), book.getId())
                 .orElseGet(() -> {
-                    UserBookProgressEntity newProgress = new UserBookProgressEntity();
-                    newProgress.setUser(user);
-                    newProgress.setBook(book);
+                    UserBookProgressRow newProgress = new UserBookProgressRow();
+                    newProgress.setUserId(user.getId());
+                    newProgress.setBookId(book.getId());
                     return newProgress;
                 });
     }

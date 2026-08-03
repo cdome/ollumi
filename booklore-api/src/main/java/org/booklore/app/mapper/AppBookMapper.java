@@ -9,6 +9,7 @@ import org.booklore.app.dto.AppShelfSummary;
 import org.booklore.model.entity.*;
 import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.mapstruct.*;
 
@@ -36,7 +37,7 @@ public interface AppBookMapper {
     @Mapping(target = "coverUpdatedOn", source = "book.metadata.coverUpdatedOn")
     @Mapping(target = "audiobookCoverUpdatedOn", source = "book.metadata.audiobookCoverUpdatedOn")
     @Mapping(target = "isPhysical", source = "book.isPhysical")
-    AppBookSummary toSummary(BookEntity book, UserBookProgressEntity progress);
+    AppBookSummary toSummary(BookEntity book, UserBookProgressRow progress);
 
     @Mapping(target = "id", source = "book.id")
     @Mapping(target = "title", source = "book.metadata.title")
@@ -73,7 +74,7 @@ public interface AppBookMapper {
     @Mapping(target = "cbxProgress", source = "progress", qualifiedByName = "mapCbxProgress")
     @Mapping(target = "audiobookProgress", source = "fileProgress", qualifiedByName = "mapAudiobookProgress")
     @Mapping(target = "koreaderProgress", source = "progress", qualifiedByName = "mapKoreaderProgress")
-    AppBookDetail toDetail(BookEntity book, UserBookProgressEntity progress, UserBookFileProgressRow fileProgress);
+    AppBookDetail toDetail(BookEntity book, UserBookProgressRow progress, UserBookFileProgressRow fileProgress);
 
     @Named("mapAuthors")
     default List<String> mapAuthors(List<AuthorEntity> authors) {
@@ -127,7 +128,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapReadProgress")
-    default Float mapReadProgress(UserBookProgressEntity progress) {
+    default Float mapReadProgress(UserBookProgressRow progress) {
         if (progress == null) {
             return null;
         }
@@ -150,7 +151,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapEpubProgress")
-    default AppBookDetail.EpubProgress mapEpubProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.EpubProgress mapEpubProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getEpubProgress() == null) {
             return null;
         }
@@ -163,7 +164,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapPdfProgress")
-    default AppBookDetail.PdfProgress mapPdfProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.PdfProgress mapPdfProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getPdfProgress() == null) {
             return null;
         }
@@ -175,7 +176,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapCbxProgress")
-    default AppBookDetail.CbxProgress mapCbxProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.CbxProgress mapCbxProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getCbxProgress() == null) {
             return null;
         }
@@ -187,7 +188,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapKoreaderProgress")
-    default AppBookDetail.KoreaderProgress mapKoreaderProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.KoreaderProgress mapKoreaderProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getKoreaderProgressPercent() == null) {
             return null;
         }

@@ -9,6 +9,8 @@ import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -64,7 +66,7 @@ class BookServiceTest {
     @Mock
     private JooqBookReadRepository jooqBookReadRepository;
     @Mock
-    private UserBookProgressRepository userBookProgressRepository;
+    private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -100,7 +102,7 @@ class BookServiceTest {
     void getBookDTOs_adminUser_returnsBooksWithProgress() {
         Book book = Book.builder().id(1L).primaryFile(BookFile.builder().bookType(BookFileType.PDF).build()).shelves(Set.of()).build();
         when(bookQueryService.getAllBooks(anyBoolean())).thenReturn(List.of(book));
-        when(readingProgressService.fetchUserProgress(anyLong(), anySet())).thenReturn(Map.of(1L, new UserBookProgressEntity()));
+        when(readingProgressService.fetchUserProgress(anyLong(), anySet())).thenReturn(Map.of(1L, new UserBookProgressRow()));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
 
         List<Book> result = bookService.getBookDTOs(true);
@@ -113,7 +115,7 @@ class BookServiceTest {
     void getBooksByIds_returnsMappedBooksWithProgress() {
         Book mappedBook = Book.builder().id(2L).primaryFile(BookFile.builder().bookType(BookFileType.EPUB).build()).metadata(BookMetadata.builder().build()).build();
         when(jooqBookReadRepository.findByIds(anyCollection())).thenReturn(List.of(mappedBook));
-        when(readingProgressService.fetchUserProgress(anyLong(), anySet())).thenReturn(Map.of(2L, new UserBookProgressEntity()));
+        when(readingProgressService.fetchUserProgress(anyLong(), anySet())).thenReturn(Map.of(2L, new UserBookProgressRow()));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
 
         List<Book> result = bookService.getBooksByIds(Set.of(2L), false);
@@ -124,7 +126,7 @@ class BookServiceTest {
 
     @Test
     void getBook_existingBook_returnsBookWithProgress() {
-        when(userBookProgressRepository.findByUserIdAndBookId(anyLong(), eq(3L))).thenReturn(Optional.of(new UserBookProgressEntity()));
+        when(userBookProgressRepository.findByUserIdAndBookId(anyLong(), eq(3L))).thenReturn(Optional.of(new UserBookProgressRow()));
         Book mappedBook = Book.builder().id(3L).primaryFile(BookFile.builder().bookType(BookFileType.PDF).build()).metadata(BookMetadata.builder().build()).shelves(Set.of()).build();
         when(jooqBookReadRepository.findByIds(List.of(3L))).thenReturn(List.of(mappedBook));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);

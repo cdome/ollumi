@@ -11,7 +11,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -36,7 +36,7 @@ class BookFileAttachmentServiceTest {
 
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
-    @Mock private UserBookProgressRepository userBookProgressRepository;
+    @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
     @Mock private MonitoringRegistrationService monitoringRegistrationService;

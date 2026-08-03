@@ -17,6 +17,7 @@ import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.kobo.KoboReadingStateService;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,8 +34,6 @@ import static org.mockito.Mockito.*;
 
 class ReadingProgressServiceTest {
 
-    @Mock
-    private UserBookProgressRepository userBookProgressRepository;
     @Mock
     private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
@@ -72,15 +71,15 @@ class ReadingProgressServiceTest {
         BookEntity book2 = new BookEntity();
         book2.setId(2L);
 
-        UserBookProgressEntity progress1 = new UserBookProgressEntity();
-        progress1.setBook(book1);
-        UserBookProgressEntity progress2 = new UserBookProgressEntity();
-        progress2.setBook(book2);
+        UserBookProgressRow progress1 = new UserBookProgressRow();
+        progress1.setBookId(book1.getId());
+        UserBookProgressRow progress2 = new UserBookProgressRow();
+        progress2.setBookId(book2.getId());
 
-        when(userBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds))
+        when(jooqUserBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds))
                 .thenReturn(List.of(progress1, progress2));
 
-        Map<Long, UserBookProgressEntity> result = readingProgressService.fetchUserProgress(userId, bookIds);
+        Map<Long, UserBookProgressRow> result = readingProgressService.fetchUserProgress(userId, bookIds);
 
         assertEquals(2, result.size());
         assertEquals(progress1, result.get(1L));
@@ -122,7 +121,7 @@ class ReadingProgressServiceTest {
     @Test
     void enrichBookWithProgress_shouldSetProgressFields() {
         Book book = Book.builder().id(1L).build();
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setReadStatus(ReadStatus.READING);
         progress.setEpubProgress("cfi");
         progress.setEpubProgressPercent(50.0f);
@@ -140,7 +139,7 @@ class ReadingProgressServiceTest {
     void enrichBookWithProgress_withFileProgress_shouldOverlayFileProgress() {
         Book book = Book.builder().id(1L).build();
 
-        UserBookProgressEntity progress = new UserBookProgressEntity();
+        UserBookProgressRow progress = new UserBookProgressRow();
         progress.setReadStatus(ReadStatus.READING);
         progress.setEpubProgress("old-cfi");
         progress.setEpubProgressPercent(30.0f);
@@ -178,8 +177,8 @@ class ReadingProgressServiceTest {
         userEntity.setId(2L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
 
-        UserBookProgressEntity progress = new UserBookProgressEntity();
-        when(userBookProgressRepository.findByUserIdAndBookId(2L, bookId)).thenReturn(Optional.of(progress));
+        UserBookProgressRow progress = new UserBookProgressRow();
+        when(jooqUserBookProgressRepository.findByUserIdAndBookId(2L, bookId)).thenReturn(Optional.of(progress));
 
         when(userBookFileProgressRepository.findByUserIdAndBookFileId(2L, 1L)).thenReturn(Optional.empty());
 
@@ -190,7 +189,7 @@ class ReadingProgressServiceTest {
 
         readingProgressService.updateReadProgress(req);
 
-        verify(userBookProgressRepository).save(progress);
+        verify(jooqUserBookProgressRepository).save(progress);
         assertEquals("cfi", progress.getEpubProgress());
         assertEquals(ReadStatus.READ, progress.getReadStatus());
         assertEquals(100f, progress.getEpubProgressPercent());
@@ -216,8 +215,8 @@ class ReadingProgressServiceTest {
         userEntity.setId(2L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
 
-        UserBookProgressEntity progress = new UserBookProgressEntity();
-        when(userBookProgressRepository.findByUserIdAndBookId(2L, bookId)).thenReturn(Optional.of(progress));
+        UserBookProgressRow progress = new UserBookProgressRow();
+        when(jooqUserBookProgressRepository.findByUserIdAndBookId(2L, bookId)).thenReturn(Optional.of(progress));
 
         when(userBookFileProgressRepository.findByUserIdAndBookFileId(2L, 1L)).thenReturn(Optional.empty());
 
@@ -228,7 +227,7 @@ class ReadingProgressServiceTest {
 
         readingProgressService.updateReadProgress(req);
 
-        verify(userBookProgressRepository).save(progress);
+        verify(jooqUserBookProgressRepository).save(progress);
         assertEquals(5, progress.getPdfProgress());
         assertEquals(ReadStatus.READING, progress.getReadStatus());
         assertEquals(50f, progress.getPdfProgressPercent());
