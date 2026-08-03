@@ -9,6 +9,7 @@ import org.booklore.jooq.tables.BookMetadataCategoryMapping.BOOK_METADATA_CATEGO
 import org.booklore.jooq.tables.Category.CATEGORY
 import org.booklore.jooq.tables.ReadingSessions.READING_SESSIONS
 import org.booklore.jooq.tables.UserBookProgress.USER_BOOK_PROGRESS
+import org.booklore.model.enums.BookFileType
 import org.booklore.repository.jooq.dto.*
 import org.jooq.DSLContext
 import org.jooq.Field
@@ -16,6 +17,7 @@ import org.jooq.impl.DSL.*
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Repository
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -37,6 +39,47 @@ class JooqReadingSessionRepository(private val dsl: DSLContext) {
 
     private fun dateOf(field: Field<*>): Field<LocalDate> =
         function("DATE", LocalDate::class.java, field)
+
+    // ========================================================================
+    // Writes
+    // ========================================================================
+
+    /**
+     * Inserts a new reading session and returns its generated id.
+     * Replaces the JPA save() in recordSession(): stamps created_at (was @PrePersist),
+     * stores book_type by name, and writes start/end times as UTC LocalDateTime
+     * (matching Hibernate's jdbc.time_zone=UTC). SQL FLOAT columns are jOOQ Double.
+     */
+    fun insert(
+        userId: Long,
+        bookId: Long,
+        bookType: BookFileType?,
+        startTime: Instant,
+        endTime: Instant,
+        durationSeconds: Int,
+        durationFormatted: String?,
+        startProgress: Float?,
+        endProgress: Float?,
+        progressDelta: Float?,
+        startLocation: String?,
+        endLocation: String?,
+    ): Long =
+        dsl.insertInto(rs)
+            .set(rs.USER_ID, userId)
+            .set(rs.BOOK_ID, bookId)
+            .set(rs.BOOK_TYPE, bookType?.name)
+            .set(rs.START_TIME, LocalDateTime.ofInstant(startTime, ZoneOffset.UTC))
+            .set(rs.END_TIME, LocalDateTime.ofInstant(endTime, ZoneOffset.UTC))
+            .set(rs.DURATION_SECONDS, durationSeconds)
+            .set(rs.DURATION_FORMATTED, durationFormatted)
+            .set(rs.START_PROGRESS, startProgress?.toDouble())
+            .set(rs.END_PROGRESS, endProgress?.toDouble())
+            .set(rs.PROGRESS_DELTA, progressDelta?.toDouble())
+            .set(rs.START_LOCATION, startLocation)
+            .set(rs.END_LOCATION, endLocation)
+            .set(rs.CREATED_AT, LocalDateTime.now())
+            .returning(rs.ID)
+            .fetchOne()!!.id!!
 
     // ========================================================================
     // Reading heatmap / session counts

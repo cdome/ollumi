@@ -8,13 +8,10 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.ReadingSessionRequest;
 import org.booklore.model.dto.response.*;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.CategoryEntity;
-import org.booklore.model.entity.ReadingSessionEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.ReadingSessionRepository;
 import org.booklore.repository.UserBookProgressRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
@@ -44,7 +41,6 @@ import java.util.stream.Collectors;
 public class ReadingSessionService {
 
     private final AuthenticationService authenticationService;
-    private final ReadingSessionRepository readingSessionRepository;
     private final JooqReadingSessionRepository jooqReadingSessionRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final BookRepository bookRepository;
@@ -61,27 +57,24 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        BookLoreUserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        userRepository.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
         BookEntity book = bookRepository.findById(request.getBookId()).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(request.getBookId()));
 
-        ReadingSessionEntity session = ReadingSessionEntity.builder()
-                .user(userEntity)
-                .book(book)
-                .bookType(request.getBookType())
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
-                .durationSeconds(request.getDurationSeconds())
-                .durationFormatted(request.getDurationFormatted())
-                .startProgress(request.getStartProgress())
-                .endProgress(request.getEndProgress())
-                .progressDelta(request.getProgressDelta())
-                .startLocation(request.getStartLocation())
-                .endLocation(request.getEndLocation())
-                .build();
+        Long sessionId = jooqReadingSessionRepository.insert(
+                userId,
+                book.getId(),
+                request.getBookType(),
+                request.getStartTime(),
+                request.getEndTime(),
+                request.getDurationSeconds(),
+                request.getDurationFormatted(),
+                request.getStartProgress(),
+                request.getEndProgress(),
+                request.getProgressDelta(),
+                request.getStartLocation(),
+                request.getEndLocation());
 
-        readingSessionRepository.save(session);
-
-        log.info("Reading session persisted successfully: sessionId={}, userId={}, bookId={}, duration={}s", session.getId(), userId, request.getBookId(), request.getDurationSeconds());
+        log.info("Reading session persisted successfully: sessionId={}, userId={}, bookId={}, duration={}s", sessionId, userId, request.getBookId(), request.getDurationSeconds());
     }
 
     @Transactional(readOnly = true)

@@ -79,11 +79,6 @@ public class BookLoreUserEntity {
     @BatchSize(size = 20)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<ReadingSessionEntity> readingSessions = new HashSet<>();
-
-    @BatchSize(size = 20)
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
     private Set<UserContentRestrictionEntity> contentRestrictions = new HashSet<>();
 
     @PrePersist
