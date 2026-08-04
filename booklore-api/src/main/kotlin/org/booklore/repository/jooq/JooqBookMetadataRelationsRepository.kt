@@ -89,4 +89,32 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
             .fetchGroups(bmm.BOOK_ID, MOOD.NAME)
             .mapValues { it.value.toSet() }
     }
+
+    // ========================================================================
+    // Writes — replace a book's mood junction rows (masters are shared, upserted by name).
+    // Replaces the JPA cascade of BookMetadataEntity.moods. Callers compute the final desired
+    // set (merge/replace/clear semantics) and call setMoodsForBook.
+    // ========================================================================
+
+    fun clearMoodsForBook(bookId: Long) {
+        dsl.deleteFrom(bmm).where(bmm.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setMoodsForBook(bookId: Long, moodNames: Collection<String>) {
+        dsl.deleteFrom(bmm).where(bmm.BOOK_ID.eq(bookId)).execute()
+        moodNames.asSequence()
+            .filter { it.isNotBlank() }
+            .map { upsertMoodId(it) }
+            .distinct()
+            .forEach { moodId ->
+                dsl.insertInto(bmm).set(bmm.BOOK_ID, bookId).set(bmm.MOOD_ID, moodId).execute()
+            }
+    }
+
+    /** Find-or-create the mood master row by name (name is UNIQUE), returning its id. */
+    private fun upsertMoodId(name: String): Long {
+        val existing = dsl.select(MOOD.ID).from(MOOD).where(MOOD.NAME.eq(name)).fetchOne(MOOD.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(MOOD).set(MOOD.NAME, name).returning(MOOD.ID).fetchOne()!!.id!!
+    }
 }

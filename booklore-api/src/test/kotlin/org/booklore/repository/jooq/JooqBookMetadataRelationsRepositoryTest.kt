@@ -68,6 +68,22 @@ class JooqBookMetadataRelationsRepositoryTest : AbstractIntegrationTest() {
     }
 
     @Test
+    fun `setMoodsForBook find-or-creates masters, replaces junctions, and reuses masters`() {
+        repository.setMoodsForBook(bookId, listOf("cozy", "tense", ""))
+        assertThat(repository.findMoodNamesByBookId(bookId)).containsExactlyInAnyOrder("cozy", "tense")
+        assertThat(dsl.fetchCount(MOOD)).isEqualTo(2) // blank skipped
+
+        // Replace with a subset -> junction reduced, master rows kept and reused (no duplicate insert).
+        repository.setMoodsForBook(bookId, listOf("cozy"))
+        assertThat(repository.findMoodNamesByBookId(bookId)).containsExactly("cozy")
+        assertThat(dsl.fetchCount(MOOD)).isEqualTo(2)
+
+        repository.clearMoodsForBook(bookId)
+        assertThat(repository.findMoodNamesByBookId(bookId)).isEmpty()
+        assertThat(dsl.fetchCount(MOOD)).isEqualTo(2) // masters not deleted
+    }
+
+    @Test
     fun `findCategory-Tag-Mood NamesByBookId return the linked names`() {
         val catId = dsl.insertInto(CATEGORY).set(CATEGORY.NAME, "Fantasy").returningResult(CATEGORY.ID).fetchOne()!!.get(CATEGORY.ID)!!
         val tagId = dsl.insertInto(TAG).set(TAG.NAME, "epic").returningResult(TAG.ID).fetchOne()!!.get(TAG.ID)!!
