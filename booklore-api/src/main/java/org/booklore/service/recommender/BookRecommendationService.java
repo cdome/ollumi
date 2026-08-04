@@ -6,7 +6,7 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.mapper.BookMapper;
 import org.booklore.model.dto.*;
-import org.booklore.model.entity.AuthorEntity;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.repository.BookRepository;
@@ -30,6 +30,7 @@ public class BookRecommendationService {
     private final BookQueryService bookQueryService;
     private final BookMapper bookMapper;
     private final AuthenticationService authenticationService;
+    private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
     private static final int MAX_BOOKS_PER_AUTHOR = 3;
 
@@ -133,9 +134,8 @@ public class BookRecommendationService {
     }
 
     private Set<String> getAuthorNames(BookEntity book) {
-        if (book.getMetadata() == null || book.getMetadata().getAuthors() == null) return Collections.emptySet();
-        return book.getMetadata().getAuthors().stream()
-                .map(AuthorEntity::getName)
+        if (book.getId() == null) return Collections.emptySet();
+        return bookMetadataRelationsRepository.findAuthorNamesByBookId(book.getId()).stream()
                 .filter(Objects::nonNull)
                 .map(String::toLowerCase)
                 .collect(Collectors.toSet());

@@ -15,6 +15,7 @@ import org.booklore.model.dto.response.AudiobookTrack;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.repository.BookFileRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.metadata.extractor.AudiobookMetadataExtractor;
 import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
@@ -34,6 +35,7 @@ public class AudioMetadataService {
   private final AudioFileUtilityService audioFileUtility;
   private final AudiobookMetadataExtractor audiobookMetadataExtractor;
   private final BookFileRepository bookFileRepository;
+  private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
   public AudiobookInfo getMetadata(BookFileEntity bookFile, Path audioPath) throws Exception {
     if (bookFile.isFolderBased()) {
@@ -84,9 +86,8 @@ public class AudioMetadataService {
 
       if (metadata != null) {
         builder.title(metadata.getTitle());
-        if (metadata.getAuthors() != null && !metadata.getAuthors().isEmpty()) {
-          builder.author(metadata.getAuthors().iterator().next().getName());
-        }
+        bookMetadataRelationsRepository.findAuthorNamesByBookId(bookFile.getBook().getId())
+            .stream().findFirst().ifPresent(builder::author);
       }
 
       return builder.build();
@@ -211,9 +212,8 @@ public class AudioMetadataService {
       if (bookTitle != null) {
         title = bookTitle;
       }
-      if (metadata.getAuthors() != null && !metadata.getAuthors().isEmpty()) {
-        author = metadata.getAuthors().iterator().next().getName();
-      }
+      author = bookMetadataRelationsRepository.findAuthorNamesByBookId(bookFile.getBook().getId())
+          .stream().findFirst().orElse(author);
     }
 
     long totalSizeBytes = tracks.stream()
