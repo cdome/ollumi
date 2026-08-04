@@ -8,7 +8,7 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.ReadingSessionRequest;
 import org.booklore.model.dto.response.*;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.CategoryEntity;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
@@ -44,6 +44,7 @@ public class ReadingSessionService {
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
+    private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
     private String getTimezoneOffset() {
         ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(Instant.now());
@@ -297,17 +298,8 @@ public class ReadingSessionService {
 
         Set<Long> bookIds = sessionsByBook.keySet();
         Map<Long, List<String>> bookCategories = new HashMap<>();
-        if (!bookIds.isEmpty()) {
-            bookRepository.findAllWithMetadataByIds(bookIds).forEach(book -> {
-                List<String> categories = book.getMetadata() != null && book.getMetadata().getCategories() != null
-                        ? book.getMetadata().getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .sorted()
-                        .collect(Collectors.toList())
-                        : List.of();
-                bookCategories.put(book.getId(), categories);
-            });
-        }
+        bookMetadataRelationsRepository.findCategoryNamesByBookIds(bookIds).forEach((id, names) ->
+                bookCategories.put(id, names.stream().sorted().collect(Collectors.toList())));
 
         return sessionsByBook.entrySet().stream()
                 .filter(entry -> entry.getValue().size() >= 2)

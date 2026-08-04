@@ -15,6 +15,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +32,9 @@ class DuplicateDetectionServiceTest {
 
     @Mock
     private BookMapper bookMapper;
+
+    @Mock
+    private JooqBookMetadataRelationsRepository relationsRepository;
 
     @InjectMocks
     private DuplicateDetectionService service;
@@ -117,6 +122,24 @@ class DuplicateDetectionServiceTest {
 
     private void stubBooks(BookEntity... books) {
         when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of(books));
+        // Author names now come from the jOOQ relations reader; derive them from the fixtures' entity authors.
+        Map<Long, List<String>> authorsByBook = new HashMap<>();
+        for (BookEntity b : books) {
+            if (b.getMetadata() == null || b.getMetadata().getAuthors() == null) continue;
+            List<String> names = b.getMetadata().getAuthors().stream()
+                    .map(AuthorEntity::getName)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (!names.isEmpty()) authorsByBook.put(b.getId(), names);
+        }
+        lenient().when(relationsRepository.findAuthorNamesByBookIds(any())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            Map<Long, List<String>> out = new HashMap<>();
+            for (Long id : ids) {
+                if (authorsByBook.containsKey(id)) out.put(id, authorsByBook.get(id));
+            }
+            return out;
+        });
     }
 
     // ── General tests ───────────────────────────────────────────

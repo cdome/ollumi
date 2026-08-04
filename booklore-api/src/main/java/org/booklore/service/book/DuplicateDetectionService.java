@@ -4,7 +4,7 @@ import org.booklore.mapper.BookMapper;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.request.DuplicateDetectionRequest;
 import org.booklore.model.dto.response.DuplicateGroup;
-import org.booklore.model.entity.AuthorEntity;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
@@ -28,6 +28,7 @@ public class DuplicateDetectionService {
     );
 
     private final BookRepository bookRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookMapper bookMapper;
 
     @Transactional(readOnly = true)
@@ -179,16 +180,18 @@ public class DuplicateDetectionService {
         for (List<BookEntity> group : titleGroups.values()) {
             if (group.size() < 2) continue;
 
+            List<Long> groupIds = group.stream().map(BookEntity::getId).toList();
+            Map<Long, List<String>> groupAuthors = relationsRepository.findAuthorNamesByBookIds(groupIds);
+
             List<BookEntity> withAuthors = group.stream()
-                    .filter(b -> b.getMetadata().getAuthors() != null && !b.getMetadata().getAuthors().isEmpty())
+                    .filter(b -> !groupAuthors.getOrDefault(b.getId(), List.of()).isEmpty())
                     .toList();
 
             if (withAuthors.size() < 2) continue;
 
             Map<Long, Set<String>> normalizedAuthors = new HashMap<>();
             for (BookEntity book : withAuthors) {
-                Set<String> names = book.getMetadata().getAuthors().stream()
-                        .map(AuthorEntity::getName)
+                Set<String> names = groupAuthors.getOrDefault(book.getId(), List.of()).stream()
                         .filter(Objects::nonNull)
                         .map(BookUtils::normalizeForSearch)
                         .collect(Collectors.toSet());
