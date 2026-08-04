@@ -51,4 +51,33 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
             .from(bmm).join(MOOD).on(MOOD.ID.eq(bmm.MOOD_ID))
             .where(bmm.BOOK_ID.eq(bookId))
             .fetchSet(MOOD.NAME)
+
+    // Batched variants (bookId -> names) for consumers that filter/process a list of books, to avoid N+1.
+
+    fun findCategoryNamesByBookIds(bookIds: Collection<Long>): Map<Long, Set<String>> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return dsl.select(bcm.BOOK_ID, CATEGORY.NAME)
+            .from(bcm).join(CATEGORY).on(CATEGORY.ID.eq(bcm.CATEGORY_ID))
+            .where(bcm.BOOK_ID.`in`(bookIds))
+            .fetchGroups(bcm.BOOK_ID, CATEGORY.NAME)
+            .mapValues { it.value.toSet() }
+    }
+
+    fun findTagNamesByBookIds(bookIds: Collection<Long>): Map<Long, Set<String>> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return dsl.select(btm.BOOK_ID, TAG.NAME)
+            .from(btm).join(TAG).on(TAG.ID.eq(btm.TAG_ID))
+            .where(btm.BOOK_ID.`in`(bookIds))
+            .fetchGroups(btm.BOOK_ID, TAG.NAME)
+            .mapValues { it.value.toSet() }
+    }
+
+    fun findMoodNamesByBookIds(bookIds: Collection<Long>): Map<Long, Set<String>> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return dsl.select(bmm.BOOK_ID, MOOD.NAME)
+            .from(bmm).join(MOOD).on(MOOD.ID.eq(bmm.MOOD_ID))
+            .where(bmm.BOOK_ID.`in`(bookIds))
+            .fetchGroups(bmm.BOOK_ID, MOOD.NAME)
+            .mapValues { it.value.toSet() }
+    }
 }

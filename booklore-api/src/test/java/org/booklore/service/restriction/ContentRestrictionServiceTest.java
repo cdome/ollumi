@@ -11,6 +11,7 @@ import org.booklore.model.entity.TagEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqUserContentRestrictionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +20,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +34,7 @@ class ContentRestrictionServiceTest {
 
     @Mock private JooqUserContentRestrictionRepository restrictionRepository;
     @Mock private UserRepository userRepository;
+    @Mock private JooqBookMetadataRelationsRepository relationsRepository;
     @InjectMocks private ContentRestrictionService service;
 
     private static final long USER = 1L;
@@ -101,6 +106,14 @@ class ContentRestrictionServiceTest {
 
     private void mockRestrictions(ContentRestriction... restrictions) {
         when(restrictionRepository.findByUserId(USER)).thenReturn(List.of(restrictions));
+        // The entity path now reads category/tag/mood names via the jOOQ relations reader (by book id).
+        when(relationsRepository.findCategoryNamesByBookIds(anyList())).thenReturn(namesByBook(BookDef::categories));
+        when(relationsRepository.findTagNamesByBookIds(anyList())).thenReturn(namesByBook(BookDef::tags));
+        when(relationsRepository.findMoodNamesByBookIds(anyList())).thenReturn(namesByBook(BookDef::moods));
+    }
+
+    private Map<Long, Set<String>> namesByBook(Function<BookDef, Set<String>> extractor) {
+        return BOOKS.stream().collect(Collectors.toMap(BookDef::id, extractor));
     }
 
     private List<Long> survivingIds(List<BookEntity> books) {

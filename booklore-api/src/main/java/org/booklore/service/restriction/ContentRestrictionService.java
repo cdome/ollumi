@@ -11,11 +11,13 @@ import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqUserContentRestrictionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -28,6 +30,7 @@ public class ContentRestrictionService {
 
     private final JooqUserContentRestrictionRepository restrictionRepository;
     private final UserRepository userRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
 
     @Transactional(readOnly = true)
     public List<ContentRestriction> getUserRestrictions(Long userId) {
@@ -78,22 +81,28 @@ public class ContentRestrictionService {
 
     @Transactional(readOnly = true)
     public List<BookEntity> applyRestrictions(List<BookEntity> books, Long userId) {
-        return filterByContent(books, userId, this::contentOf);
+        List<ContentRestriction> restrictions = restrictionRepository.findByUserId(userId);
+        if (restrictions.isEmpty()) {
+            return books;
+        }
+        List<Long> bookIds = books.stream().map(BookEntity::getId).filter(Objects::nonNull).toList();
+        Map<Long, Set<String>> categoriesByBook = relationsRepository.findCategoryNamesByBookIds(bookIds);
+        Map<Long, Set<String>> tagsByBook = relationsRepository.findTagNamesByBookIds(bookIds);
+        Map<Long, Set<String>> moodsByBook = relationsRepository.findMoodNamesByBookIds(bookIds);
+        return filterByContent(books, restrictions, book -> contentOf(book, categoriesByBook, tagsByBook, moodsByBook));
     }
 
     /** DTO-based counterpart of {@link #applyRestrictions}, sharing the same filter logic. */
     @Transactional(readOnly = true)
     public List<Book> applyRestrictionsToDtos(List<Book> books, Long userId) {
-        return filterByContent(books, userId, this::contentOf);
-    }
-
-    private <T> List<T> filterByContent(List<T> books, Long userId, Function<T, BookContent> toContent) {
         List<ContentRestriction> restrictions = restrictionRepository.findByUserId(userId);
-
         if (restrictions.isEmpty()) {
             return books;
         }
+        return filterByContent(books, restrictions, this::contentOf);
+    }
 
+    private <T> List<T> filterByContent(List<T> books, List<ContentRestriction> restrictions, Function<T, BookContent> toContent) {
         Set<String> excludedCategories = getValuesForTypeAndMode(restrictions, ContentRestrictionType.CATEGORY, ContentRestrictionMode.EXCLUDE);
         Set<String> excludedTags = getValuesForTypeAndMode(restrictions, ContentRestrictionType.TAG, ContentRestrictionMode.EXCLUDE);
         Set<String> excludedMoods = getValuesForTypeAndMode(restrictions, ContentRestrictionType.MOOD, ContentRestrictionMode.EXCLUDE);
@@ -121,15 +130,19 @@ public class ContentRestrictionService {
                                String contentRating, Integer ageRating) {
     }
 
-    private BookContent contentOf(BookEntity book) {
+    private BookContent contentOf(BookEntity book,
+                                  Map<Long, Set<String>> categoriesByBook,
+                                  Map<Long, Set<String>> tagsByBook,
+                                  Map<Long, Set<String>> moodsByBook) {
         BookMetadataEntity m = book.getMetadata();
         if (m == null) {
             return new BookContent(Set.of(), Set.of(), Set.of(), null, null);
         }
+        Long id = book.getId();
         return new BookContent(
-                names(m.getCategories() == null ? null : m.getCategories().stream().map(c -> c.getName())),
-                names(m.getTags() == null ? null : m.getTags().stream().map(t -> t.getName())),
-                names(m.getMoods() == null ? null : m.getMoods().stream().map(mo -> mo.getName())),
+                categoriesByBook.getOrDefault(id, Set.of()),
+                tagsByBook.getOrDefault(id, Set.of()),
+                moodsByBook.getOrDefault(id, Set.of()),
                 m.getContentRating(), m.getAgeRating());
     }
 
@@ -143,10 +156,6 @@ public class ContentRestrictionService {
                 m.getTags() == null ? Set.of() : m.getTags(),
                 m.getMoods() == null ? Set.of() : m.getMoods(),
                 m.getContentRating(), m.getAgeRating());
-    }
-
-    private Set<String> names(java.util.stream.Stream<String> stream) {
-        return stream == null ? Set.of() : stream.collect(Collectors.toSet());
     }
 
     private Set<String> getValuesForTypeAndMode(List<ContentRestriction> restrictions,
