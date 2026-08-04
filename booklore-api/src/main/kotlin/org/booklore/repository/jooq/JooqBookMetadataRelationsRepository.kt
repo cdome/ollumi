@@ -54,6 +54,15 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
 
     // Batched variants (bookId -> names) for consumers that filter/process a list of books, to avoid N+1.
 
+    fun findAuthorNamesByBookIds(bookIds: Collection<Long>): Map<Long, List<String>> {
+        if (bookIds.isEmpty()) return emptyMap()
+        return dsl.select(bam.BOOK_ID, AUTHOR.NAME)
+            .from(bam).join(AUTHOR).on(AUTHOR.ID.eq(bam.AUTHOR_ID))
+            .where(bam.BOOK_ID.`in`(bookIds))
+            .orderBy(bam.BOOK_ID, bam.SORT_ORDER)
+            .fetchGroups(bam.BOOK_ID, AUTHOR.NAME)
+    }
+
     fun findCategoryNamesByBookIds(bookIds: Collection<Long>): Map<Long, Set<String>> {
         if (bookIds.isEmpty()) return emptyMap()
         return dsl.select(bcm.BOOK_ID, CATEGORY.NAME)

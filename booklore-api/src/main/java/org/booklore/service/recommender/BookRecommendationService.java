@@ -100,6 +100,15 @@ public class BookRecommendationService {
                 .map(String::toLowerCase)
                 .orElse(null);
 
+        // Batch-load author/category names for the target + all candidates once (avoids a per-pair query).
+        List<Long> similarityIds = new ArrayList<>();
+        similarityIds.add(target.getId());
+        candidates.forEach(c -> {
+            if (c.getId() != null) similarityIds.add(c.getId());
+        });
+        Map<Long, Set<String>> authorNamesByBook = lowercaseNames(bookMetadataRelationsRepository.findAuthorNamesByBookIds(similarityIds));
+        Map<Long, Set<String>> categoryNamesByBook = lowercaseNames(bookMetadataRelationsRepository.findCategoryNamesByBookIds(similarityIds));
+
         List<SimpleEntry<BookEntity, Double>> scored = candidates.stream()
                 .filter(candidate -> !candidate.getId().equals(bookId))
                 .filter(candidate -> {
@@ -109,7 +118,7 @@ public class BookRecommendationService {
                             .orElse(null);
                     return targetSeriesName == null || !targetSeriesName.equals(candidateSeriesName);
                 })
-                .map(candidate -> new SimpleEntry<>(candidate, similarityService.calculateSimilarity(target, candidate)))
+                .map(candidate -> new SimpleEntry<>(candidate, similarityService.calculateSimilarity(target, candidate, authorNamesByBook, categoryNamesByBook)))
                 .filter(entry -> entry.getValue() > 0.0)
                 .sorted(Map.Entry.<BookEntity, Double>comparingByValue().reversed())
                 .toList();
@@ -131,6 +140,18 @@ public class BookRecommendationService {
         }
 
         return recommendations;
+    }
+
+    private Map<Long, Set<String>> lowercaseNames(Map<Long, ? extends Collection<String>> raw) {
+        Map<Long, Set<String>> out = new HashMap<>();
+        raw.forEach((id, names) -> {
+            Set<String> lowered = new HashSet<>();
+            for (String n : names) {
+                if (n != null) lowered.add(n.toLowerCase());
+            }
+            out.put(id, lowered);
+        });
+        return out;
     }
 
     private Set<String> getAuthorNames(BookEntity book) {
