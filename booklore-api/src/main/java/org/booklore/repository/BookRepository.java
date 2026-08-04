@@ -14,7 +14,6 @@ import java.util.Set;
 
 @Repository
 public interface BookRepository extends JpaRepository<BookEntity, Long> {
-    Optional<BookEntity> findBookByIdAndLibraryId(long id, long libraryId);
 
     @EntityGraph(attributePaths = { "metadata", "metadata.comicMetadata", "shelves", "libraryPath", "library", "bookFiles" })
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
@@ -98,15 +97,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
             AND (b.deleted IS NULL OR b.deleted = false)
             """)
     List<BookEntity> findAllForDuplicateDetection(@Param("libraryId") Long libraryId);
-
-    @EntityGraph(attributePaths = {
-        "metadata", "metadata.comicMetadata",
-        "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags",
-        "shelves", "libraryPath", "library", "bookFiles"
-    })
-    @Query("SELECT b FROM BookEntity b WHERE b.library.id IN :libraryIds AND (b.deleted IS NULL OR b.deleted = false)")
-    List<BookEntity> findAllWithMetadataByLibraryIds(@Param("libraryIds") Collection<Long> libraryIds);
 
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",

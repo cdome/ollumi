@@ -59,13 +59,6 @@ public interface UserRepository extends JpaRepository<BookLoreUserEntity, Long> 
     @Query("SELECT DISTINCT u FROM BookLoreUserEntity u")
     List<BookLoreUserEntity> findAllWithDetails();
 
-    /**
-     * Fetch a user by username with all associations needed for authentication/DTO mapping.
-     */
-    @EntityGraph(attributePaths = {"libraries", "libraries.libraryPaths", "permissions"})
-    @Query("SELECT u FROM BookLoreUserEntity u WHERE u.username = :username")
-    Optional<BookLoreUserEntity> findByUsernameWithDetails(@Param("username") String username);
-
     long countByProvisioningMethod(ProvisioningMethod provisioningMethod);
 
     Optional<BookLoreUserEntity> findByOidcIssuerAndOidcSubject(String oidcIssuer, String oidcSubject);
