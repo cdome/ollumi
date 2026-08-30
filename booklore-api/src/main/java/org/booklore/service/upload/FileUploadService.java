@@ -17,6 +17,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.file.FileMovingHelper;
@@ -50,6 +51,7 @@ public class FileUploadService {
     private static final long MB_TO_BYTES_MULTIPLIER = 1024L * 1024L;
 
     private final LibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final BookRepository bookRepository;
     private final BookAdditionalFileRepository additionalFileRepository;
     private final AppSettingService appSettingService;
@@ -64,7 +66,7 @@ public class FileUploadService {
         validateFile(file);
 
         final LibraryEntity libraryEntity = findLibraryById(libraryId);
-        final LibraryPathEntity libraryPathEntity = findLibraryPathById(libraryEntity, pathId);
+        final String libraryPath = findLibraryPath(libraryId, pathId);
         final String originalFileName = getValidatedFileName(file);
         final BookFileExtension fileExtension = getFileExtension(originalFileName);
         validateAllowedFormat(libraryEntity, fileExtension.getType());
@@ -77,7 +79,7 @@ public class FileUploadService {
             final String uploadPattern = fileMovingHelper.getFileNamingPattern(libraryEntity);
 
             final String relativePath = PathPatternResolver.resolvePattern(metadata, uploadPattern, originalFileName);
-            final Path finalPath = Paths.get(libraryPathEntity.getPath(), relativePath);
+            final Path finalPath = Paths.get(libraryPath, relativePath);
 
             validateFinalPath(finalPath);
             moveFileToFinalLocation(tempPath, finalPath);
@@ -241,12 +243,17 @@ public class FileUploadService {
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
     }
 
-    private LibraryPathEntity findLibraryPathById(LibraryEntity libraryEntity, long pathId) {
-        return libraryEntity.getLibraryPaths()
-                .stream()
-                .filter(p -> p.getId() == pathId)
-                .findFirst()
-                .orElseThrow(() -> ApiError.INVALID_LIBRARY_PATH.createException(libraryEntity.getId()));
+    /**
+     * Resolves the library path by id via jOOQ rather than walking LibraryEntity.libraryPaths: that
+     * collection is LAZY and this method runs outside a transaction, which throws
+     * LazyInitializationException with open-in-view disabled.
+     */
+    private String findLibraryPath(long libraryId, long pathId) {
+        final String path = jooqLibraryPathRepository.findPathByIdAndLibraryId(pathId, libraryId);
+        if (path == null) {
+            throw ApiError.INVALID_LIBRARY_PATH.createException(libraryId);
+        }
+        return path;
     }
 
     private BookEntity findBookById(Long bookId) {

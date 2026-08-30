@@ -8,6 +8,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.library.LibraryProcessingService;
 import org.booklore.util.FileUtils;
 import org.junit.jupiter.api.*;
@@ -38,6 +40,7 @@ class LibraryFileEventProcessorTest {
     @Mock private BookFileTransactionalHandler bookFileTransactionalHandler;
     @Mock private BookFilePersistenceService bookFilePersistenceService;
     @Mock private LibraryProcessingService libraryProcessingService;
+    @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private PendingDeletionPool pendingDeletionPool;
 
     private LibraryFileEventProcessor processor;
@@ -54,7 +57,7 @@ class LibraryFileEventProcessorTest {
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
         processor = new LibraryFileEventProcessor(
-                libraryRepository, bookRepository, bookFileTransactionalHandler,
+                libraryRepository, jooqLibraryPathRepository, bookRepository, bookFileTransactionalHandler,
                 bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
 
         libraryPath = new LibraryPathEntity();
@@ -69,6 +72,9 @@ class LibraryFileEventProcessorTest {
                 .build();
 
         when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        // handleEvent reads the library's paths via jOOQ, not off the LAZY entity collection
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
+                .thenReturn(List.of(new LibraryPathRow(1L, tempDir.toString())));
         when(bookFilePersistenceService.findMatchingLibraryPath(eq(library), any(Path.class)))
                 .thenReturn(tempDir.toString());
         when(bookFilePersistenceService.getLibraryPathEntityForFile(eq(library), eq(tempDir.toString())))
@@ -398,7 +404,7 @@ class LibraryFileEventProcessorTest {
 
             // Reinitialize so tearDown's shutdown doesn't fail
             processor = new LibraryFileEventProcessor(
-                    libraryRepository, bookRepository, bookFileTransactionalHandler,
+                    libraryRepository, jooqLibraryPathRepository, bookRepository, bookFileTransactionalHandler,
                     bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
         }
     }

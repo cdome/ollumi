@@ -7,6 +7,7 @@ import org.booklore.app.dto.AppLibrarySummary;
 import org.booklore.app.dto.AppMagicShelfSummary;
 import org.booklore.app.dto.AppShelfSummary;
 import org.booklore.model.entity.*;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
@@ -296,19 +297,21 @@ public interface AppBookMapper {
                 .collect(Collectors.toList());
     }
 
-    default AppLibrarySummary toLibrarySummary(LibraryEntity library, long bookCount) {
+    /**
+     * Paths are passed in (read via jOOQ by the caller) rather than taken from the LAZY
+     * library.getLibraryPaths(): this runs outside a transaction, where that collection would throw.
+     */
+    default AppLibrarySummary toLibrarySummary(LibraryEntity library, long bookCount, List<LibraryPathRow> pathRows) {
         if (library == null) {
             return null;
         }
-        List<AppLibrarySummary.PathSummary> paths = Collections.emptyList();
-        if (library.getLibraryPaths() != null && !library.getLibraryPaths().isEmpty()) {
-            paths = library.getLibraryPaths().stream()
+        List<AppLibrarySummary.PathSummary> paths = pathRows == null ? Collections.emptyList()
+                : pathRows.stream()
                     .map(lp -> AppLibrarySummary.PathSummary.builder()
                             .id(lp.getId())
                             .path(lp.getPath())
                             .build())
                     .collect(Collectors.toList());
-        }
         return AppLibrarySummary.builder()
                 .id(library.getId())
                 .name(library.getName())

@@ -16,6 +16,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.file.FileMovingHelper;
@@ -58,6 +59,8 @@ class FileUploadServiceTest {
     @Mock
     LibraryRepository libraryRepository;
     @Mock
+    JooqLibraryPathRepository jooqLibraryPathRepository;
+    @Mock
     BookRepository bookRepository;
     @Mock
     BookAdditionalFileRepository bookAdditionalFileRepository;
@@ -90,7 +93,7 @@ class FileUploadServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(settings);
 
         service = new FileUploadService(
-                libraryRepository, bookRepository, bookAdditionalFileRepository,
+                libraryRepository, jooqLibraryPathRepository, bookRepository, bookAdditionalFileRepository,
                 appSettingService, appProperties, metadataExtractorFactory, additionalFileMapper, fileMovingHelper, monitoringRegistrationService, auditService
         );
     }
@@ -164,8 +167,9 @@ class FileUploadServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "book.cbz", "application/octet-stream", new byte[]{1});
         LibraryEntity lib = new LibraryEntity();
         lib.setId(42L);
-        lib.setLibraryPaths(List.of());
         when(libraryRepository.findById(42L)).thenReturn(Optional.of(lib));
+        // path 99 does not belong to library 42 -> jOOQ lookup returns null
+        when(jooqLibraryPathRepository.findPathByIdAndLibraryId(99L, 42L)).thenReturn(null);
 
         assertThatExceptionOfType(APIException.class)
                 .isThrownBy(() -> service.uploadFile(file, 42L, 99L))
@@ -182,11 +186,8 @@ class FileUploadServiceTest {
 
         LibraryEntity lib = new LibraryEntity();
         lib.setId(1L);
-        LibraryPathEntity path = new LibraryPathEntity();
-        path.setId(1L);
-        path.setPath(tempDir.toString());
-        lib.setLibraryPaths(List.of(path));
         when(libraryRepository.findById(1L)).thenReturn(Optional.of(lib));
+        when(jooqLibraryPathRepository.findPathByIdAndLibraryId(1L, 1L)).thenReturn(tempDir.toString());
         when(fileMovingHelper.getFileNamingPattern(lib)).thenReturn("{currentFilename}");
 
         assertThatExceptionOfType(APIException.class)
@@ -204,11 +205,8 @@ class FileUploadServiceTest {
 
         LibraryEntity lib = new LibraryEntity();
         lib.setId(7L);
-        LibraryPathEntity path = new LibraryPathEntity();
-        path.setId(2L);
-        path.setPath(tempDir.toString());
-        lib.setLibraryPaths(List.of(path));
         when(libraryRepository.findById(7L)).thenReturn(Optional.of(lib));
+        when(jooqLibraryPathRepository.findPathByIdAndLibraryId(2L, 7L)).thenReturn(tempDir.toString());
         when(fileMovingHelper.getFileNamingPattern(lib)).thenReturn("{currentFilename}");
 
         BookMetadata metadata = BookMetadata.builder().title("book").build();
@@ -306,11 +304,8 @@ class FileUploadServiceTest {
         lib.setId(10L);
         String defaultPattern = "{authors}/<{series}/><{seriesIndex}. >{title}< - {authors}>< ({year})>";
         lib.setFileNamingPattern(defaultPattern);
-        LibraryPathEntity path = new LibraryPathEntity();
-        path.setId(3L);
-        path.setPath(tempDir.toString());
-        lib.setLibraryPaths(List.of(path));
         when(libraryRepository.findById(10L)).thenReturn(Optional.of(lib));
+        when(jooqLibraryPathRepository.findPathByIdAndLibraryId(3L, 10L)).thenReturn(tempDir.toString());
 
         BookMetadata metadata = BookMetadata.builder()
                 .title("中国文化合集")

@@ -28,6 +28,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.MalformedURLException;
 import java.nio.file.Files;
@@ -184,6 +185,9 @@ public class AuthorMetadataService {
         }
     }
 
+    // @Transactional: iterates the LAZY author.getBookMetadataEntityList() and mutates the junction, both
+    // of which need an open session/transaction (the controller calls this directly).
+    @Transactional
     public void deleteAuthors(List<Long> authorIds) {
         for (Long authorId : authorIds) {
             AuthorEntity author = authorRepository.findById(authorId).orElse(null);

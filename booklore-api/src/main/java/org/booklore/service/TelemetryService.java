@@ -13,6 +13,7 @@ import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
@@ -36,6 +37,7 @@ public class TelemetryService {
 
     private final VersionService versionService;
     private final LibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMarkRepository bookMarkRepository;
@@ -151,7 +153,7 @@ public class TelemetryService {
 
     private BookloreTelemetry.LibraryStatistics mapLibraryStatistics(LibraryEntity lib) {
         return BookloreTelemetry.LibraryStatistics.builder()
-                .totalLibraryPaths(lib.getLibraryPaths() != null ? lib.getLibraryPaths().size() : 0)
+                .totalLibraryPaths(jooqLibraryPathRepository.countPathsByLibraryId(lib.getId()))
                 .bookCount(jooqBookRepository.countByLibraryId(lib.getId()))
                 .watchEnabled(lib.isWatch())
                 .iconType(lib.getIconType() != null ? lib.getIconType().name() : null)
