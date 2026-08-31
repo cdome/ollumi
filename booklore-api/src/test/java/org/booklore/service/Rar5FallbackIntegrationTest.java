@@ -70,7 +70,7 @@ class Rar5FallbackIntegrationTest {
         BookEntity book = new BookEntity();
         book.setId(99L);
         BookRepository mockRepo = org.mockito.Mockito.mock(BookRepository.class);
-        org.mockito.Mockito.when(mockRepo.findById(99L)).thenReturn(java.util.Optional.of(book));
+        org.mockito.Mockito.when(mockRepo.findByIdWithBookFiles(99L)).thenReturn(java.util.Optional.of(book));
 
         try (var fileUtilsStatic = org.mockito.Mockito.mockStatic(org.booklore.util.FileUtils.class)) {
             fileUtilsStatic.when(() -> org.booklore.util.FileUtils.getBookFullPath(book))
@@ -92,7 +92,7 @@ class Rar5FallbackIntegrationTest {
         BookEntity book = new BookEntity();
         book.setId(99L);
         BookRepository mockRepo = org.mockito.Mockito.mock(BookRepository.class);
-        org.mockito.Mockito.when(mockRepo.findById(99L)).thenReturn(java.util.Optional.of(book));
+        org.mockito.Mockito.when(mockRepo.findByIdWithBookFiles(99L)).thenReturn(java.util.Optional.of(book));
 
         try (var fileUtilsStatic = org.mockito.Mockito.mockStatic(org.booklore.util.FileUtils.class)) {
             fileUtilsStatic.when(() -> org.booklore.util.FileUtils.getBookFullPath(book))

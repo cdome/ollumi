@@ -265,6 +265,9 @@ public class KomgaService {
         }
         
         // Manual pagination
+        books = books.stream()
+                .filter(book -> book.getPrimaryBookFile() != null)
+                .collect(Collectors.toList());
         int totalElements = books.size();
         int totalPages = (int) Math.ceil((double) totalElements / size);
         int fromIndex = Math.min(page * size, totalElements);
