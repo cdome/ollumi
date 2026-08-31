@@ -158,11 +158,37 @@ tasks.register('integrationTest', Test) {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
     shouldRunAfter test
-    jacoco.enabled = false
+    finalizedBy jacocoIntegrationTestReport
 }
 
 jacocoTestReport {
     dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.register('jacocoIntegrationTestReport', JacocoReport) {
+    group = 'verification'
+    description = 'Generates code coverage report for the integrationTest task'
+    dependsOn integrationTest
+    sourceDirectories.setFrom(files(sourceSets.main.java.srcDirs))
+    classDirectories.setFrom(files(sourceSets.main.output.classesDirs))
+    executionData(integrationTest)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.register('jacocoCombinedReport', JacocoReport) {
+    group = 'verification'
+    description = 'Generates combined code coverage report from unit and integration tests'
+    dependsOn test, integrationTest
+    sourceDirectories.setFrom(files(sourceSets.main.java.srcDirs))
+    classDirectories.setFrom(files(sourceSets.main.output.classesDirs))
+    executionData(test, integrationTest)
     reports {
         xml.required = true
         html.required = true

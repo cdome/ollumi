@@ -54,8 +54,8 @@ jobs:
         id: backend_tests
         working-directory: ./booklore-api
         run: |
-          echo "Running backend tests..."
-          ./gradlew test --no-daemon --parallel --build-cache
+          echo "Running backend unit and integration tests..."
+          ./gradlew test integrationTest jacocoCombinedReport --no-daemon --parallel --build-cache
         continue-on-error: true
 
       - name: Publish Backend Test Results
@@ -75,63 +75,19 @@ jobs:
             booklore-api/build/test-results/
           retention-days: 30
 
+      - name: Upload Backend Coverage Report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: |
+            booklore-api/build/reports/jacoco/jacocoCombinedReport/
+          retention-days: 30
+
       - name: Validate Backend Test Results
         if: steps.backend_tests.outcome == 'failure'
         run: |
           echo "❌ Backend tests failed"
-          exit 1
-
-  backend-integration-tests:
-    name: Backend Integration Tests
-    needs: [ migration-check ]
-    if: needs.migration-check.result == 'success' || needs.migration-check.result == 'skipped'
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      checks: write
-      pull-requests: write
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set Up JDK 25
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Execute Backend Integration Tests
-        id: backend_integration_tests
-        working-directory: ./booklore-api
-        run: |
-          echo "Running backend integration tests..."
-          ./gradlew integrationTest --no-daemon --parallel --build-cache
-        continue-on-error: true
-
-      - name: Publish Backend Integration Test Results
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
-        if: always()
-        with:
-          files: booklore-api/build/test-results/integrationTest/**/*.xml
-          check_name: Backend Integration Test Results
-
-      - name: Upload Backend Integration Test Reports
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        if: always()
-        with:
-          name: backend-integration-test-reports
-          path: |
-            booklore-api/build/reports/tests/integrationTest/
-            booklore-api/build/test-results/integrationTest/
-          retention-days: 30
-
-      - name: Validate Backend Integration Test Results
-        if: steps.backend_integration_tests.outcome == 'failure'
-        run: |
-          echo "❌ Backend integration tests failed"
           exit 1
 
   frontend-tests:
@@ -200,8 +156,8 @@ jobs:
           exit 1
 
   build-and-release:
-    needs: [ backend-tests, frontend-tests, backend-integration-tests ]
-    if: needs.backend-tests.result == 'success' && needs.frontend-tests.result == 'success' && needs.backend-integration-tests.result == 'success'
+    needs: [ backend-tests, frontend-tests ]
+    if: needs.backend-tests.result == 'success' && needs.frontend-tests.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
