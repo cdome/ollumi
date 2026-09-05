@@ -130,7 +130,7 @@ jobs:
         working-directory: ./booklore-ui
         run: |
           echo "Running frontend tests..."
-          npx ng test
+          npx vitest run
         continue-on-error: true
 
       - name: Publish Frontend Test Results
