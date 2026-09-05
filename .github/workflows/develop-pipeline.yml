@@ -22,6 +22,22 @@ jobs:
     if: needs.migration-check.result == 'success' || needs.migration-check.result == 'skipped'
     runs-on: ubuntu-latest
 
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MYSQL_ROOT_PASSWORD: booklore
+          MYSQL_DATABASE: booklore
+          MYSQL_USER: booklore
+          MYSQL_PASSWORD: booklore
+        ports:
+          - 3366:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h localhost -uroot -pbooklore"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
     permissions:
       contents: read
       checks: write
@@ -37,6 +53,20 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: gradle
+
+      - name: Apply Flyway Migrations for jOOQ Codegen
+        run: |
+          docker run --network host \
+            -v ${{ github.workspace }}:/flyway/sql \
+            flyway/flyway:11.19.0-alpine \
+            -url=jdbc:mariadb://127.0.0.1:3366/booklore \
+            -user=booklore -password=booklore \
+            -locations=filesystem:/flyway/sql/booklore-api/src/main/resources/db/migration \
+            migrate
+
+      - name: Generate jOOQ Sources
+        working-directory: ./booklore-api
+        run: ./gradlew generateJooq --no-daemon
 
       - name: Execute Backend Tests
         id: backend_tests
