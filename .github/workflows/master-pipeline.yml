@@ -172,7 +172,8 @@ jobs:
 
   build-and-release:
     needs: [ backend-tests, frontend-tests ]
-    if: needs.backend-tests.result == 'success' && needs.frontend-tests.result == 'success'
+ #   if: needs.backend-tests.result == 'success' && needs.frontend-tests.result == 'success'
+    if: false
     runs-on: ubuntu-latest
     permissions:
       contents: write
