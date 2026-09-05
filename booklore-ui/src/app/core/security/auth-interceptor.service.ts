@@ -12,12 +12,13 @@ export const AuthInterceptorService: HttpInterceptorFn = (req, next: HttpHandler
 
   const token = authService.getInternalAccessToken();
   const isApiRequest = req.url.startsWith(`${API_CONFIG.BASE_URL}/api/`);
+  const isAuthEndpoint = req.url.includes('/api/v1/auth/');
 
   const authReq = (token && isApiRequest) ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (error.status === 401) {
+      if (error.status === 401 && isApiRequest && !isAuthEndpoint) {
         return handle401Error(authService, authReq, next, router);
       }
       return throwError(() => error);

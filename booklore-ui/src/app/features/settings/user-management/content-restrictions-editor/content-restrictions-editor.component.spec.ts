@@ -1,0 +1,62 @@
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {CommonModule} from '@angular/common';
+import {FormsModule, ReactiveFormsModule} from '@angular/forms';
+import {NO_ERRORS_SCHEMA} from '@angular/core';
+import {TranslocoDirective, TranslocoPipe} from '@jsverse/transloco';
+import {Button} from 'primeng/button';
+import {Checkbox} from 'primeng/checkbox';
+import {DatePicker} from 'primeng/datepicker';
+import {InputText} from 'primeng/inputtext';
+import {MultiSelect} from 'primeng/multiselect';
+import {Password} from 'primeng/password';
+import {RadioButton} from 'primeng/radiobutton';
+import {Select} from 'primeng/select';
+import {Slider} from 'primeng/slider';
+import {SplitButton} from 'primeng/splitbutton';
+import {ToggleSwitch} from 'primeng/toggleswitch';
+import {ContentRestrictionsEditorComponent} from './content-restrictions-editor.component';
+import {commonComponentTestProviders} from '../../../../../testing';
+import {ContentRestrictionService} from '../content-restriction.service';
+import {of} from 'rxjs';
+
+const mockContentRestrictionService = {
+  getUserRestrictions: vi.fn(() => of([])),
+  addRestriction: vi.fn(() => of({})),
+  updateRestrictions: vi.fn(() => of([])),
+  deleteRestriction: vi.fn(() => of(undefined)),
+  deleteAllRestrictions: vi.fn(() => of(undefined))
+};
+
+describe('ContentRestrictionsEditorComponent', () => {
+  let fixture: ComponentFixture<ContentRestrictionsEditorComponent>;
+  let component: ContentRestrictionsEditorComponent;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      providers: [
+        ...commonComponentTestProviders,
+        {provide: ContentRestrictionService, useValue: mockContentRestrictionService}
+      ]
+    }).overrideComponent(ContentRestrictionsEditorComponent, {
+      set: {
+        imports: [CommonModule, FormsModule, ReactiveFormsModule, TranslocoPipe, TranslocoDirective, Button, Checkbox, DatePicker, InputText, MultiSelect, Password, RadioButton, Select, Slider, SplitButton, ToggleSwitch],
+        schemas: [NO_ERRORS_SCHEMA]
+      }
+    });
+
+    fixture = TestBed.createComponent(ContentRestrictionsEditorComponent);
+    component = fixture.componentInstance;
+    component.userId = 1;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+});

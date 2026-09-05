@@ -97,10 +97,15 @@ export class MetadataFormBuilder {
   }
 
   setAllFieldsLocked(metadataForm: FormGroup, locked: boolean): void {
+    const lockedKeyToField: Record<string, string> = {
+      coverLocked: 'thumbnailUrl',
+      audiobookCoverLocked: 'audiobookThumbnailUrl'
+    };
+
     for (const key of Object.keys(metadataForm.controls)) {
       if (key.endsWith('Locked')) {
         metadataForm.get(key)?.setValue(locked);
-        const fieldName = key.replace('Locked', '');
+        const fieldName = lockedKeyToField[key] ?? key.replace('Locked', '');
         if (locked) {
           metadataForm.get(fieldName)?.disable();
         } else {
