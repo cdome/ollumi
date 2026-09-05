@@ -6,16 +6,25 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['src/**/*.spec.ts'],
+    isolate: true,
     setupFiles: ['./src/test-setup.ts'],
-    sequence: {
-      hooks: 'stack'
-    },
+    include: ['src/app/**/*.spec.ts'],
+    exclude: ['node_modules/**', 'e2e/**'],
+    reporters: [
+      ['default', {summary: false}],
+      ['junit', {outputFile: 'test-results/vitest-results.xml'}]
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/app/**/*.ts'],
-      exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts']
+      exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts'],
+      thresholds: {
+        statements: 42.5,
+        branches: 28,
+        functions: 38.5,
+        lines: 42.75
+      }
     }
   }
 });

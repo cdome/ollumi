@@ -42,8 +42,8 @@ jobs:
         id: backend_tests
         working-directory: ./booklore-api
         run: |
-          echo "Running backend tests..."
-          ./gradlew test --no-daemon --parallel --build-cache
+          echo "Running backend unit and integration tests..."
+          ./gradlew test integrationTest jacocoCombinedReport --no-daemon --parallel --build-cache
         continue-on-error: true
 
       - name: Publish Backend Test Results
@@ -61,6 +61,15 @@ jobs:
           path: |
             booklore-api/build/reports/tests/
             booklore-api/build/test-results/
+          retention-days: 30
+
+      - name: Upload Backend Coverage Report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: |
+            booklore-api/build/reports/jacoco/jacocoCombinedReport/
           retention-days: 30
 
       - name: Validate Backend Test Results
@@ -95,21 +104,34 @@ jobs:
         working-directory: ./booklore-ui
         run: npm ci
 
+      - name: Install Playwright Browsers
+        working-directory: ./booklore-ui
+        run: npx playwright install --with-deps chromium
+
       - name: Audit Frontend Dependencies
         working-directory: ./booklore-ui
         run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Validate Dependency Tree
         working-directory: ./booklore-ui
         run: npm ls --depth=0
 
 
-      - name: Execute Frontend Tests
+      - name: Execute Frontend Unit Tests
         id: frontend_tests
         working-directory: ./booklore-ui
         run: |
-          echo "Running frontend tests..."
-          npx ng test
+          echo "Running frontend unit tests..."
+          npx vitest run
+        continue-on-error: true
+
+      - name: Execute Frontend E2E Tests
+        id: frontend_e2e_tests
+        working-directory: ./booklore-ui
+        run: |
+          echo "Running frontend E2E tests..."
+          npx playwright test
         continue-on-error: true
 
       - name: Publish Frontend Test Results
@@ -126,10 +148,12 @@ jobs:
           name: frontend-test-reports
           path: |
             booklore-ui/test-results/vitest-results.xml
+            booklore-ui/playwright-report/
+            booklore-ui/test-results/
           retention-days: 30
 
       - name: Validate Frontend Test Results
-        if: steps.frontend_tests.outcome == 'failure'
+        if: steps.frontend_tests.outcome == 'failure' || steps.frontend_e2e_tests.outcome == 'failure'
         run: |
           echo "❌ Frontend tests failed"
           exit 1

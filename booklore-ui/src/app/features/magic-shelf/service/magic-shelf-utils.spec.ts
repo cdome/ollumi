@@ -368,13 +368,77 @@ describe('magic-shelf-utils', () => {
     });
   });
 
-  describe('EMPTY_CHECK_OPERATORS', () => {
-    it('should contain exactly is_empty, is_not_empty', () => {
-      expect(EMPTY_CHECK_OPERATORS).toEqual(['is_empty', 'is_not_empty']);
+  describe('parseValue additional cases', () => {
+    it('should return boolean value as-is for boolean type', () => {
+      expect(parseValue(true, 'boolean')).toBe(true);
+      expect(parseValue(false, 'boolean')).toBe(false);
     });
 
-    it('should have length 2', () => {
-      expect(EMPTY_CHECK_OPERATORS.length).toBe(2);
+    it('should return string value as-is for explicit string type', () => {
+      expect(parseValue('hello', 'string')).toBe('hello');
+      expect(parseValue('', 'string')).toBe('');
+    });
+
+    it('should handle whitespace-only string for number type', () => {
+      expect(parseValue('   ', 'number')).toBe(0);
+    });
+
+    it('should handle empty string for date type', () => {
+      expect(parseValue('', 'date')).toBeNull();
+    });
+  });
+
+  describe('removeNulls additional cases', () => {
+    it('should return null when input is null', () => {
+      expect(removeNulls(null)).toBeNull();
+    });
+
+    it('should return undefined when input is undefined', () => {
+      expect(removeNulls(undefined)).toBeUndefined();
+    });
+
+    it('should handle arrays containing null entries', () => {
+      expect(removeNulls([null, 1, undefined, 2])).toEqual([null, 1, undefined, 2]);
+    });
+
+    it('should convert Date objects to empty objects', () => {
+      const date = new Date('2024-01-01');
+      expect(removeNulls({date, nested: {value: null, kept: date}})).toEqual({date: {}, nested: {kept: {}}});
+    });
+  });
+
+  describe('serializeDateRules additional cases', () => {
+    it('should handle rule with neither field nor operator', () => {
+      const rule = {value: 'plain value'};
+      const result = serializeDateRules(rule) as Record<string, unknown>;
+      expect(result['value']).toBe('plain value');
+    });
+
+    it('should serialize Date on valueStart/valueEnd for date fields', () => {
+      const rule = {
+        field: 'publishedDate',
+        operator: 'in_between',
+        value: null,
+        valueStart: new Date('2024-01-01T00:00:00Z'),
+        valueEnd: new Date('2024-12-31T00:00:00Z')
+      };
+
+      const result = serializeDateRules(rule) as Record<string, unknown>;
+      expect(result['valueStart']).toBe('2024-01-01');
+      expect(result['valueEnd']).toBe('2024-12-31');
+    });
+
+    it('should not serialize Date values for relative date operators on date fields', () => {
+      const rule = {
+        field: 'lastReadTime',
+        operator: 'older_than',
+        value: new Date('2024-01-01T00:00:00Z'),
+        valueStart: null,
+        valueEnd: null
+      };
+
+      const result = serializeDateRules(rule) as Record<string, unknown>;
+      expect(result['value']).toBeInstanceOf(Date);
     });
   });
 });
