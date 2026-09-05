@@ -20,13 +20,6 @@ public class TestEntityFactory {
                 .build();
     }
 
-    public static MoodEntity createMood(String name) {
-        return MoodEntity.builder()
-                .id(idCounter.getAndIncrement())
-                .name(name)
-                .build();
-    }
-
     public static TagEntity createTag(String name) {
         return TagEntity.builder()
                 .id(idCounter.getAndIncrement())

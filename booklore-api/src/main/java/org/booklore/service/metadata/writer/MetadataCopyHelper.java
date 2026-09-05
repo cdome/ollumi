@@ -189,16 +189,17 @@ public class MetadataCopyHelper {
         }
     }
 
-    public void copyMoods(boolean clear, Consumer<Set<String>> consumer) {
+    /**
+     * moods is no longer a Hibernate-managed collection on BookMetadataEntity: the caller resolves the
+     * current names via JooqBookMetadataRelationsRepository (this class is a plain POJO, not a Spring
+     * bean, so it cannot inject the repository itself) and passes them in.
+     */
+    public void copyMoods(boolean clear, Set<String> currentMoodNames, Consumer<Set<String>> consumer) {
         if (!isLocked(metadata.getMoodsLocked())) {
             if (clear) {
                 consumer.accept(Set.of());
-            } else if (metadata.getMoods() != null) {
-                Set<String> moods = metadata.getMoods().stream()
-                        .map(MoodEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(moods);
+            } else if (currentMoodNames != null) {
+                consumer.accept(currentMoodNames);
             }
         }
     }

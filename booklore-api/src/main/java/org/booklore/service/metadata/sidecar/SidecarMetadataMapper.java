@@ -1,10 +1,12 @@
 package org.booklore.service.metadata.sidecar;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ComicMetadata;
 import org.booklore.model.dto.sidecar.*;
 import org.booklore.model.entity.*;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -16,7 +18,10 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SidecarMetadataMapper {
+
+    private final JooqBookMetadataRelationsRepository relationsRepository;
 
     public SidecarMetadata toSidecarMetadata(BookMetadataEntity entity, String coverFileName) {
         if (entity == null) {
@@ -35,7 +40,7 @@ public class SidecarMetadataMapper {
                 .language(entity.getLanguage())
                 .pageCount(entity.getPageCount())
                 .categories(extractCategoryNames(entity.getCategories()))
-                .moods(extractMoodNames(entity.getMoods()))
+                .moods(relationsRepository.findMoodNamesByBookId(entity.getBookId()))
                 .tags(extractTagNames(entity.getTags()))
                 .series(buildSeries(entity))
                 .identifiers(buildIdentifiers(entity))
@@ -157,13 +162,6 @@ public class SidecarMetadataMapper {
         if (entities == null) return null;
         return entities.stream()
                 .map(CategoryEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
-    private Set<String> extractMoodNames(Set<MoodEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(MoodEntity::getName)
                 .collect(Collectors.toSet());
     }
 

@@ -385,14 +385,15 @@ public class BookMetadataEntity {
     @Fetch(FetchMode.SUBSELECT)
     private Set<CategoryEntity> categories;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "book_metadata_mood_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "mood_id")
-    )
-    @Fetch(FetchMode.SUBSELECT)
-    private Set<MoodEntity> moods;
+    /**
+     * Mood names for this book, read/written via JooqBookMetadataRelationsRepository (moods is no
+     * longer a Hibernate-managed collection). This field is a same-request scratch cache, NOT
+     * persisted: MetadataChangeDetector's generic FieldDescriptor lambdas expect an entity getter, so
+     * callers populate this once (a single jOOQ read) before diffing/updating moods, instead of each
+     * call site re-querying. Never read this without populating it first in the same request.
+     */
+    @Transient
+    private Set<String> moodNames;
 
     @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(

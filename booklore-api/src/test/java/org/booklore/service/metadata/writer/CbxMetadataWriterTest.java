@@ -6,6 +6,7 @@ import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ComicCreatorRole;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,9 +40,13 @@ class CbxMetadataWriterTest {
     private CbxMetadataWriter writer;
     private Path tempDir;
 
+    private JooqBookMetadataRelationsRepository relationsRepository;
+
     @BeforeEach
     void setup() throws Exception {
         AppSettingService appSettingService = Mockito.mock(AppSettingService.class);
+        relationsRepository = Mockito.mock(JooqBookMetadataRelationsRepository.class);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of());
         AppSettings settings = new AppSettings();
         MetadataPersistenceSettings persistence = new MetadataPersistenceSettings();
         MetadataPersistenceSettings.SaveToOriginalFile save = new MetadataPersistenceSettings.SaveToOriginalFile();
@@ -53,7 +58,7 @@ class CbxMetadataWriterTest {
         settings.setMetadataPersistenceSettings(persistence);
         Mockito.when(appSettingService.getAppSettings()).thenReturn(settings);
 
-        writer = new CbxMetadataWriter(appSettingService);
+        writer = new CbxMetadataWriter(appSettingService, relationsRepository);
         tempDir = Files.createTempDirectory("cbx_writer_test_");
     }
 
@@ -85,6 +90,7 @@ class CbxMetadataWriterTest {
 
         // Prepare metadata
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("My Comic");
         meta.setDescription("Short desc");
         meta.setPublisher("Indie");
@@ -170,6 +176,8 @@ class CbxMetadataWriterTest {
         File cbz = createCbz(tempDir.resolve("tags_rating.cbz"), new String[]{"page1.jpg"});
 
         BookMetadataEntity meta = new BookMetadataEntity();
+
+        meta.setBookId(1L);
         meta.setTitle("Rating Test");
         meta.setRating(8.4);
         meta.setGoodreadsId("12345");
@@ -186,12 +194,7 @@ class CbxMetadataWriterTest {
         tags.add(tag2);
         meta.setTags(tags);
 
-        Set<MoodEntity> moods = new HashSet<>();
-        MoodEntity mood = new MoodEntity();
-        mood.setId(1L);
-        mood.setName("Dark");
-        moods.add(mood);
-        meta.setMoods(moods);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Dark"));
 
         writer.saveMetadataToFile(cbz, meta, null, new MetadataClearFlags());
 
@@ -242,6 +245,8 @@ class CbxMetadataWriterTest {
         }
 
         BookMetadataEntity meta = new BookMetadataEntity();
+
+        meta.setBookId(1L);
         meta.setTitle("New Title");
         meta.setDescription("New Summary");
 
@@ -262,6 +267,8 @@ class CbxMetadataWriterTest {
         File zipAsCbr = createCbz(tempDir.resolve("mismatched.cbr"), new String[]{"page1.jpg"});
 
         BookMetadataEntity meta = new BookMetadataEntity();
+
+        meta.setBookId(1L);
         meta.setTitle("Mismatched Title");
 
         writer.saveMetadataToFile(zipAsCbr, meta, null, new MetadataClearFlags());
@@ -281,6 +288,7 @@ class CbxMetadataWriterTest {
 
         // Create metadata with ComicMetadataEntity
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("Spider-Man #1");
         meta.setSeriesName("Spider-Man");
         meta.setSeriesNumber(1.0f);

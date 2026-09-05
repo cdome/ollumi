@@ -1,7 +1,6 @@
 package org.booklore.service.metadata.writer;
 
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.MoodEntity;
 import org.booklore.model.entity.TagEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -23,19 +22,17 @@ class MetadataCopyHelperTest {
 
     @Nested
     class MoodsTests {
+        // moods is no longer a Hibernate-managed collection: the caller resolves current mood names
+        // via jOOQ and passes them straight through, so copyMoods just gates on lock/clear now -
+        // filtering blank/null names moved to the writers (BookMetadataUpdater/BookCreatorService).
         @Test
         void copyMoods_whenNotLocked_callsConsumer() {
-            MoodEntity mood1 = new MoodEntity();
-            mood1.setName("Dark");
-            MoodEntity mood2 = new MoodEntity();
-            mood2.setName("Atmospheric");
-            metadata.setMoods(Set.of(mood1, mood2));
             metadata.setMoodsLocked(false);
 
             MetadataCopyHelper helper = new MetadataCopyHelper(metadata);
             AtomicReference<Set<String>> result = new AtomicReference<>();
 
-            helper.copyMoods(false, result::set);
+            helper.copyMoods(false, Set.of("Dark", "Atmospheric"), result::set);
 
             assertNotNull(result.get());
             assertEquals(2, result.get().size());
@@ -45,53 +42,39 @@ class MetadataCopyHelperTest {
 
         @Test
         void copyMoods_whenLocked_doesNotCallConsumer() {
-            MoodEntity mood = new MoodEntity();
-            mood.setName("Dark");
-            metadata.setMoods(Set.of(mood));
             metadata.setMoodsLocked(true);
 
             MetadataCopyHelper helper = new MetadataCopyHelper(metadata);
             AtomicReference<Set<String>> result = new AtomicReference<>();
 
-            helper.copyMoods(false, result::set);
+            helper.copyMoods(false, Set.of("Dark"), result::set);
 
             assertNull(result.get());
         }
 
         @Test
         void copyMoods_whenClear_passesEmptySet() {
-            MoodEntity mood = new MoodEntity();
-            mood.setName("Dark");
-            metadata.setMoods(Set.of(mood));
             metadata.setMoodsLocked(false);
 
             MetadataCopyHelper helper = new MetadataCopyHelper(metadata);
             AtomicReference<Set<String>> result = new AtomicReference<>();
 
-            helper.copyMoods(true, result::set);
+            helper.copyMoods(true, Set.of("Dark"), result::set);
 
             assertNotNull(result.get());
             assertTrue(result.get().isEmpty());
         }
 
         @Test
-        void copyMoods_filtersBlankNames() {
-            MoodEntity mood1 = new MoodEntity();
-            mood1.setName("Dark");
-            MoodEntity mood2 = new MoodEntity();
-            mood2.setName("   ");
-            MoodEntity mood3 = new MoodEntity();
-            mood3.setName(null);
-            metadata.setMoods(Set.of(mood1, mood2, mood3));
+        void copyMoods_whenCurrentNamesNull_doesNotCallConsumer() {
             metadata.setMoodsLocked(false);
 
             MetadataCopyHelper helper = new MetadataCopyHelper(metadata);
             AtomicReference<Set<String>> result = new AtomicReference<>();
 
-            helper.copyMoods(false, result::set);
+            helper.copyMoods(false, null, result::set);
 
-            assertEquals(1, result.get().size());
-            assertTrue(result.get().contains("Dark"));
+            assertNull(result.get());
         }
     }
 

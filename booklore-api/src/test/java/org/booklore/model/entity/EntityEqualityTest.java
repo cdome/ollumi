@@ -54,14 +54,6 @@ class EntityEqualityTest {
         assertEquals(c1.hashCode(), c2.hashCode());
     }
 
-    @Test
-    void moodEntity_shouldBeEqual_whenIdsAreSame() {
-        MoodEntity m1 = MoodEntity.builder().id(1L).name("Happy").build();
-        MoodEntity m2 = MoodEntity.builder().id(1L).name("Sad").build();
-
-        assertEquals(m1, m2);
-        assertEquals(m1.hashCode(), m2.hashCode());
-    }
 
     @Test
     void tagEntity_shouldBeEqual_whenIdsAreSame() {

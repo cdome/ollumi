@@ -19,8 +19,8 @@ public class BookMetadataMapperTest {
     private CategoryMapper categoryMapper;
     
     @Mock
-    private MoodMapper moodMapper;
-    
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+
     @Mock
     private TagMapper tagMapper;
     
@@ -34,7 +34,7 @@ public class BookMetadataMapperTest {
         bookMetadataMapper = new BookMetadataMapperImpl();
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "authorMapper", authorMapper);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "categoryMapper", categoryMapper);
-        org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "moodMapper", moodMapper);
+        org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "relationsRepository", relationsRepository);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "tagMapper", tagMapper);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "comicMetadataMapper", comicMetadataMapper);
     }
@@ -42,13 +42,13 @@ public class BookMetadataMapperTest {
     @Test
     void testMapping() {
         BookMetadataEntity entity = new BookMetadataEntity();
+        entity.setBookId(1L);
         entity.setTitle("Test Title");
         entity.setHardcoverId("hc-id");
         entity.setHardcoverRating(4.5);
         entity.setGoodreadsId("gr-id");
         entity.setAuthors(new java.util.ArrayList<>());
         entity.setCategories(new java.util.HashSet<>());
-        entity.setMoods(new java.util.HashSet<>());
         entity.setTags(new java.util.HashSet<>());
 
         BookMetadata dto = bookMetadataMapper.toBookMetadata(entity);

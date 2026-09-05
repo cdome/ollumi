@@ -9,9 +9,9 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.MoodEntity;
 import org.booklore.model.entity.TagEntity;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.extractor.PdfMetadataExtractor;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PdfMetadataWriterTest {
 
     private PdfMetadataWriter writer;
+    private JooqBookMetadataRelationsRepository relationsRepository;
     private PdfMetadataExtractor extractor;
     private Path tempDir;
 
@@ -53,7 +54,9 @@ class PdfMetadataWriterTest {
         settings.setMetadataPersistenceSettings(persistence);
         Mockito.when(appSettingService.getAppSettings()).thenReturn(settings);
 
-        writer = new PdfMetadataWriter(appSettingService);
+        relationsRepository = Mockito.mock(JooqBookMetadataRelationsRepository.class);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of());
+        writer = new PdfMetadataWriter(appSettingService, relationsRepository);
         extractor = new PdfMetadataExtractor();
         tempDir = Files.createTempDirectory("pdf_writer_test_");
     }
@@ -295,12 +298,7 @@ class PdfMetadataWriterTest {
         tags.add(tag2);
         meta.setTags(tags);
         
-        Set<MoodEntity> moods = new HashSet<>();
-        MoodEntity mood1 = new MoodEntity(); mood1.setName("Educational");
-        MoodEntity mood2 = new MoodEntity(); mood2.setName("Technical");
-        moods.add(mood1);
-        moods.add(mood2);
-        meta.setMoods(moods);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Educational", "Technical"));
 
         writer.saveMetadataToFile(pdf, meta, null, null);
 
@@ -384,6 +382,7 @@ class PdfMetadataWriterTest {
 
     private BookMetadataEntity createBasicMetadata() {
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("Test Book");
         return meta;
     }

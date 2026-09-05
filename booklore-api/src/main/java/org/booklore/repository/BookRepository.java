@@ -19,11 +19,11 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
     Optional<BookEntity> findByIdWithBookFiles(@Param("id") Long id);
 
-    @EntityGraph(attributePaths = { "metadata", "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags", "metadata.comicMetadata", "library" })
+    @EntityGraph(attributePaths = { "metadata", "metadata.authors", "metadata.categories", "metadata.tags", "metadata.comicMetadata", "library" })
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
     Optional<BookEntity> findByIdWithMetadata(@Param("id") Long id);
 
-    @EntityGraph(attributePaths = { "metadata", "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags", "metadata.comicMetadata", "bookFiles" })
+    @EntityGraph(attributePaths = { "metadata", "metadata.authors", "metadata.categories", "metadata.tags", "metadata.comicMetadata", "bookFiles" })
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
     Optional<BookEntity> findByIdFull(@Param("id") Long id);
 
@@ -50,7 +50,7 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags",
+        "metadata.authors", "metadata.categories", "metadata.tags",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE (b.deleted IS NULL OR b.deleted = false)")
@@ -59,7 +59,7 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags",
+        "metadata.authors", "metadata.categories", "metadata.tags",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.id IN :bookIds AND (b.deleted IS NULL OR b.deleted = false)")
@@ -68,7 +68,7 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags",
+        "metadata.authors", "metadata.categories", "metadata.tags",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.id IN :bookIds AND (b.deleted IS NULL OR b.deleted = false)")
@@ -77,7 +77,7 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags",
+        "metadata.authors", "metadata.categories", "metadata.tags",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.library.id = :libraryId AND (b.deleted IS NULL OR b.deleted = false)")
@@ -101,7 +101,7 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors", "metadata.categories", "metadata.moods", "metadata.tags",
+        "metadata.authors", "metadata.categories", "metadata.tags",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT DISTINCT b FROM BookEntity b JOIN b.shelves s WHERE s.id = :shelfId AND (b.deleted IS NULL OR b.deleted = false)")

@@ -62,6 +62,7 @@ public class CbxMetadataWriter implements MetadataWriter {
     }
 
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Override
     public void saveMetadataToFile(File file, BookMetadataEntity metadata, String thumbnailUrl, MetadataClearFlags clearFlags) {
@@ -322,9 +323,7 @@ public class CbxMetadataWriter implements MetadataWriter {
              }
         }
 
-        if (metadata.getMoods() != null) {
-            appendBookLoreTag(notesBuilder, "Moods", joinStrings(metadata.getMoods().stream().map(MoodEntity::getName).collect(Collectors.toSet())));
-        }
+        appendBookLoreTag(notesBuilder, "Moods", joinStrings(relationsRepository.findMoodNamesByBookId(metadata.getBookId())));
         if (metadata.getTags() != null) {
             appendBookLoreTag(notesBuilder, "Tags", joinStrings(metadata.getTags().stream().map(TagEntity::getName).collect(Collectors.toSet())));
         }

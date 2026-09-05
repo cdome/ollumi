@@ -42,7 +42,7 @@ class BookMetadataUpdaterTest {
     @Mock private AppProperties appProperties;
     @Mock private AuthorRepository authorRepository;
     @Mock private CategoryRepository categoryRepository;
-    @Mock private MoodRepository moodRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private TagRepository tagRepository;
     @Mock private BookRepository bookRepository;
     @Mock private ComicMetadataRepository comicMetadataRepository;
@@ -72,7 +72,6 @@ class BookMetadataUpdaterTest {
                 .title("Original Title")
                 .authors(new ArrayList<>())
                 .categories(new HashSet<>())
-                .moods(new HashSet<>())
                 .tags(new HashSet<>())
                 .build();
 
@@ -480,11 +479,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void setBookMetadata_moodsReplaceAll_noMerge_replacesExisting() {
-        MoodEntity existing = MoodEntity.builder().id(1L).name("Old Mood").build();
-        metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
-
-        MoodEntity newMood = MoodEntity.builder().id(2L).name("New Mood").build();
-        when(moodRepository.findByName("New Mood")).thenReturn(Optional.of(newMood));
+        when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of("Old Mood"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of("New Mood")).build();
         MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -499,7 +494,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getMoods()).containsExactly(newMood);
+            verify(relationsRepository).setMoodsForBook(1L, Set.of("New Mood"));
         }
     }
 
@@ -683,8 +678,6 @@ class BookMetadataUpdaterTest {
     @Test
     void setBookMetadata_moodsLocked_notUpdated() {
         metadataEntity.setMoodsLocked(true);
-        MoodEntity existing = MoodEntity.builder().id(1L).name("Locked").build();
-        metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of("New Mood")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -694,7 +687,8 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getMoods()).containsExactly(existing);
+            verify(relationsRepository, never()).setMoodsForBook(anyLong(), any());
+            verify(relationsRepository, never()).clearMoodsForBook(anyLong());
         }
     }
 
@@ -1331,9 +1325,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void moods_replaceMissing_addsWhenEmpty() {
-            metadataEntity.setMoods(new HashSet<>());
-            MoodEntity newMood = MoodEntity.builder().id(1L).name("Happy").build();
-            when(moodRepository.findByName("Happy")).thenReturn(Optional.of(newMood));
+            when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of());
 
             BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of("Happy")).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1341,14 +1333,13 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getMoods()).containsExactly(newMood);
+                verify(relationsRepository).setMoodsForBook(1L, Set.of("Happy"));
             }
         }
 
         @Test
         void moods_replaceMissing_skipsWhenPresent() {
-            MoodEntity existing = MoodEntity.builder().id(1L).name("Sad").build();
-            metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of("Sad"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of("Happy")).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1356,7 +1347,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getMoods()).containsExactly(existing);
+                verify(relationsRepository, never()).setMoodsForBook(anyLong(), any());
             }
         }
 
@@ -1416,11 +1407,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void moods_replaceWhenProvided_noMerge_replacesExisting() {
-            MoodEntity existing = MoodEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
-
-            MoodEntity newMood = MoodEntity.builder().id(2L).name("New").build();
-            when(moodRepository.findByName("New")).thenReturn(Optional.of(newMood));
+            when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of("New")).build();
             MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -1433,7 +1420,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getMoods()).containsExactly(newMood);
+                verify(relationsRepository).setMoodsForBook(1L, Set.of("New"));
             }
         }
 
@@ -1498,11 +1485,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void moods_nullReplaceMode_replacesExisting() {
-            MoodEntity existing = MoodEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
-
-            MoodEntity newMood = MoodEntity.builder().id(2L).name("New").build();
-            when(moodRepository.findByName("New")).thenReturn(Optional.of(newMood));
+            when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of("New")).build();
             MetadataUpdateContext context = buildContext(newMeta, null);
@@ -1510,7 +1493,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getMoods()).containsExactly(newMood);
+                verify(relationsRepository).setMoodsForBook(1L, Set.of("New"));
             }
         }
 
@@ -1534,8 +1517,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void clearMoods_clearsSet() {
-            MoodEntity existing = MoodEntity.builder().id(1L).name("Mood").build();
-            metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of("Mood"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").build();
             MetadataClearFlags clearFlags = new MetadataClearFlags();
@@ -1550,7 +1532,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getMoods()).isEmpty();
+                verify(relationsRepository).clearMoodsForBook(1L);
             }
         }
 
@@ -1615,8 +1597,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void emptyMoods_replaceAll_clearsExisting() {
-            MoodEntity existing = MoodEntity.builder().id(1L).name("Mood").build();
-            metadataEntity.setMoods(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findMoodNamesByBookId(1L)).thenReturn(Set.of("Mood"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").moods(Set.of()).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1624,7 +1605,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getMoods()).isEmpty();
+                verify(relationsRepository).clearMoodsForBook(1L);
             }
         }
 

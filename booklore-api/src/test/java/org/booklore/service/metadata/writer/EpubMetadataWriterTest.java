@@ -42,6 +42,7 @@ import static org.mockito.Mockito.when;
 class EpubMetadataWriterTest {
 
     private EpubMetadataWriter writer;
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private BookMetadataEntity metadata;
     private BookEntity bookEntity;
     private AppSettingService appSettingService;
@@ -66,8 +67,11 @@ class EpubMetadataWriterTest {
         when(appSettings.getMetadataPersistenceSettings()).thenReturn(metadataPersistenceSettings);
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
 
-        writer = new EpubMetadataWriter(appSettingService);
+        relationsRepository = org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class);
+        org.mockito.Mockito.when(relationsRepository.findMoodNamesByBookId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Set.of());
+        writer = new EpubMetadataWriter(appSettingService, relationsRepository);
         metadata = new BookMetadataEntity();
+        metadata.setBookId(1L);
         metadata.setTitle("Test Book");
         AuthorEntity author = new AuthorEntity();
         author.setName("Test Author");
@@ -172,6 +176,7 @@ class EpubMetadataWriterTest {
             File epubFile = createEpubWithOpf(initialOpfContent, "test-whitespace-" + System.nanoTime() + ".epub");
 
             BookMetadataEntity newMeta = new BookMetadataEntity();
+            newMeta.setBookId(1L);
             newMeta.setTitle("Updated Title");
             AuthorEntity author = new AuthorEntity();
             author.setName("Updated Author");

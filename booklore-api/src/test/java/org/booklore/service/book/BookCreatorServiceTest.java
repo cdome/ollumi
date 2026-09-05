@@ -4,7 +4,6 @@ import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.CategoryEntity;
-import org.booklore.model.entity.MoodEntity;
 import org.booklore.model.entity.TagEntity;
 import org.booklore.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +29,7 @@ class BookCreatorServiceTest {
 
     @Mock private AuthorRepository authorRepository;
     @Mock private CategoryRepository categoryRepository;
-    @Mock private MoodRepository moodRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private TagRepository tagRepository;
     @Mock private BookRepository bookRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
@@ -122,27 +121,23 @@ class BookCreatorServiceTest {
     void addMoodsToBook_nullMoods_doesNothing() {
         bookCreatorService.addMoodsToBook(null, bookEntity);
 
-        assertNull(bookEntity.getMetadata().getMoods());
-        verifyNoInteractions(moodRepository);
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addMoodsToBook_emptyMoods_doesNothing() {
         bookCreatorService.addMoodsToBook(Set.of(), bookEntity);
 
-        assertNull(bookEntity.getMetadata().getMoods());
-        verifyNoInteractions(moodRepository);
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addMoodsToBook_validMoods_addsToBook() {
-        MoodEntity mood = MoodEntity.builder().name("Dark").build();
-        when(moodRepository.findByName("Dark")).thenReturn(Optional.of(mood));
+        bookEntity.setId(1L);
 
         bookCreatorService.addMoodsToBook(Set.of("Dark"), bookEntity);
 
-        assertNotNull(bookEntity.getMetadata().getMoods());
-        assertEquals(1, bookEntity.getMetadata().getMoods().size());
+        verify(relationsRepository).setMoodsForBook(1L, Set.of("Dark"));
     }
 
     @Test

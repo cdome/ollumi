@@ -18,8 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -29,7 +31,7 @@ public class MetadataManagementService {
     private final AppProperties appProperties;
     private final AuthorRepository authorRepository;
     private final CategoryRepository categoryRepository;
-    private final MoodRepository moodRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final TagRepository tagRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final AppSettingService appSettingService;
@@ -166,41 +168,27 @@ public class MetadataManagementService {
     }
 
     private void consolidateMoods(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
-        List<MoodEntity> targetMoods = targetValues.stream()
-                .map(name -> moodRepository.findByNameIgnoreCase(name)
-                        .map(existing -> {
-                            existing.setName(name);
-                            return moodRepository.save(existing);
-                        })
-                        .orElseGet(() -> {
-                            MoodEntity mood = new MoodEntity();
-                            mood.setName(name);
-                            return moodRepository.save(mood);
-                        }))
-                .toList();
+        targetValues.forEach(relationsRepository::renameOrCreateMood);
 
-        List<MoodEntity> moodsToMerge = valuesToMerge.stream()
-                .map(moodRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (MoodEntity oldMood : moodsToMerge) {
-            List<BookMetadataEntity> booksWithOldMood = bookMetadataRepository.findAllByMoodsContaining(oldMood);
-
-            for (BookMetadataEntity metadata : booksWithOldMood) {
-                metadata.getMoods().remove(oldMood);
-                metadata.getMoods().addAll(targetMoods);
+        for (String oldMoodName : valuesToMerge) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByMoodNameIgnoreCase(oldMoodName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithOldMood);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                Set<String> finalMoods = new HashSet<>(relationsRepository.findMoodNamesByBookId(bookId));
+                finalMoods.remove(oldMoodName);
+                finalMoods.addAll(targetValues);
+                relationsRepository.setMoodsForBook(bookId, finalMoods);
+            }
 
+            List<BookMetadataEntity> booksWithOldMood = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithOldMood, moveFile);
-            moodRepository.delete(oldMood);
+            relationsRepository.deleteMoodByName(oldMoodName);
         }
 
-        log.info("Consolidated {} moods into {}: {}", moodsToMerge.size(), targetValues, valuesToMerge);
+        log.info("Consolidated {} moods into {}: {}", valuesToMerge.size(), targetValues, valuesToMerge);
     }
 
     private void consolidateTags(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
@@ -364,26 +352,24 @@ public class MetadataManagementService {
     }
 
     private void deleteMoods(List<String> valuesToDelete, boolean moveFile) {
-        List<MoodEntity> moodsToDelete = valuesToDelete.stream()
-                .map(moodRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (MoodEntity mood : moodsToDelete) {
-            List<BookMetadataEntity> booksWithMood = bookMetadataRepository.findAllByMoodsContaining(mood);
-
-            for (BookMetadataEntity metadata : booksWithMood) {
-                metadata.getMoods().remove(mood);
+        for (String moodName : valuesToDelete) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByMoodNameIgnoreCase(moodName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithMood);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                Set<String> finalMoods = new HashSet<>(relationsRepository.findMoodNamesByBookId(bookId));
+                finalMoods.remove(moodName);
+                relationsRepository.setMoodsForBook(bookId, finalMoods);
+            }
+
+            List<BookMetadataEntity> booksWithMood = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithMood, moveFile);
-            moodRepository.delete(mood);
+            relationsRepository.deleteMoodByName(moodName);
         }
 
-        log.info("Deleted {} moods: {}", moodsToDelete.size(), valuesToDelete);
+        log.info("Deleted {} moods: {}", valuesToDelete.size(), valuesToDelete);
     }
 
     private void deleteTags(List<String> valuesToDelete, boolean moveFile) {

@@ -5,7 +5,6 @@ import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.CategoryEntity;
-import org.booklore.model.entity.MoodEntity;
 import org.booklore.model.entity.TagEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -93,10 +92,7 @@ public class MetadataChangeDetectorTest {
                         CategoryEntity.builder().id(1L).name("Fiction").build(),
                         CategoryEntity.builder().id(2L).name("Mystery").build()
                 ))
-                .moods(Set.of(
-                        MoodEntity.builder().id(1L).name("Dark").build(),
-                        MoodEntity.builder().id(2L).name("Suspenseful").build()
-                ))
+                .moodNames(Set.of("Dark", "Suspenseful"))
                 .tags(Set.of(
                         TagEntity.builder().id(1L).name("Thriller").build(),
                         TagEntity.builder().id(2L).name("Bestseller").build()
@@ -319,7 +315,7 @@ public class MetadataChangeDetectorTest {
                 .authorsLocked(false)
                 .categories(Set.of(CategoryEntity.builder().id(1L).name("Fiction").build()))
                 .categoriesLocked(false)
-                .moods(Set.of(MoodEntity.builder().id(1L).name("Dark").build()))
+                .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
                 .tags(Set.of(TagEntity.builder().id(1L).name("Thriller").build()))
                 .tagsLocked(false)
@@ -367,7 +363,7 @@ public class MetadataChangeDetectorTest {
                 .authorsLocked(false)
                 .categories(Set.of(CategoryEntity.builder().id(1L).name("Fiction").build()))
                 .categoriesLocked(false)
-                .moods(Set.of(MoodEntity.builder().id(1L).name("Dark").build()))
+                .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
                 .tags(Set.of(TagEntity.builder().id(1L).name("Tag").build()))
                 .tagsLocked(false)
@@ -676,7 +672,7 @@ public class MetadataChangeDetectorTest {
                 .authorsLocked(false)
                 .categories(Set.of())
                 .categoriesLocked(false)
-                .moods(Set.of())
+                .moodNames(Set.of())
                 .moodsLocked(false)
                 .tags(Set.of())
                 .tagsLocked(false)

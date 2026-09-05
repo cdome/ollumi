@@ -40,6 +40,7 @@ public class BookFileDetachmentService {
 
     private final BookRepository bookRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final BookMapper bookMapper;
@@ -101,6 +102,15 @@ public class BookFileDetachmentService {
         targetFile.setBook(newBook);
 
         newBook = bookRepository.saveAndFlush(newBook);
+
+        // moods are no longer part of the copyMetadataFrom in-memory copy (not a Hibernate collection
+        // any more); copy them via jOOQ now that newBook has an id and its book_metadata row exists.
+        if (copyMetadata) {
+            Set<String> sourceMoods = relationsRepository.findMoodNamesByBookId(sourceBook.getId());
+            if (!sourceMoods.isEmpty()) {
+                relationsRepository.setMoodsForBook(newBook.getId(), sourceMoods);
+            }
+        }
 
         try {
             bookCoverService.regenerateCover(newBook.getId());
@@ -166,9 +176,6 @@ public class BookFileDetachmentService {
         }
         if (source.getCategories() != null) {
             copy.setCategories(new HashSet<>(source.getCategories()));
-        }
-        if (source.getMoods() != null) {
-            copy.setMoods(new HashSet<>(source.getMoods()));
         }
         if (source.getTags() != null) {
             copy.setTags(new HashSet<>(source.getTags()));

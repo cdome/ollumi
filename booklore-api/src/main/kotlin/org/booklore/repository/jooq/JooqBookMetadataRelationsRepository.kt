@@ -117,4 +117,35 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
         if (existing != null) return existing
         return dsl.insertInto(MOOD).set(MOOD.NAME, name).returning(MOOD.ID).fetchOne()!!.id!!
     }
+
+    // ========================================================================
+    // Mood master-row maintenance (consolidate/delete admin flows in MetadataManagementService).
+    // ========================================================================
+
+    /** Book ids whose mood junction references [name] (case-insensitive, matching JPA findByNameIgnoreCase). */
+    fun findBookIdsByMoodNameIgnoreCase(name: String): List<Long> =
+        dsl.select(bmm.BOOK_ID)
+            .from(bmm).join(MOOD).on(MOOD.ID.eq(bmm.MOOD_ID))
+            .where(MOOD.NAME.equalIgnoreCase(name))
+            .fetch(bmm.BOOK_ID)
+
+    /**
+     * Ensures a mood master row exists with exactly this casing of [name]: renames an existing
+     * case-insensitive match, or inserts a new row. Mirrors the JPA consolidate flow's
+     * findByNameIgnoreCase(name).map(existing -> existing.setName(name)).orElseGet(create).
+     */
+    fun renameOrCreateMood(name: String) {
+        val existingId = dsl.select(MOOD.ID).from(MOOD).where(MOOD.NAME.equalIgnoreCase(name)).fetchOne(MOOD.ID)
+        if (existingId != null) {
+            dsl.update(MOOD).set(MOOD.NAME, name).where(MOOD.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(MOOD).set(MOOD.NAME, name).execute()
+        }
+    }
+
+    /** Deletes the mood master row by exact name. Call only once no book references it any more. */
+    fun deleteMoodByName(name: String): Int =
+        dsl.deleteFrom(MOOD).where(MOOD.NAME.eq(name)).execute()
+
+    fun countAllMoods(): Long = dsl.fetchCount(MOOD).toLong()
 }

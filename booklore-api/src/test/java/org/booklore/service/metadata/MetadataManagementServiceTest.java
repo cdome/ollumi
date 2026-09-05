@@ -36,7 +36,7 @@ class MetadataManagementServiceTest {
     @Mock private AppProperties appProperties;
     @Mock private AuthorRepository authorRepository;
     @Mock private CategoryRepository categoryRepository;
-    @Mock private MoodRepository moodRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private TagRepository tagRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
     @Mock private AppSettingService appSettingService;
@@ -119,21 +119,18 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateMoods_mergesAndDeletesOld() {
-        MoodEntity oldMood = MoodEntity.builder().id(1L).name("Old Mood").build();
-        MoodEntity targetMood = MoodEntity.builder().id(2L).name("Target Mood").build();
+        long bookId = 5L;
+        when(relationsRepository.findBookIdsByMoodNameIgnoreCase("Old Mood")).thenReturn(List.of(bookId));
+        when(relationsRepository.findMoodNamesByBookId(bookId)).thenReturn(Set.of("Old Mood"));
 
-        when(moodRepository.findByNameIgnoreCase("Target Mood")).thenReturn(Optional.of(targetMood));
-        when(moodRepository.save(targetMood)).thenReturn(targetMood);
-        when(moodRepository.findByNameIgnoreCase("Old Mood")).thenReturn(Optional.of(oldMood));
-
-        Set<MoodEntity> moods = new HashSet<>(List.of(oldMood));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().moods(moods).build();
-        when(bookMetadataRepository.findAllByMoodsContaining(oldMood)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.moods, List.of("Target Mood"), List.of("Old Mood"));
 
-        assertThat(metadata.getMoods()).contains(targetMood);
-        verify(moodRepository).delete(oldMood);
+        verify(relationsRepository).renameOrCreateMood("Target Mood");
+        verify(relationsRepository).setMoodsForBook(bookId, Set.of("Target Mood"));
+        verify(relationsRepository).deleteMoodByName("Old Mood");
     }
 
     @Test
@@ -352,17 +349,17 @@ class MetadataManagementServiceTest {
 
     @Test
     void deleteMoods_removesFromBooksAndDeletesEntity() {
-        MoodEntity mood = MoodEntity.builder().id(1L).name("Mood1").build();
-        when(moodRepository.findByNameIgnoreCase("Mood1")).thenReturn(Optional.of(mood));
+        long bookId = 7L;
+        when(relationsRepository.findBookIdsByMoodNameIgnoreCase("Mood1")).thenReturn(List.of(bookId));
+        when(relationsRepository.findMoodNamesByBookId(bookId)).thenReturn(Set.of("Mood1"));
 
-        Set<MoodEntity> moods = new HashSet<>(List.of(mood));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().moods(moods).build();
-        when(bookMetadataRepository.findAllByMoodsContaining(mood)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.deleteMetadata(MergeMetadataType.moods, List.of("Mood1"));
 
-        assertThat(metadata.getMoods()).isEmpty();
-        verify(moodRepository).delete(mood);
+        verify(relationsRepository).setMoodsForBook(bookId, Set.of());
+        verify(relationsRepository).deleteMoodByName("Mood1");
     }
 
     @Test

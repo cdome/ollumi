@@ -52,13 +52,6 @@ public interface BookMapper {
                 .collect(Collectors.toSet());
     }
 
-    default Set<String> mapMoods(Set<MoodEntity> moods) {
-        if (moods == null) return null;
-        return moods.stream()
-                .map(MoodEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
     default Set<String> mapTags(Set<TagEntity> tags) {
         if (tags == null) return null;
         return tags.stream()

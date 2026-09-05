@@ -39,6 +39,7 @@ class BookFileDetachmentServiceTest {
     @Mock private BookService bookService;
     @Mock private AuditService auditService;
     @Mock private BookCoverService bookCoverService;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @InjectMocks
     private BookFileDetachmentService service;
@@ -71,6 +72,7 @@ class BookFileDetachmentServiceTest {
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .book(book)
+                .bookId(id)
                 .title("Test Book " + id)
                 .build();
         book.setMetadata(metadata);

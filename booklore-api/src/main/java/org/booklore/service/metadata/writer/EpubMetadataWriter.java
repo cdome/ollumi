@@ -52,6 +52,7 @@ public class EpubMetadataWriter implements MetadataWriter {
 
     private static final String OPF_NS = "http://www.idpf.org/2007/opf";
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Override
     public void saveMetadataToFile(File epubFile, BookMetadataEntity metadata, String thumbnailUrl, MetadataClearFlags clear) {
@@ -955,9 +956,10 @@ public class EpubMetadataWriter implements MetadataWriter {
             metadataElement.appendChild(createBookloreMetaElement(doc, "ranobedb_rating", String.valueOf(metadata.getRanobedbRating()), epub3));
         }
         
-        if (metadata.getMoods() != null && !metadata.getMoods().isEmpty()) {
-            String moodsJson = "[" + String.join(", ", metadata.getMoods().stream()
-                .map(mood -> "\"" + mood.getName().replace("\"", "\\\"") + "\"")
+        java.util.Set<String> moodNames = relationsRepository.findMoodNamesByBookId(metadata.getBookId());
+        if (!moodNames.isEmpty()) {
+            String moodsJson = "[" + String.join(", ", moodNames.stream()
+                .map(mood -> "\"" + mood.replace("\"", "\\\"") + "\"")
                 .toList()) + "]";
             metadataElement.appendChild(createBookloreMetaElement(doc, "moods", moodsJson, epub3));
         }

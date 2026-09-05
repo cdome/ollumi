@@ -46,7 +46,7 @@ public class BookMetadataUpdater {
 
     private final AuthorRepository authorRepository;
     private final CategoryRepository categoryRepository;
-    private final MoodRepository moodRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final TagRepository tagRepository;
     private final BookRepository bookRepository;
     private final ComicMetadataRepository comicMetadataRepository;
@@ -83,6 +83,9 @@ public class BookMetadataUpdater {
 
         MetadataClearFlags clearFlags = wrapper.getClearFlags();
         BookMetadataEntity metadata = bookEntity.getMetadata();
+        // MetadataChangeDetector's moods field reads BookMetadataEntity::getMoodNames (a transient
+        // scratch cache, not a Hibernate collection) - populate it once here via jOOQ.
+        metadata.setMoodNames(relationsRepository.findMoodNamesByBookId(bookId));
 
         boolean thumbnailRequiresUpdate = StringUtils.hasText(newMetadata.getThumbnailUrl());
         boolean hasMetadataChanges = MetadataChangeDetector.isDifferent(newMetadata, metadata, clearFlags);
@@ -326,39 +329,54 @@ public class BookMetadataUpdater {
         }
     }
 
+    /**
+     * Writes moods via jOOQ instead of mutating a Hibernate collection: e.getMoodNames() is the
+     * pre-update snapshot populated once at the top of updateMetadata, and every branch below computes
+     * the FINAL desired name set and calls relationsRepository.setMoodsForBook/clearMoodsForBook exactly
+     * once, keeping e.getMoodNames() in sync so later steps in the same request see the new value.
+     */
     private void updateMoodsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getMoodsLocked())) return;
 
-        e.setMoods(Optional.ofNullable(e.getMoods()).orElseGet(HashSet::new));
+        Set<String> existingMoods = Optional.ofNullable(e.getMoodNames()).orElse(Collections.emptySet());
 
         if (clear.isMoods()) {
-            e.getMoods().clear();
+            relationsRepository.clearMoodsForBook(e.getBookId());
+            e.setMoodNames(Collections.emptySet());
             return;
         }
 
         Set<String> moodNames = Optional.ofNullable(m.getMoods()).orElse(Collections.emptySet());
         if (moodNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) e.getMoods().clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearMoodsForBook(e.getBookId());
+                e.setMoodNames(Collections.emptySet());
+            }
             return;
         }
 
-        Set<MoodEntity> newMoods = moodNames.stream()
+        Set<String> newMoods = moodNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> moodRepository.findByName(name)
-                        .orElseGet(() -> moodRepository.save(MoodEntity.builder().name(name).build())))
                 .collect(Collectors.toSet());
 
         if (newMoods.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getMoods().clear();
-            e.getMoods().addAll(newMoods);
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && e.getMoods().isEmpty()) {
-            e.getMoods().addAll(newMoods);
-        } else if (replaceMode == null) {
-            if (!merge) e.getMoods().clear();
-            e.getMoods().addAll(newMoods);
+        Set<String> finalMoods;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                finalMoods = new HashSet<>(existingMoods);
+                finalMoods.addAll(newMoods);
+            } else {
+                finalMoods = newMoods;
+            }
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingMoods.isEmpty()) {
+            finalMoods = newMoods;
+        } else {
+            return;
         }
+
+        relationsRepository.setMoodsForBook(e.getBookId(), finalMoods);
+        e.setMoodNames(finalMoods);
     }
 
     private void updateTagsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {

@@ -7,6 +7,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ComicCreatorRole;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.util.FileUtils;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -22,7 +24,7 @@ public class BookCreatorService {
 
     private final AuthorRepository authorRepository;
     private final CategoryRepository categoryRepository;
-    private final MoodRepository moodRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final TagRepository tagRepository;
     private final BookRepository bookRepository;
     private final BookMetadataRepository bookMetadataRepository;
@@ -37,7 +39,7 @@ public class BookCreatorService {
 
     public BookCreatorService(AuthorRepository authorRepository,
                               CategoryRepository categoryRepository,
-                              MoodRepository moodRepository,
+                              JooqBookMetadataRelationsRepository relationsRepository,
                               TagRepository tagRepository,
                               BookRepository bookRepository,
                               BookMetadataRepository bookMetadataRepository,
@@ -48,7 +50,7 @@ public class BookCreatorService {
                               ComicCreatorRepository comicCreatorRepository) {
         this.authorRepository = authorRepository;
         this.categoryRepository = categoryRepository;
-        this.moodRepository = moodRepository;
+        this.relationsRepository = relationsRepository;
         this.tagRepository = tagRepository;
         this.bookRepository = bookRepository;
         this.bookMetadataRepository = bookMetadataRepository;
@@ -153,14 +155,8 @@ public class BookCreatorService {
 
     public void addMoodsToBook(Set<String> moods, BookEntity bookEntity) {
         if (moods == null || moods.isEmpty()) return;
-        if (bookEntity.getMetadata().getMoods() == null) {
-            bookEntity.getMetadata().setMoods(new HashSet<>());
-        }
-        moods.stream()
-                .map(mood -> truncate(mood, 255))
-                .map(truncated -> moodRepository.findByName(truncated)
-                        .orElseGet(() -> moodRepository.save(MoodEntity.builder().name(truncated).build())))
-                .forEach(moodEntity -> bookEntity.getMetadata().getMoods().add(moodEntity));
+        Set<String> truncated = moods.stream().map(mood -> truncate(mood, 255)).collect(Collectors.toSet());
+        relationsRepository.setMoodsForBook(bookEntity.getId(), truncated);
     }
 
     public void addTagsToBook(Set<String> tags, BookEntity bookEntity) {

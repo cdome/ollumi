@@ -44,6 +44,7 @@ import java.util.*;
 public class PdfMetadataWriter implements MetadataWriter {
 
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Override
     public void saveMetadataToFile(File file, BookMetadataEntity metadataEntity, String thumbnailUrl, MetadataClearFlags clear) {
@@ -379,7 +380,8 @@ public class PdfMetadataWriter implements MetadataWriter {
         });
 
         // Moods (as RDF Bag)
-        helper.copyMoods(clear != null && clear.isMoods(), moods -> {
+        Set<String> currentMoodNames = relationsRepository.findMoodNamesByBookId(metadata.getBookId());
+        helper.copyMoods(clear != null && clear.isMoods(), currentMoodNames, moods -> {
             if (moods != null && !moods.isEmpty()) {
                 appendBookloreBag(doc, bookloreDescription, "moods", moods);
             }

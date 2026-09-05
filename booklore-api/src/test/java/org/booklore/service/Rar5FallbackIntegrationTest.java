@@ -120,6 +120,7 @@ class Rar5FallbackIntegrationTest {
         BookEntity book = new BookEntity();
         book.setId(99L);
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("Test RAR5 Comic");
         book.setMetadata(meta);
 
@@ -160,9 +161,12 @@ class Rar5FallbackIntegrationTest {
         appSettings.setMetadataPersistenceSettings(persistenceSettings);
         when(mockSettings.getAppSettings()).thenReturn(appSettings);
 
-        CbxMetadataWriter writer = new CbxMetadataWriter(mockSettings);
+        var mockRelationsRepository = org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class);
+        when(mockRelationsRepository.findMoodNamesByBookId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Set.of());
+        CbxMetadataWriter writer = new CbxMetadataWriter(mockSettings, mockRelationsRepository);
 
         BookMetadataEntity metadata = new BookMetadataEntity();
+        metadata.setBookId(1L);
         metadata.setTitle("Updated RAR5 Title");
 
         writer.saveMetadataToFile(cbrCopy.toFile(), metadata, null, null);
