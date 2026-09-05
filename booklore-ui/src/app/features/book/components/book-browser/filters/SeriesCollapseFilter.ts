@@ -145,6 +145,16 @@ export class SeriesCollapseFilter implements BookFilter, OnDestroy {
       overrides: []
     });
 
+    if (!prefs.global) {
+      prefs.global = {
+        sortKey: 'addedOn',
+        sortDir: 'DESC',
+        view: 'GRID',
+        coverSize: 1.0,
+        seriesCollapsed: false
+      };
+    }
+
     if (!prefs.overrides) {
       prefs.overrides = [];
     }

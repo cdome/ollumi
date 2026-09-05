@@ -21,10 +21,10 @@ export default defineConfig({
       include: ['src/app/**/*.ts'],
       exclude: ['src/app/**/*.spec.ts', 'src/app/**/*.module.ts'],
       thresholds: {
-        statements: 39.75,
-        branches: 24,
-        functions: 36,
-        lines: 39.75
+        statements: 42,
+        branches: 27.5,
+        functions: 38,
+        lines: 42.25
       }
     }
   }
