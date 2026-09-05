@@ -2,14 +2,14 @@ package org.booklore.it.util;
 
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.*;
+import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.BookShelfMappingRepository;
 import org.booklore.repository.CategoryRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.OpdsUserV2Repository;
+import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -33,10 +33,9 @@ public class TestDataFactory {
     private final BookRepository bookRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final ShelfRepository shelfRepository;
-    private final BookShelfMappingRepository bookShelfMappingRepository;
     private final AuthorRepository authorRepository;
     private final CategoryRepository categoryRepository;
-    private final OpdsUserV2Repository opdsUserRepository;
+    private final JooqOpdsUserV2Repository opdsUserRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -45,10 +44,9 @@ public class TestDataFactory {
                            BookRepository bookRepository,
                            BookMetadataRepository bookMetadataRepository,
                            ShelfRepository shelfRepository,
-                           BookShelfMappingRepository bookShelfMappingRepository,
                            AuthorRepository authorRepository,
                            CategoryRepository categoryRepository,
-                           OpdsUserV2Repository opdsUserRepository,
+                           JooqOpdsUserV2Repository opdsUserRepository,
                            UserRepository userRepository,
                            PasswordEncoder passwordEncoder) {
         this.libraryRepository = libraryRepository;
@@ -56,7 +54,6 @@ public class TestDataFactory {
         this.bookRepository = bookRepository;
         this.bookMetadataRepository = bookMetadataRepository;
         this.shelfRepository = shelfRepository;
-        this.bookShelfMappingRepository = bookShelfMappingRepository;
         this.authorRepository = authorRepository;
         this.categoryRepository = categoryRepository;
         this.opdsUserRepository = opdsUserRepository;
@@ -177,19 +174,14 @@ public class TestDataFactory {
     }
 
     public void addBookToShelf(BookEntity book, ShelfEntity shelf) {
-        BookShelfMapping mapping = new BookShelfMapping();
-        mapping.setBookId(book.getId());
-        mapping.setShelfId(shelf.getId());
-        mapping.setBook(book);
-        mapping.setShelf(shelf);
-        bookShelfMappingRepository.save(mapping);
+        // BookShelfMapping was dropped; book_shelf_mapping is now written through the
+        // ShelfEntity <-> BookEntity @ManyToMany join table.
+        shelf.getBookEntities().add(book);
+        shelfRepository.save(shelf);
     }
 
-    public OpdsUserV2Entity createOpdsUser(BookLoreUserEntity user, String username, String rawPassword) {
-        OpdsUserV2Entity opdsUser = new OpdsUserV2Entity();
-        opdsUser.setUser(user);
-        opdsUser.setUsername(username);
-        opdsUser.setPasswordHash(passwordEncoder.encode(rawPassword));
-        return opdsUserRepository.save(opdsUser);
+    public OpdsUserV2 createOpdsUser(BookLoreUserEntity user, String username, String rawPassword) {
+        return opdsUserRepository.insert(
+                user.getId(), username, passwordEncoder.encode(rawPassword), OpdsSortOrder.RECENT);
     }
 }

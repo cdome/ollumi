@@ -1,15 +1,12 @@
 package org.booklore.it;
 
 import org.booklore.it.util.AuthTestHelper;
-import org.booklore.model.entity.AnnotationEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.BookMarkEntity;
-import org.booklore.model.entity.BookNoteV2Entity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.repository.AnnotationRepository;
-import org.booklore.repository.BookMarkRepository;
-import org.booklore.repository.BookNoteV2Repository;
+import org.booklore.repository.jooq.JooqAnnotationRepository;
+import org.booklore.repository.jooq.JooqBookMarkRepository;
+import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -30,13 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class NotebookIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private AnnotationRepository annotationRepository;
+    private JooqAnnotationRepository annotationRepository;
 
     @Autowired
-    private BookNoteV2Repository bookNoteV2Repository;
+    private JooqBookNoteV2Repository bookNoteV2Repository;
 
     @Autowired
-    private BookMarkRepository bookMarkRepository;
+    private JooqBookMarkRepository bookMarkRepository;
 
     @Test
     void getNotebookEntriesReturnsSeededAnnotations() throws Exception {
@@ -146,34 +143,27 @@ public class NotebookIntegrationTest extends RestApiIntegrationTest {
     private void seedNotebookEntries(BookEntity book) {
         BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
 
-        annotationRepository.save(AnnotationEntity.builder()
-                .user(user)
-                .book(book)
-                .cfi("epubcfi(/6/2[id001]!/4/1:0)")
-                .text("Highlighted text")
-                .note("annotation note")
-                .color("yellow")
-                .style("solid")
-                .chapterTitle("Chapter One")
-                .build());
+        annotationRepository.insert(
+                book.getId(), user.getId(),
+                "epubcfi(/6/2[id001]!/4/1:0)",
+                "Highlighted text",
+                "yellow",
+                "solid",
+                "annotation note",
+                "Chapter One");
 
-        bookNoteV2Repository.save(BookNoteV2Entity.builder()
-                .user(user)
-                .book(book)
-                .cfi("epubcfi(/6/2[id002]!/4/1:0)")
-                .selectedText("Selected text")
-                .noteContent("This is a note")
-                .color("blue")
-                .chapterTitle("Chapter Two")
-                .build());
+        bookNoteV2Repository.insert(
+                book.getId(), user.getId(),
+                "epubcfi(/6/2[id002]!/4/1:0)",
+                "Selected text",
+                "This is a note",
+                "blue",
+                "Chapter Two");
 
-        bookMarkRepository.save(BookMarkEntity.builder()
-                .user(user)
-                .book(book)
-                .title("Important bookmark")
-                .notes("bookmark notes")
-                .color("red")
-                .priority(1)
-                .build());
+        bookMarkRepository.insert(
+                book.getId(), user.getId(),
+                null, null, null,
+                "Important bookmark",
+                1);
     }
 }

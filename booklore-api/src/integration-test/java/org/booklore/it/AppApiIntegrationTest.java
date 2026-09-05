@@ -6,6 +6,11 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqAnnotationRepository;
+import org.booklore.repository.jooq.JooqBookMarkRepository;
+import org.booklore.repository.jooq.JooqBookNoteV2Repository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -31,19 +36,16 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
     private AuthorRepository authorRepository;
 
     @Autowired
-    private AnnotationRepository annotationRepository;
+    private JooqAnnotationRepository annotationRepository;
 
     @Autowired
-    private BookNoteV2Repository bookNoteV2Repository;
+    private JooqBookNoteV2Repository bookNoteV2Repository;
 
     @Autowired
-    private BookMarkRepository bookMarkRepository;
+    private JooqBookMarkRepository bookMarkRepository;
 
     @Autowired
-    private UserBookProgressRepository userBookProgressRepository;
-
-    @Autowired
-    private UserBookFileProgressRepository userBookFileProgressRepository;
+    private JooqUserBookProgressRepository userBookProgressRepository;
 
     private static final ParameterizedTypeReference<AppPageResponse<AppBookSummary>> BOOK_PAGE =
             new ParameterizedTypeReference<>() {};
@@ -134,35 +136,28 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
     private void seedNotebookEntries(BookEntity book) {
         BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
 
-        annotationRepository.save(AnnotationEntity.builder()
-                .user(user)
-                .book(book)
-                .cfi("epubcfi(/6/2[id001]!/4/1:0)")
-                .text("Highlighted text")
-                .note("annotation note")
-                .color("yellow")
-                .style("solid")
-                .chapterTitle("Chapter One")
-                .build());
+        annotationRepository.insert(
+                book.getId(), user.getId(),
+                "epubcfi(/6/2[id001]!/4/1:0)",
+                "Highlighted text",
+                "yellow",
+                "solid",
+                "annotation note",
+                "Chapter One");
 
-        bookNoteV2Repository.save(BookNoteV2Entity.builder()
-                .user(user)
-                .book(book)
-                .cfi("epubcfi(/6/2[id002]!/4/1:0)")
-                .selectedText("Selected text")
-                .noteContent("This is a note")
-                .color("blue")
-                .chapterTitle("Chapter Two")
-                .build());
+        bookNoteV2Repository.insert(
+                book.getId(), user.getId(),
+                "epubcfi(/6/2[id002]!/4/1:0)",
+                "Selected text",
+                "This is a note",
+                "blue",
+                "Chapter Two");
 
-        bookMarkRepository.save(BookMarkEntity.builder()
-                .user(user)
-                .book(book)
-                .title("Important bookmark")
-                .notes("bookmark notes")
-                .color("red")
-                .priority(1)
-                .build());
+        bookMarkRepository.insert(
+                book.getId(), user.getId(),
+                null, null, null,
+                "Important bookmark",
+                1);
     }
 
     // ---------------------- AppBookController ----------------------
@@ -260,12 +255,11 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         BookEntity book = createPhantomBook(library, "Continue Reading Book " + UUID.randomUUID());
         BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
 
-        UserBookProgressEntity progress = UserBookProgressEntity.builder()
-                .user(user)
-                .book(book)
-                .readStatus(ReadStatus.READING)
-                .lastReadTime(Instant.now())
-                .build();
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(user.getId());
+        progress.setBookId(book.getId());
+        progress.setReadStatus(ReadStatus.READING);
+        progress.setLastReadTime(Instant.now());
         userBookProgressRepository.save(progress);
 
         ResponseEntity<List<AppBookSummary>> response = rest.exchange(
@@ -288,12 +282,11 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         BookEntity book = createPhantomBook(library, "Continue Listening Book " + UUID.randomUUID());
         BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
 
-        UserBookProgressEntity progress = UserBookProgressEntity.builder()
-                .user(user)
-                .book(book)
-                .readStatus(ReadStatus.READING)
-                .lastReadTime(Instant.now())
-                .build();
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(user.getId());
+        progress.setBookId(book.getId());
+        progress.setReadStatus(ReadStatus.READING);
+        progress.setLastReadTime(Instant.now());
         userBookProgressRepository.save(progress);
 
         ResponseEntity<List<AppBookSummary>> response = rest.exchange(

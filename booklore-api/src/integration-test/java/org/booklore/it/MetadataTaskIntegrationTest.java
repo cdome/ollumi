@@ -2,12 +2,11 @@ package org.booklore.it;
 
 import org.booklore.it.util.AuthTestHelper;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.MetadataFetchJobEntity;
-import org.booklore.model.entity.MetadataFetchProposalEntity;
+import org.booklore.repository.jooq.dto.MetadataFetchJobRow;
+import org.booklore.repository.jooq.dto.MetadataFetchProposalRow;
 import org.booklore.model.enums.FetchedMetadataProposalStatus;
 import org.booklore.model.enums.MetadataFetchTaskStatus;
-import org.booklore.repository.MetadataFetchJobRepository;
-import org.booklore.repository.MetadataFetchProposalRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,21 +25,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private MetadataFetchJobRepository metadataFetchJobRepository;
-
-    @Autowired
-    private MetadataFetchProposalRepository metadataFetchProposalRepository;
+    private JooqMetadataFetchJobRepository metadataFetchJobRepository;
 
     @BeforeEach
     void cleanMetadataTaskState() {
-        metadataFetchProposalRepository.deleteAll();
-        metadataFetchJobRepository.deleteAll();
+        // proposals are FK-cascaded from the job rows
+        metadataFetchJobRepository.deleteAllRecords();
     }
 
     @Test
     void adminCanGetMetadataTaskWithProposals() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        MetadataFetchJobEntity job = createJobWithProposal();
+        MetadataFetchJobRow job = createJobWithProposal();
 
         ResponseEntity<Map> response = rest.exchange(
                 baseUrl() + "/api/metadata/tasks/" + job.getTaskId(),
@@ -74,7 +70,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
     void userWithoutMetadataEditPermissionCannotAccessTasks() {
         BookLoreUserEntity user = auth.createUser("metadata-no-edit", "password");
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), user.getUsername(), "password");
-        MetadataFetchJobEntity job = createJobWithProposal();
+        MetadataFetchJobRow job = createJobWithProposal();
 
         ResponseEntity<Map> response = rest.exchange(
                 baseUrl() + "/api/metadata/tasks/" + job.getTaskId(),
@@ -106,7 +102,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanDeleteMetadataTask() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        MetadataFetchJobEntity job = createJobWithProposal();
+        MetadataFetchJobRow job = createJobWithProposal();
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/metadata/tasks/" + job.getTaskId(),
@@ -136,7 +132,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanUpdateProposalStatus() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        MetadataFetchJobEntity job = createJobWithProposal();
+        MetadataFetchJobRow job = createJobWithProposal();
         Long proposalId = job.getProposals().get(0).getProposalId();
 
         ResponseEntity<Void> response = rest.exchange(
@@ -148,7 +144,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        MetadataFetchProposalEntity updated = metadataFetchProposalRepository.findById(proposalId).orElseThrow();
+        MetadataFetchProposalRow updated = metadataFetchJobRepository.findProposalById(proposalId).orElseThrow();
         assertThat(updated.getStatus()).isEqualTo(FetchedMetadataProposalStatus.ACCEPTED);
         assertThat(updated.getReviewerUserId()).isEqualTo(auth.userRepository().findByUsername(ADMIN_USERNAME).orElseThrow().getId());
         assertThat(updated.getReviewedAt()).isNotNull();
@@ -157,7 +153,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
     @Test
     void updateStatusForMissingProposalReturnsNotFound() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        MetadataFetchJobEntity job = createJobWithProposal();
+        MetadataFetchJobRow job = createJobWithProposal();
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/metadata/tasks/" + job.getTaskId() + "/proposals/99999/status?status=ACCEPTED",
@@ -172,7 +168,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
     @Test
     void invalidProposalStatusReturnsNotFound() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        MetadataFetchJobEntity job = createJobWithProposal();
+        MetadataFetchJobRow job = createJobWithProposal();
         Long proposalId = job.getProposals().get(0).getProposalId();
 
         ResponseEntity<Void> response = rest.exchange(
@@ -185,27 +181,18 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
-    private MetadataFetchJobEntity createJobWithProposal() {
+    private MetadataFetchJobRow createJobWithProposal() {
         String taskId = UUID.randomUUID().toString();
-        MetadataFetchJobEntity job = MetadataFetchJobEntity.builder()
-                .taskId(taskId)
-                .userId(auth.userRepository().findByUsername(ADMIN_USERNAME).orElseThrow().getId())
-                .status(MetadataFetchTaskStatus.COMPLETED)
-                .startedAt(Instant.now())
-                .completedAt(Instant.now())
-                .totalBooksCount(1)
-                .completedBooks(1)
-                .build();
+        Long userId = auth.userRepository().findByUsername(ADMIN_USERNAME).orElseThrow().getId();
 
-        MetadataFetchProposalEntity proposal = MetadataFetchProposalEntity.builder()
-                .job(job)
-                .bookId(1L)
-                .status(FetchedMetadataProposalStatus.FETCHED)
-                .fetchedAt(Instant.now())
-                .metadataJson("{}")
-                .build();
+        metadataFetchJobRepository.insertJob(
+                taskId, userId, MetadataFetchTaskStatus.COMPLETED, Instant.now(), 1, 1);
+        // insertJob does not carry completedAt; markCompleted stamps it
+        metadataFetchJobRepository.markCompleted(taskId, 1, Instant.now());
 
-        job.setProposals(List.of(proposal));
-        return metadataFetchJobRepository.save(job);
+        metadataFetchJobRepository.insertProposal(
+                taskId, 1L, "{}", FetchedMetadataProposalStatus.FETCHED, Instant.now());
+
+        return metadataFetchJobRepository.findById(taskId).orElseThrow();
     }
 }
