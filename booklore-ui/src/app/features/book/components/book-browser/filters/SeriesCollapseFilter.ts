@@ -140,7 +140,8 @@ export class SeriesCollapseFilter implements BookFilter, OnDestroy {
         sortDir: 'DESC',
         view: 'GRID',
         coverSize: 1.0,
-        seriesCollapsed: false
+        seriesCollapsed: false,
+        overlayBookType: false
       },
       overrides: []
     });
@@ -151,7 +152,8 @@ export class SeriesCollapseFilter implements BookFilter, OnDestroy {
         sortDir: 'DESC',
         view: 'GRID',
         coverSize: 1.0,
-        seriesCollapsed: false
+        seriesCollapsed: false,
+        overlayBookType: false
       };
     }
 

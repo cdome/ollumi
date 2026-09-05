@@ -8,9 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     isolate: true,
     setupFiles: ['./src/test-setup.ts'],
-    sequence: {
-      hooks: 'stack'
-    },
+    include: ['src/app/**/*.spec.ts'],
+    exclude: ['node_modules/**', 'e2e/**'],
     reporters: [
       ['default', {summary: false}],
       ['junit', {outputFile: 'test-results/vitest-results.xml'}]

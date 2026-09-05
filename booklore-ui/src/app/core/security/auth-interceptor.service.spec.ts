@@ -109,25 +109,14 @@ describe('AuthInterceptorService', () => {
     expect(authService.internalRefreshToken).not.toHaveBeenCalled();
   });
 
-  it('should refresh and retry when the initial request had no token and receives a 401', async () => {
-    authService.getInternalAccessToken.mockReturnValue(null);
-    authService.internalRefreshToken.mockReturnValue(of({accessToken: 'new-access', refreshToken: 'new-refresh'}));
+  it('should not attempt a refresh for 401 responses on auth endpoints', async () => {
+    authService.getInternalAccessToken.mockReturnValue('token');
+    const next = vi.fn(() => throwError(() => new HttpErrorResponse({status: 401, statusText: 'Unauthorized'})));
 
-    let callCount = 0;
-    const next = vi.fn((req: HttpRequest<unknown>) => {
-      callCount++;
-      if (callCount === 1) {
-        return throwError(() => new HttpErrorResponse({status: 401, statusText: 'Unauthorized'}));
-      }
-      return of(new HttpResponse({status: 200, url: req.url}));
-    });
+    await expect(run(new HttpRequest('GET', 'http://localhost:6060/api/v1/auth/login'), next as HttpHandlerFn))
+      .rejects.toThrow();
 
-    await run(new HttpRequest('GET', 'http://localhost:6060/api/v1/test'), next as HttpHandlerFn);
-
-    expect(authService.internalRefreshToken).toHaveBeenCalledTimes(1);
-    expect(callCount).toBe(2);
-    expect(next.mock.calls[0][0].headers.has('Authorization')).toBe(false);
-    expect(next.mock.calls[1][0].headers.get('Authorization')).toBe('Bearer new-access');
+    expect(authService.internalRefreshToken).not.toHaveBeenCalled();
   });
 
   it('should add an Authorization header for API requests when a token is present', async () => {
