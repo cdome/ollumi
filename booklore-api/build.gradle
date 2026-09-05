@@ -153,7 +153,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testImplementation "org.mockito:mockito-inline:5.2.0"
-    testRuntimeOnly 'com.h2database:h2'
 
     // --- Integration Test Dependencies ---
     integrationTestImplementation 'org.springframework.boot:spring-boot-testcontainers'
