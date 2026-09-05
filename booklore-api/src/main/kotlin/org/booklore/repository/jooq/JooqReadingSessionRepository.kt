@@ -441,17 +441,20 @@ class JooqReadingSessionRepository(private val dsl: DSLContext) {
     }
 
     fun findAudiobookProgressByUser(userId: Long): List<AudiobookProgress> {
-        val title = coalesce(bm.TITLE, inline("Unknown"))
-        val endProgress = coalesce(max(rs.END_PROGRESS), inline(0.0))
-        val totalDuration = coalesce(max(bf.DURATION_SECONDS), inline(0L))
-        val listenedDuration = sum(rs.DURATION_SECONDS)
+        // The alias must live on the field VARIABLE, not be applied inline in select(): the record then
+        // holds a field named "title" while r.get(title) looks up the unaliased coalesce expression,
+        // which fails at runtime with "Field coalesce(...) is not contained in row type".
+        val title = coalesce(bm.TITLE, inline("Unknown")).`as`("title")
+        val endProgress = coalesce(max(rs.END_PROGRESS), inline(0.0)).`as`("max_progress")
+        val totalDuration = coalesce(max(bf.DURATION_SECONDS), inline(0L)).`as`("total_duration")
+        val listenedDuration = sum(rs.DURATION_SECONDS).`as`("listened_duration")
 
         return dsl.select(
             rs.BOOK_ID,
-            title.`as`("title"),
-            endProgress.`as`("max_progress"),
-            totalDuration.`as`("total_duration"),
-            listenedDuration.`as`("listened_duration")
+            title,
+            endProgress,
+            totalDuration,
+            listenedDuration
         )
             .from(rs)
             .join(BOOK).on(rs.BOOK_ID.eq(BOOK.ID))

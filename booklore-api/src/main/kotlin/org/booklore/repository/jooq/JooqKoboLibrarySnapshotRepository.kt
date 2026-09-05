@@ -16,8 +16,15 @@ class JooqKoboLibrarySnapshotRepository(private val dsl: DSLContext) {
     private val s = KOBO_LIBRARY_SNAPSHOT
     private val b = KOBO_LIBRARY_SNAPSHOT_BOOK
 
-    fun findByIdAndUserId(id: String, userId: Long): KoboLibrarySnapshot? =
-        dsl.selectFrom(s).where(s.ID.eq(id).and(s.USER_ID.eq(userId))).fetchOne()?.let(::toDto)
+    /**
+     * [id] is nullable on purpose: on the first Kobo sync the sync token carries no ongoing/last
+     * sync-point id, and the Java caller passes null. The JPA derived query this replaced simply
+     * matched no rows; a non-null Kotlin parameter would instead throw on the intrinsic null check.
+     */
+    fun findByIdAndUserId(id: String?, userId: Long): KoboLibrarySnapshot? {
+        if (id == null) return null
+        return dsl.selectFrom(s).where(s.ID.eq(id).and(s.USER_ID.eq(userId))).fetchOne()?.let(::toDto)
+    }
 
     /** Insert the snapshot row and its snapshot-book children (was a JPA cascade save). */
     fun insert(id: String, userId: Long, createdDate: LocalDateTime, books: List<KoboSnapshotBook>): KoboLibrarySnapshot {
