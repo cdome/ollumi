@@ -8,6 +8,7 @@
     "dev": "ng serve --open --watch --configuration development",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "test:coverage": "ng test --coverage",
     "lint": "ng lint"
   },
   "private": true,
