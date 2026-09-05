@@ -5,11 +5,13 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.settings.OidcProviderDetails;
-import org.booklore.model.entity.OidcSessionEntity;
+import org.booklore.model.entity.BookLoreUserEntity;
+import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.dto.OidcSession;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.OidcSessionRepository;
-import org.booklore.repository.RefreshTokenRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -36,8 +38,9 @@ public class BackchannelLogoutService {
 
     private final AppSettingService appSettingService;
     private final OidcTokenValidator oidcTokenValidator;
-    private final OidcSessionRepository oidcSessionRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final JooqOidcSessionRepository oidcSessionRepository;
+    private final UserRepository userRepository;
+    private final JooqRefreshTokenRepository refreshTokenRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
 
@@ -77,23 +80,21 @@ public class BackchannelLogoutService {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Logout token must contain either 'sub' or 'sid' claim");
         }
 
-        List<OidcSessionEntity> sessions;
+        List<OidcSession> sessions;
         if (sid != null) {
             sessions = oidcSessionRepository.findByOidcSessionIdAndRevokedFalse(sid);
         } else {
             sessions = oidcSessionRepository.findByOidcSubjectAndOidcIssuerAndRevokedFalse(sub, providerDetails.getIssuerUri());
         }
 
-        for (OidcSessionEntity session : sessions) {
-            session.setRevoked(true);
-            oidcSessionRepository.save(session);
+        for (OidcSession session : sessions) {
+            oidcSessionRepository.revokeById(session.getId());
 
-            var user = session.getUser();
-            refreshTokenRepository.findAllByUserAndRevokedFalse(user).forEach(token -> {
-                token.setRevoked(true);
-                token.setRevocationDate(Instant.now());
-                refreshTokenRepository.save(token);
-            });
+            BookLoreUserEntity user = userRepository.findById(session.getUserId()).orElse(null);
+            if (user == null) {
+                continue;
+            }
+            refreshTokenRepository.revokeAllActiveByUserId(user.getId(), Instant.now());
 
             notificationService.sendMessageToUser(
                     user.getUsername(),

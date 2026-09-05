@@ -3,8 +3,8 @@ package org.booklore.service.bookdrop;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookMetadata;
-import org.booklore.model.entity.BookdropFileEntity;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
@@ -16,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BookdropMetadataHelper {
 
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
     private final ObjectMapper objectMapper;
 
     public List<Long> resolveFileIds(boolean selectAll, List<Long> excludedIds, List<Long> selectedIds) {
@@ -31,7 +31,7 @@ public class BookdropMetadataHelper {
         return selectedIds != null ? selectedIds : Collections.emptyList();
     }
 
-    public BookMetadata getCurrentMetadata(BookdropFileEntity file) {
+    public BookMetadata getCurrentMetadata(BookdropFileRow file) {
         try {
             String fetchedMetadataJson = file.getFetchedMetadata();
             if (fetchedMetadataJson != null && !fetchedMetadataJson.isBlank()) {
@@ -43,10 +43,9 @@ public class BookdropMetadataHelper {
         return new BookMetadata();
     }
 
-    public void updateFetchedMetadata(BookdropFileEntity file, BookMetadata metadata) {
+    public String serializeMetadata(BookdropFileRow file, BookMetadata metadata) {
         try {
-            String updatedMetadataJson = objectMapper.writeValueAsString(metadata);
-            file.setFetchedMetadata(updatedMetadataJson);
+            return objectMapper.writeValueAsString(metadata);
         } catch (Exception e) {
             log.error("Error serializing metadata for file {}: {}", file.getId(), e.getMessage());
             throw new RuntimeException("Failed to update metadata", e);

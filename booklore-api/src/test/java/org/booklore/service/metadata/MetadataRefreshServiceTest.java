@@ -13,12 +13,12 @@ import org.booklore.model.MetadataUpdateWrapper;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.MetadataFetchJobEntity;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.MetadataFetchJobRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.parser.BookParser;
@@ -43,7 +43,7 @@ import static org.mockito.Mockito.*;
 class MetadataRefreshServiceTest {
 
     @Mock private LibraryRepository libraryRepository;
-    @Mock private MetadataFetchJobRepository metadataFetchJobRepository;
+    @Mock private JooqMetadataFetchJobRepository metadataFetchJobRepository;
     @Mock private BookMapper bookMapper;
     @Mock private BookMetadataUpdater bookMetadataUpdater;
     @Mock private NotificationService notificationService;
@@ -51,6 +51,7 @@ class MetadataRefreshServiceTest {
     @Mock private Map<MetadataProvider, BookParser> parserMap;
     @Mock private ObjectMapper objectMapper;
     @Mock private BookRepository bookRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private AuthenticationService authenticationService;
     @Mock private TaskCancellationManager cancellationManager;
@@ -269,7 +270,7 @@ class MetadataRefreshServiceTest {
         library.setId(5L);
 
         when(libraryRepository.findById(5L)).thenReturn(Optional.of(library));
-        when(bookRepository.findBookIdsByLibraryId(5L)).thenReturn(Set.of(10L, 11L));
+        when(jooqBookRepository.findBookIdsByLibraryId(5L)).thenReturn(Set.of(10L, 11L));
 
         MetadataRefreshRequest request = MetadataRefreshRequest.builder()
                 .refreshType(MetadataRefreshRequest.RefreshType.LIBRARY)

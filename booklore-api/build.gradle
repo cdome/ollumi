@@ -1,8 +1,12 @@
 plugins {
     id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '2.3.20'
+    id 'org.jetbrains.kotlin.plugin.spring' version '2.3.20'
+    id 'org.jetbrains.kotlin.plugin.lombok' version '2.3.20'
     id 'org.springframework.boot' version '4.0.3'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'org.hibernate.orm' version '7.2.6.Final'
+    id 'nu.studer.jooq' version '9.0'
     id 'com.github.ben-manes.versions' version '0.53.0'
     id 'jacoco'
 }
@@ -14,6 +18,17 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
+}
+
+kotlin {
+    jvmToolchain(25)
+    compilerOptions {
+        freeCompilerArgs = ['-Xjsr305=strict']
+    }
+}
+
+kotlinLombok {
+    lombokConfigurationFile file("lombok.config")
 }
 
 repositories {
@@ -59,6 +74,14 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-mysql:12.0.3'
 
+    // --- jOOQ (version managed by Spring Boot BOM) ---
+    implementation 'org.springframework.boot:spring-boot-starter-jooq'
+    implementation 'org.jooq:jooq-kotlin'
+    jooqGenerator 'org.mariadb.jdbc:mariadb-java-client:3.5.7'
+
+    // --- Kotlin ---
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+
     // --- Security & Authentication ---
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
@@ -76,13 +99,13 @@ dependencies {
     // Required for JPEG2000 support in PDFBox (not covered by TwelveMonkeys)
     implementation 'com.github.jai-imageio:jai-imageio-core:1.4.0'
     implementation 'com.github.jai-imageio:jai-imageio-jpeg2000:1.4.0'
-    
+
     // --- TwelveMonkeys ImageIO ---
     implementation 'com.twelvemonkeys.imageio:imageio-jpeg:3.13.1'
     implementation 'com.twelvemonkeys.imageio:imageio-tiff:3.13.1'
     implementation 'com.twelvemonkeys.imageio:imageio-webp:3.13.1'
     implementation 'com.twelvemonkeys.imageio:imageio-bmp:3.13.1'
-    
+
     implementation 'io.documentnode:epub4j-core:4.2.3'
 
     // --- Audio Metadata (Audiobook Support) ---
@@ -130,12 +153,25 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testImplementation "org.mockito:mockito-inline:5.2.0"
-    testRuntimeOnly 'com.h2database:h2'
 
     // --- Integration Test Dependencies ---
     integrationTestImplementation 'org.springframework.boot:spring-boot-testcontainers'
     integrationTestImplementation 'org.testcontainers:testcontainers-mariadb'
     integrationTestImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+
+    // --- Testcontainers (for jOOQ integration tests against real MariaDB) ---
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.5')
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mariadb'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/generated/java'
+        }
+    }
 }
 
 hibernate {
@@ -147,6 +183,7 @@ hibernate {
 test {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+    maxHeapSize = '1g'
     finalizedBy jacocoTestReport
 }
 
@@ -198,11 +235,48 @@ tasks.register('jacocoCombinedReport', JacocoReport) {
 
 bootRun {
     def debug = System.getenv('REMOTE_DEBUG_ENABLED')
-    if (debug.equals("true")) { 
+    if (debug.equals("true")) {
         jvmArgs("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005")
     }
 }
 
 bootJar {
     mainClass = 'org.booklore.BookloreApplication'
+}
+
+jooq {
+    version = dependencyManagement.importedProperties['jooq.version']
+    configurations {
+        main {
+            generateSchemaSourceOnCompilation = false
+            generationTool {
+                logging = org.jooq.meta.jaxb.Logging.WARN
+                jdbc {
+                    driver = 'org.mariadb.jdbc.Driver'
+                    url = System.getenv('CODEGEN_DB_URL') ?: 'jdbc:mariadb://localhost:3366/booklore'
+                    user = System.getenv('CODEGEN_DB_USER') ?: 'booklore'
+                    password = System.getenv('CODEGEN_DB_PASS') ?: 'booklore'
+                }
+                generator {
+                    name = 'org.jooq.codegen.JavaGenerator'
+                    database {
+                        name = 'org.jooq.meta.mariadb.MariaDBDatabase'
+                        inputSchema = 'booklore'
+                        excludes = 'flyway_schema_history'
+                    }
+                    target {
+                        packageName = 'org.booklore.jooq'
+                        directory = 'src/generated/java'
+                    }
+                    generate {
+                        records = true
+                        pojos = false
+                        daos = false
+                        fluentSetters = true
+                        javaTimeTypes = true
+                    }
+                }
+            }
+        }
+    }
 }

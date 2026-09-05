@@ -1,7 +1,7 @@
 package org.booklore.config.security.filter;
 
 import org.booklore.config.security.userdetails.KoreaderUserDetails;
-import org.booklore.repository.KoreaderUserRepository;
+import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,7 +23,7 @@ import java.util.List;
 @Slf4j
 public class KoreaderAuthFilter extends OncePerRequestFilter {
 
-    private final KoreaderUserRepository koreaderUserRepository;
+    private final JooqKoreaderUserRepository koreaderUserRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
@@ -40,17 +40,12 @@ public class KoreaderAuthFilter extends OncePerRequestFilter {
         if (username != null && key != null) {
             koreaderUserRepository.findByUsername(username).ifPresentOrElse(user -> {
                 if (user.getPasswordMD5().equalsIgnoreCase(key)) {
-                    Long bookLoreUserId = null;
-                    if (user.getBookLoreUser() != null) {
-                        bookLoreUserId = user.getBookLoreUser().getId();
-                    }
-
                     UserDetails userDetails = new KoreaderUserDetails(
                             user.getUsername(),
                             user.getPasswordMD5(),
-                            user.isSyncEnabled(),
-                            user.isSyncWithBookloreReader(),
-                            bookLoreUserId,
+                            user.getSyncEnabled(),
+                            user.getSyncWithBookloreReader(),
+                            user.getBookLoreUserId(),
                             List.of(new SimpleGrantedAuthority("ROLE_USER"))
                     );
 

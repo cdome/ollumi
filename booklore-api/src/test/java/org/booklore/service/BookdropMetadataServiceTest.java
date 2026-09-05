@@ -4,10 +4,10 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.settings.AppSettings;
-import org.booklore.model.entity.BookdropFileEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.bookdrop.BookdropMetadataService;
 import org.booklore.service.metadata.MetadataRefreshService;
@@ -33,14 +33,14 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
-import static org.booklore.model.entity.BookdropFileEntity.Status.PENDING_REVIEW;
+import static org.booklore.model.enums.BookdropFileStatus.PENDING_REVIEW;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class BookdropMetadataServiceTest {
 
     @Mock
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
     @Mock
     private AppSettingService appSettingService;
     @Mock
@@ -61,14 +61,15 @@ class BookdropMetadataServiceTest {
     @InjectMocks
     private BookdropMetadataService bookdropMetadataService;
 
-    private BookdropFileEntity sampleFile;
+    private BookdropFileRow sampleFile;
 
     @BeforeEach
     void setup() {
-        sampleFile = new BookdropFileEntity();
-        sampleFile.setId(1L);
-        sampleFile.setFileName("book.epub");
-        sampleFile.setFilePath("/tmp/book.epub");
+        sampleFile = row(1L, "/tmp/book.epub", "book.epub", null);
+    }
+
+    private static BookdropFileRow row(Long id, String filePath, String fileName, String originalMetadata) {
+        return new BookdropFileRow(id, filePath, fileName, null, PENDING_REVIEW, originalMetadata, null, null, null);
     }
 
     @Test
@@ -78,14 +79,16 @@ class BookdropMetadataServiceTest {
         when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(sampleFile));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileExtension.EPUB), any(File.class))).thenReturn(metadata);
         when(objectMapper.writeValueAsString(any(BookMetadata.class))).thenReturn("{\"title\":\"Test Book\"}");
-        when(bookdropFileRepository.save(any(BookdropFileEntity.class))).thenReturn(sampleFile);
+        when(bookdropFileRepository.updateOriginalMetadata(anyLong(), anyString())).thenAnswer(invocation ->
+                new BookdropFileRow(1L, "/tmp/book.epub", "book.epub", null, PENDING_REVIEW,
+                        invocation.getArgument(1), null, null, Instant.now()));
 
-        BookdropFileEntity result = bookdropMetadataService.attachInitialMetadata(1L);
+        BookdropFileRow result = bookdropMetadataService.attachInitialMetadata(1L);
 
         assertThat(result).isNotNull();
         assertThat(result.getOriginalMetadata()).contains("Test Book");
         assertThat(result.getUpdatedAt()).isBeforeOrEqualTo(Instant.now());
-        verify(bookdropFileRepository).save(any(BookdropFileEntity.class));
+        verify(bookdropFileRepository).updateOriginalMetadata(anyLong(), anyString());
     }
 
     @Test
@@ -97,24 +100,49 @@ class BookdropMetadataServiceTest {
 
     @Test
     void attachFetchedMetadata_shouldUpdateEntityWithFetchedData() throws Exception {
-        sampleFile.setOriginalMetadata("{\"title\":\"Old Book\"}");
+        BookdropFileRow file = row(1L, "/tmp/book.epub", "book.epub", "{\"title\":\"Old Book\"}");
         AppSettings settings = new AppSettings();
         BookMetadata fetched = BookMetadata.builder().title("New Title").build();
 
-        when(bookdropFileRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(sampleFile));
+        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(file));
         when(appSettingService.getAppSettings()).thenReturn(settings);
         when(metadataRefreshService.prepareProviders(any())).thenReturn(List.of());
-        when(objectMapper.readValue(sampleFile.getOriginalMetadata(), BookMetadata.class)).thenReturn(fetched);
+        when(objectMapper.readValue(file.getOriginalMetadata(), BookMetadata.class)).thenReturn(fetched);
         when(metadataRefreshService.fetchMetadataForBook(any(), any(Book.class))).thenReturn(Map.of());
         when(metadataRefreshService.buildFetchMetadata(any(), any(), any(), any())).thenReturn(fetched);
         when(objectMapper.writeValueAsString(fetched)).thenReturn("{\"title\":\"New Title\"}");
+        when(bookdropFileRepository.updateFetchedMetadataAndStatus(anyLong(), anyString(), any())).thenAnswer(invocation ->
+                new BookdropFileRow(1L, "/tmp/book.epub", "book.epub", null, invocation.getArgument(2),
+                        "{\"title\":\"Old Book\"}", invocation.getArgument(1), null, Instant.now()));
 
-        BookdropFileEntity result = bookdropMetadataService.attachFetchedMetadata(1L);
+        BookdropFileRow result = bookdropMetadataService.attachFetchedMetadata(1L);
 
         assertThat(result.getFetchedMetadata()).contains("New Title");
         assertThat(result.getStatus()).isEqualTo(PENDING_REVIEW);
-        verify(bookdropFileRepository).save(result);
+        verify(bookdropFileRepository).updateFetchedMetadataAndStatus(anyLong(), anyString(), any());
+    }
+
+    @Test
+    void attachFetchedMetadata_shouldSkipOnlineFetchWhenNotSearchable() throws Exception {
+        // filename base "book" equals the title and there is no ISBN/ASIN, so hasSearchableMetadata is false:
+        // the service must skip the online fetch and only flip status to PENDING_REVIEW.
+        BookdropFileRow file = row(1L, "/tmp/book.epub", "book.epub", "{\"title\":\"book\"}");
+        BookMetadata initial = BookMetadata.builder().title("book").build();
+
+        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(file));
+        when(appSettingService.getAppSettings()).thenReturn(new AppSettings());
+        when(objectMapper.readValue(file.getOriginalMetadata(), BookMetadata.class)).thenReturn(initial);
+        when(bookdropFileRepository.updateStatus(anyLong(), any())).thenAnswer(invocation ->
+                new BookdropFileRow(1L, "/tmp/book.epub", "book.epub", null, invocation.getArgument(1),
+                        "{\"title\":\"book\"}", null, null, Instant.now()));
+
+        BookdropFileRow result = bookdropMetadataService.attachFetchedMetadata(1L);
+
+        assertThat(result.getStatus()).isEqualTo(PENDING_REVIEW);
+        assertThat(result.getFetchedMetadata()).isNull();
+        verify(bookdropFileRepository).updateStatus(1L, PENDING_REVIEW);
+        verify(bookdropFileRepository, never()).updateFetchedMetadataAndStatus(anyLong(), anyString(), any());
+        verify(metadataRefreshService, never()).fetchMetadataForBook(any(), any(Book.class));
     }
 
     @Test
@@ -124,52 +152,55 @@ class BookdropMetadataServiceTest {
         when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(sampleFile));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileExtension.EPUB), any(File.class))).thenReturn(metadata);
         when(objectMapper.writeValueAsString(metadata)).thenReturn("{\"title\":\"No Cover Book\"}");
-        when(bookdropFileRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(bookdropFileRepository.updateOriginalMetadata(anyLong(), anyString())).thenAnswer(invocation ->
+                new BookdropFileRow(1L, "/tmp/book.epub", "book.epub", null, PENDING_REVIEW,
+                        invocation.getArgument(1), null, null, Instant.now()));
 
-        BookdropFileEntity result = bookdropMetadataService.attachInitialMetadata(1L);
+        BookdropFileRow result = bookdropMetadataService.attachInitialMetadata(1L);
 
         assertThat(result.getOriginalMetadata()).contains("No Cover Book");
-        verify(bookdropFileRepository).save(result);
+        verify(bookdropFileRepository).updateOriginalMetadata(anyLong(), anyString());
     }
 
     @Test
     void extractInitialMetadata_shouldThrowForUnsupportedFileExtension() {
-        sampleFile.setFileName("book.txt");
-        sampleFile.setFilePath("/tmp/book.txt");
+        BookdropFileRow file = row(1L, "/tmp/book.txt", "book.txt", null);
 
-        when(bookdropFileRepository.findById(sampleFile.getId())).thenReturn(Optional.of(sampleFile));
+        when(bookdropFileRepository.findById(file.getId())).thenReturn(Optional.of(file));
 
-        assertThatThrownBy(() -> bookdropMetadataService.attachInitialMetadata(sampleFile.getId())).isInstanceOf(APIException.class)
+        assertThatThrownBy(() -> bookdropMetadataService.attachInitialMetadata(file.getId())).isInstanceOf(APIException.class)
                 .hasMessageContaining("Invalid file format");
     }
 
     @Test
     void attachFetchedMetadata_shouldSleepIfGoodreadsIncluded() throws Exception {
-        sampleFile.setOriginalMetadata("{\"title\":\"Book\"}");
+        BookdropFileRow file = row(1L, "/tmp/book.epub", "book.epub", "{\"title\":\"Book\"}");
         AppSettings settings = new AppSettings();
         BookMetadata fetched = BookMetadata.builder().title("Fetched Book").build();
 
-        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(sampleFile));
+        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(file));
         when(appSettingService.getAppSettings()).thenReturn(settings);
         when(metadataRefreshService.prepareProviders(any())).thenReturn(List.of(MetadataProvider.GoodReads));
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class))).thenReturn(fetched);
         when(metadataRefreshService.fetchMetadataForBook(any(), any(Book.class))).thenReturn(Map.of());
         when(metadataRefreshService.buildFetchMetadata(any(), any(), any(), any())).thenReturn(fetched);
         when(objectMapper.writeValueAsString(fetched)).thenReturn("{\"title\":\"Fetched Book\"}");
-        when(bookdropFileRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(bookdropFileRepository.updateFetchedMetadataAndStatus(anyLong(), anyString(), any())).thenAnswer(invocation ->
+                new BookdropFileRow(1L, "/tmp/book.epub", "book.epub", null, invocation.getArgument(2),
+                        "{\"title\":\"Book\"}", invocation.getArgument(1), null, Instant.now()));
 
-        BookdropFileEntity result = bookdropMetadataService.attachFetchedMetadata(1L);
+        BookdropFileRow result = bookdropMetadataService.attachFetchedMetadata(1L);
 
         assertThat(result.getFetchedMetadata()).contains("Fetched Book");
         assertThat(result.getStatus()).isEqualTo(PENDING_REVIEW);
-        verify(bookdropFileRepository).save(result);
+        verify(bookdropFileRepository).updateFetchedMetadataAndStatus(anyLong(), anyString(), any());
     }
 
     @Test
     void attachFetchedMetadata_shouldThrowOnJsonProcessingError() throws Exception {
-        sampleFile.setOriginalMetadata("{invalidJson}");
+        BookdropFileRow file = row(1L, "/tmp/book.epub", "book.epub", "{invalidJson}");
 
-        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(sampleFile));
+        when(bookdropFileRepository.findById(1L)).thenReturn(Optional.of(file));
         when(appSettingService.getAppSettings()).thenReturn(new AppSettings());
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class)))
                 .thenThrow(new JacksonException("Invalid JSON") {

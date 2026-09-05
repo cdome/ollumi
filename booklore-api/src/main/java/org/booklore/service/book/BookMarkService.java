@@ -1,16 +1,12 @@
 package org.booklore.service.book;
 
 import org.booklore.config.BookmarkProperties;
-import org.booklore.mapper.BookMarkMapper;
 import org.booklore.model.dto.BookMark;
 import org.booklore.model.dto.CreateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
-import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.BookMarkEntity;
-import org.booklore.repository.BookMarkRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,25 +24,21 @@ import java.util.Optional;
 @Slf4j
 public class BookMarkService {
 
-    private final BookMarkRepository bookMarkRepository;
+    private final JooqBookMarkRepository bookMarkRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
-    private final BookMarkMapper mapper;
     private final BookmarkProperties bookmarkProperties;
 
     @Transactional(readOnly = true)
     public List<BookMark> getBookmarksForBook(Long bookId) {
         Long userId = getCurrentUserId();
-        return bookMarkRepository.findByBookIdAndUserIdOrderByPriorityAscCreatedAtDesc(bookId, userId)
-                .stream()
-                .map(mapper::toDto)
-                .toList();
+        return bookMarkRepository.findByBookIdAndUserIdOrderByPriorityAscCreatedAtDesc(bookId, userId);
     }
 
     @Transactional(readOnly = true)
     public BookMark getBookmarkById(Long bookmarkId) {
-        return mapper.toDto(findBookmarkByIdAndUser(bookmarkId));
+        return findBookmarkByIdAndUser(bookmarkId);
     }
 
     @Transactional
@@ -60,23 +52,27 @@ public class BookMarkService {
             validateNoDuplicateBookmark(request.getCfi(), request.getBookId(), userId);
         }
 
-        BookMarkEntity bookmark = BookMarkEntity.builder()
-                .cfi(request.getCfi())
-                .positionMs(request.getPositionMs())
-                .trackIndex(request.getTrackIndex())
-                .title(request.getTitle())
-                .book(findBook(request.getBookId()))
-                .user(findUser(userId))
-                .priority(bookmarkProperties.getDefaultPriority())
-                .build();
+        if (!bookRepository.existsById(request.getBookId())) {
+            throw new EntityNotFoundException("Book not found: " + request.getBookId());
+        }
+        if (!userRepository.existsById(userId)) {
+            throw new EntityNotFoundException("User not found: " + userId);
+        }
 
         log.info("Creating bookmark for book {} by user {}", request.getBookId(), userId);
-        return mapper.toDto(bookMarkRepository.save(bookmark));
+        return bookMarkRepository.insert(
+                request.getBookId(),
+                userId,
+                request.getCfi(),
+                request.getPositionMs(),
+                request.getTrackIndex(),
+                request.getTitle(),
+                bookmarkProperties.getDefaultPriority());
     }
 
     @Transactional
     public BookMark updateBookmark(Long bookmarkId, UpdateBookMarkRequest request) {
-        BookMarkEntity bookmark = findBookmarkByIdAndUser(bookmarkId);
+        BookMark bookmark = findBookmarkByIdAndUser(bookmarkId);
 
         // Validate CFI uniqueness if CFI is being updated
         if (request.getCfi() != null) {
@@ -86,34 +82,27 @@ public class BookMarkService {
         applyUpdates(bookmark, request);
 
         log.info("Updating bookmark {}", bookmarkId);
-        return mapper.toDto(bookMarkRepository.save(bookmark));
+        return bookMarkRepository.update(bookmark);
     }
 
     @Transactional
     public void deleteBookmark(Long bookmarkId) {
-        BookMarkEntity bookmark = findBookmarkByIdAndUser(bookmarkId);
+        BookMark bookmark = findBookmarkByIdAndUser(bookmarkId);
         log.info("Deleting bookmark {}", bookmarkId);
-        bookMarkRepository.delete(bookmark);
+        bookMarkRepository.deleteById(bookmark.getId());
     }
 
     private Long getCurrentUserId() {
         return authenticationService.getAuthenticatedUser().getId();
     }
 
-    private BookMarkEntity findBookmarkByIdAndUser(Long bookmarkId) {
+    private BookMark findBookmarkByIdAndUser(Long bookmarkId) {
         Long userId = getCurrentUserId();
-        return bookMarkRepository.findByIdAndUserId(bookmarkId, userId)
-                .orElseThrow(() -> new EntityNotFoundException("Bookmark not found: " + bookmarkId));
-    }
-
-    private BookEntity findBook(Long bookId) {
-        return bookRepository.findById(bookId)
-                .orElseThrow(() -> new EntityNotFoundException("Book not found: " + bookId));
-    }
-
-    private BookLoreUserEntity findUser(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+        BookMark bookmark = bookMarkRepository.findByIdAndUserId(bookmarkId, userId);
+        if (bookmark == null) {
+            throw new EntityNotFoundException("Bookmark not found: " + bookmarkId);
+        }
+        return bookmark;
     }
 
     private void validateNoDuplicateBookmark(String cfi, Long bookId, Long userId) {
@@ -125,10 +114,7 @@ public class BookMarkService {
      * Bookmarks are sorted by priority ascending (1 first), then by creation date descending.
      */
     private void validateNoDuplicateBookmark(String cfi, Long bookId, Long userId, Long excludeBookmarkId) {
-        boolean exists = (excludeBookmarkId == null)
-                ? bookMarkRepository.existsByCfiAndBookIdAndUserId(cfi, bookId, userId)
-                : bookMarkRepository.existsByCfiAndBookIdAndUserIdExcludeId(cfi, bookId, userId, excludeBookmarkId);
-
+        boolean exists = bookMarkRepository.existsByCfiAndBookIdAndUserId(cfi, bookId, userId, excludeBookmarkId);
         if (exists) {
             throw new APIException("Bookmark already exists at this location", HttpStatus.CONFLICT);
         }
@@ -144,7 +130,7 @@ public class BookMarkService {
         }
     }
 
-    private void applyUpdates(BookMarkEntity bookmark, UpdateBookMarkRequest request) {
+    private void applyUpdates(BookMark bookmark, UpdateBookMarkRequest request) {
         Optional.ofNullable(request.getTitle()).ifPresent(bookmark::setTitle);
         Optional.ofNullable(request.getCfi()).ifPresent(bookmark::setCfi);
         Optional.ofNullable(request.getColor()).ifPresent(bookmark::setColor);

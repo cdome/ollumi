@@ -8,10 +8,9 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.settings.OidcAutoProvisionDetails;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.OidcSessionEntity;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.OidcSessionRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
@@ -46,7 +45,7 @@ public class OidcAuthService {
     private final UserRepository userRepository;
     private final UserProvisioningService userProvisioningService;
     private final AuthenticationService authenticationService;
-    private final OidcSessionRepository oidcSessionRepository;
+    private final JooqOidcSessionRepository oidcSessionRepository;
     private final OidcGroupMappingService oidcGroupMappingService;
     private final AuditService auditService;
 
@@ -181,15 +180,7 @@ public class OidcAuthService {
             log.debug("No 'sid' claim in ID token");
         }
 
-        var session = OidcSessionEntity.builder()
-                .user(user)
-                .oidcSubject(subject)
-                .oidcIssuer(issuer)
-                .oidcSessionId(sessionId)
-                .idTokenHint(rawIdToken)
-                .build();
-
-        oidcSessionRepository.save(session);
+        oidcSessionRepository.insert(user.getId(), subject, issuer, sessionId, rawIdToken);
         log.debug("Persisted OIDC session for user '{}' (subject: {})", user.getUsername(), subject);
     }
 

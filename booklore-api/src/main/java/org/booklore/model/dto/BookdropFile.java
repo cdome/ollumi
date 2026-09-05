@@ -1,6 +1,6 @@
 package org.booklore.model.dto;
 
-import org.booklore.model.entity.BookdropFileEntity.Status;
+import org.booklore.model.enums.BookdropFileStatus;
 import lombok.Data;
 
 @Data
@@ -13,5 +13,5 @@ public class BookdropFile {
     private BookMetadata fetchedMetadata;
     private String createdAt;
     private String updatedAt;
-    private Status status;
+    private BookdropFileStatus status;
 }

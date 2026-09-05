@@ -3,18 +3,19 @@ package org.booklore.service.kobo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.KoboReadingStateMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.dto.response.kobo.KoboReadingStateResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoboReadingStateEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
+import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -45,11 +47,11 @@ public class KoboReadingStateService {
             .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
             .optionalEnd()
             .toFormatter();
+    private static final Pattern SURROUNDING_DOUBLE_QUOTES_PATTERN = Pattern.compile("^\"|\"$");
 
-    private final KoboReadingStateRepository repository;
-    private final KoboReadingStateMapper mapper;
-    private final UserBookProgressRepository progressRepository;
-    private final UserBookFileProgressRepository fileProgressRepository;
+    private final JooqKoboReadingStateRepository repository;
+    private final JooqUserBookProgressRepository progressRepository;
+    private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
@@ -83,60 +85,60 @@ public class KoboReadingStateService {
 
         return dtos.stream()
                 .map(dto -> {
-                    String entitlementId = mapper.cleanString(dto.getEntitlementId());
-                    Optional<KoboReadingStateEntity> existingOpt =
-                            repository.findByEntitlementIdAndUserId(entitlementId, userId);
+                    String entitlementId = cleanString(dto.getEntitlementId());
+                    KoboReadingState existing = repository.findByEntitlementIdAndUserId(entitlementId, userId);
                     log.debug("Kobo reading state lookup: entitlementId={}, foundExisting={}",
-                            entitlementId, existingOpt.isPresent());
-                    KoboReadingStateEntity entity = existingOpt
-                            .map(existing -> mergeReadingState(existing, dto))
-                            .orElseGet(() -> {
-                                KoboReadingStateEntity newEntity = mapper.toEntity(dto);
-                                newEntity.setUserId(userId);
-                                if (entitlementId != null && !entitlementId.isBlank()) {
-                                    newEntity.setEntitlementId(entitlementId);
-                                }
-                                String created = normalizeTimestampValue(dto.getCreated());
-                                if (isBlank(created)) {
-                                    created = KOBO_TIMESTAMP_FORMAT.format(Instant.now());
-                                }
-                                String lastModified = normalizeTimestampValue(dto.getLastModified());
-                                if (isBlank(lastModified)) {
-                                    lastModified = created;
-                                }
-                                dto.setLastModified(lastModified);
-                                dto.setCreated(created);
-                                newEntity.setLastModifiedString(mapper.cleanString(lastModified));
-                                newEntity.setPriorityTimestamp(mapper.cleanString(computePriorityTimestamp(dto)));
-                                newEntity.setCreated(mapper.cleanString(created));
-                                return newEntity;
-                            });
+                            entitlementId, existing != null);
 
-                    KoboReadingStateEntity savedEntity = repository.save(entity);
-                    KoboReadingState savedState = mapper.toDto(savedEntity);
+                    KoboReadingState savedState;
+                    if (existing != null) {
+                        KoboReadingState merged = mergeReadingState(existing, dto);
+                        merged.setEntitlementId(entitlementId);
+                        merged.setCreated(existing.getCreated());
+                        merged.setLastModified(cleanString(merged.getLastModified()));
+                        merged.setPriorityTimestamp(cleanString(merged.getPriorityTimestamp()));
+                        repository.updateByEntitlementIdAndUserId(entitlementId, userId, merged);
+                        savedState = merged;
+                    } else {
+                        String created = normalizeTimestampValue(dto.getCreated());
+                        if (isBlank(created)) {
+                            created = KOBO_TIMESTAMP_FORMAT.format(Instant.now());
+                        }
+                        String lastModified = normalizeTimestampValue(dto.getLastModified());
+                        if (isBlank(lastModified)) {
+                            lastModified = created;
+                        }
+                        dto.setLastModified(lastModified);
+                        dto.setCreated(created);
+                        savedState = KoboReadingState.builder()
+                                .entitlementId(entitlementId)
+                                .created(cleanString(created))
+                                .lastModified(cleanString(lastModified))
+                                .priorityTimestamp(cleanString(computePriorityTimestamp(dto)))
+                                .currentBookmark(dto.getCurrentBookmark())
+                                .statistics(dto.getStatistics())
+                                .statusInfo(dto.getStatusInfo())
+                                .build();
+                        repository.insert(userId, savedState);
+                    }
 
                     syncKoboProgressToUserBookProgress(savedState, userId);
-
-                    return savedEntity;
+                    return savedState;
                 })
-                .map(mapper::toDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public void deleteReadingState(Long bookId) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        repository.findByEntitlementIdAndUserId(String.valueOf(bookId), userId).ifPresent(repository::delete);
+        repository.deleteByEntitlementIdAndUserId(String.valueOf(bookId), userId);
     }
 
     public List<KoboReadingState> getReadingState(String entitlementId) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        Optional<KoboReadingState> readingState = repository.findByEntitlementIdAndUserId(entitlementId, userId)
-                .map(mapper::toDto)
-                .or(() -> repository
-                        .findFirstByEntitlementIdAndUserIdIsNullOrderByPriorityTimestampDescLastModifiedStringDescIdDesc(
-                                entitlementId)
-                        .map(mapper::toDto))
+        Optional<KoboReadingState> readingState = Optional.ofNullable(repository.findByEntitlementIdAndUserId(entitlementId, userId))
+                .or(() -> Optional.ofNullable(
+                        repository.findFirstByEntitlementIdWithNullUserOrderByPriority(entitlementId)))
                 .or(() -> constructReadingStateFromProgress(entitlementId));
 
         readingState.ifPresent(state -> overlayWebReaderBookmark(state, entitlementId, userId));
@@ -205,11 +207,11 @@ public class KoboReadingStateService {
                 return;
             }
 
-            UserBookProgressEntity progress = progressRepository.findByUserIdAndBookId(userId, bookId)
+            UserBookProgressRow progress = progressRepository.findByUserIdAndBookId(userId, bookId)
                     .orElseGet(() -> {
-                        UserBookProgressEntity newProgress = new UserBookProgressEntity();
-                        newProgress.setUser(userOpt.get());
-                        newProgress.setBook(book);
+                        UserBookProgressRow newProgress = new UserBookProgressRow();
+                        newProgress.setUserId(userOpt.get().getId());
+                        newProgress.setBookId(book.getId());
                         return newProgress;
                     });
 
@@ -256,7 +258,7 @@ public class KoboReadingStateService {
         }
     }
 
-    private boolean crossPopulateEpubFieldsFromKobo(UserBookProgressEntity progress,
+    private boolean crossPopulateEpubFieldsFromKobo(UserBookProgressRow progress,
                                                       KoboReadingState.CurrentBookmark bookmark,
                                                       BookEntity book, Long userId, Instant now) {
         if (bookmark == null || bookmark.getProgressPercent() == null) {
@@ -267,7 +269,7 @@ public class KoboReadingStateService {
             return false;
         }
 
-        UserBookFileProgressEntity fileProgress = book.getPrimaryBookFile() != null
+        UserBookFileProgressRow fileProgress = book.getPrimaryBookFile() != null
                 ? fileProgressRepository.findByUserIdAndBookFileId(userId, book.getPrimaryBookFile().getId()).orElse(null)
                 : null;
 
@@ -375,20 +377,9 @@ public class KoboReadingStateService {
         return value;
     }
 
-    private KoboReadingStateEntity mergeReadingState(KoboReadingStateEntity existing, KoboReadingState incoming) {
-        KoboReadingState existingState = mapper.toDto(existing);
-        if (existingState == null) {
-            existingState = KoboReadingState.builder().entitlementId(existing.getEntitlementId()).build();
-        }
-
-        KoboReadingState merged = mergeReadingState(existingState, incoming);
-
-        existing.setCurrentBookmarkJson(mapper.toJson(merged.getCurrentBookmark()));
-        existing.setStatisticsJson(mapper.toJson(merged.getStatistics()));
-        existing.setStatusInfoJson(mapper.toJson(merged.getStatusInfo()));
-        existing.setLastModifiedString(mapper.cleanString(merged.getLastModified()));
-        existing.setPriorityTimestamp(mapper.cleanString(merged.getPriorityTimestamp()));
-        return existing;
+    private static String cleanString(String value) {
+        if (value == null) return null;
+        return SURROUNDING_DOUBLE_QUOTES_PATTERN.matcher(value).replaceAll("");
     }
 
     private KoboReadingState mergeReadingState(KoboReadingState existing, KoboReadingState incoming) {
@@ -497,7 +488,7 @@ public class KoboReadingStateService {
         return value == null || value.trim().isEmpty() || "null".equalsIgnoreCase(value.trim());
     }
 
-    private void updateReadStatusFromKoboProgress(UserBookProgressEntity userProgress, Instant now) {
+    private void updateReadStatusFromKoboProgress(UserBookProgressRow userProgress, Instant now) {
         if (shouldPreserveCurrentStatus(userProgress, now)) {
             return;
         }
@@ -512,7 +503,7 @@ public class KoboReadingStateService {
         }
     }
 
-    private boolean shouldPreserveCurrentStatus(UserBookProgressEntity progress, Instant now) {
+    private boolean shouldPreserveCurrentStatus(UserBookProgressRow progress, Instant now) {
         Instant statusModifiedTime = progress.getReadStatusModifiedTime();
         if (statusModifiedTime == null) {
             return false;

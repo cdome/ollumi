@@ -1,10 +1,11 @@
 package org.booklore.service.book;
 
+import lombok.RequiredArgsConstructor;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.NotebookBookOption;
 import org.booklore.model.dto.NotebookEntry;
-import org.booklore.repository.NotebookEntryRepository;
-import lombok.RequiredArgsConstructor;
+import org.booklore.repository.jooq.JooqNotebookEntryRepository;
+import org.booklore.repository.jooq.dto.NotebookEntryRow;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +23,7 @@ public class NotebookService {
     private static final int EXPORT_LIMIT = 50_000;
     private static final int BOOK_OPTIONS_LIMIT = 50;
 
-    private final NotebookEntryRepository repository;
+    private final JooqNotebookEntryRepository jooqRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)
@@ -30,7 +31,7 @@ public class NotebookService {
                                                   String search, String sort) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
         Pageable pageable = PageRequest.of(page, size, toSort(sort));
-        return repository.findEntries(userId, types, bookId, wrapSearch(search), pageable)
+        return jooqRepository.findEntries(userId, types, bookId, wrapSearch(search), pageable)
                 .map(NotebookService::toDto);
     }
 
@@ -38,7 +39,7 @@ public class NotebookService {
     public List<NotebookEntry> getAllNotebookEntries(Set<String> types, Long bookId, String search, String sort) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
         Pageable pageable = PageRequest.of(0, EXPORT_LIMIT, toSort(sort));
-        return repository.findEntries(userId, types, bookId, wrapSearch(search), pageable)
+        return jooqRepository.findEntries(userId, types, bookId, wrapSearch(search), pageable)
                 .map(NotebookService::toDto)
                 .getContent();
     }
@@ -46,7 +47,7 @@ public class NotebookService {
     @Transactional(readOnly = true)
     public List<NotebookBookOption> getBooksWithAnnotations(String search) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        return repository.findBooksWithAnnotations(userId, wrapSearch(search), Pageable.ofSize(BOOK_OPTIONS_LIMIT))
+        return jooqRepository.findBooksWithAnnotations(userId, wrapSearch(search), Pageable.ofSize(BOOK_OPTIONS_LIMIT))
                 .stream()
                 .map(p -> new NotebookBookOption(p.getBookId(), p.getBookTitle()))
                 .toList();
@@ -70,7 +71,7 @@ public class NotebookService {
                 : Sort.by("createdAt").descending();
     }
 
-    private static NotebookEntry toDto(NotebookEntryRepository.EntryProjection p) {
+    private static NotebookEntry toDto(NotebookEntryRow p) {
         return NotebookEntry.builder()
                 .id(p.getId())
                 .type(p.getType())

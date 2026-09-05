@@ -10,10 +10,10 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.UserLoginRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
+import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.RefreshTokenRepository;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.user.DefaultSettingInitializer;
@@ -41,7 +41,7 @@ public class AuthenticationService {
 
     private final AppProperties appProperties;
     private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final JooqRefreshTokenRepository refreshTokenRepository;
     private final UserProvisioningService userProvisioningService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
@@ -53,7 +53,7 @@ public class AuthenticationService {
     public AuthenticationService(
             AppProperties appProperties,
             UserRepository userRepository,
-            RefreshTokenRepository refreshTokenRepository,
+            JooqRefreshTokenRepository refreshTokenRepository,
             UserProvisioningService userProvisioningService,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
@@ -191,19 +191,12 @@ public class AuthenticationService {
 
         long expirationMs = customRefreshTokenExpirationMs != null ? customRefreshTokenExpirationMs : jwtUtils.getRefreshTokenExpirationMs();
 
-        RefreshTokenEntity refreshTokenEntity = RefreshTokenEntity.builder()
-                .user(user)
-                .token(refreshToken)
-                .expiryDate(Instant.now().plusMillis(expirationMs))
-                .revoked(false)
-                .build();
-
-        refreshTokenRepository.save(refreshTokenEntity);
+        refreshTokenRepository.insert(user.getId(), refreshToken, Instant.now().plusMillis(expirationMs), false);
         auditService.log(AuditAction.LOGIN_SUCCESS, "User", user.getId(), "Login successful for user: " + user.getUsername());
 
         return ResponseEntity.ok(Map.of(
                 "accessToken", accessToken,
-                "refreshToken", refreshTokenEntity.getToken(),
+                "refreshToken", refreshToken,
                 "isDefaultPassword", String.valueOf(user.isDefaultPassword())
         ));
     }
@@ -213,31 +206,24 @@ public class AuthenticationService {
         String ip = RequestUtils.getCurrentRequest().getRemoteAddr();
         authRateLimitService.checkRefreshRateLimit(ip);
 
-        RefreshTokenEntity storedToken = refreshTokenRepository.findByToken(token).orElseThrow(() -> {
+        RefreshToken storedToken = refreshTokenRepository.findByToken(token);
+        if (storedToken == null) {
             authRateLimitService.recordFailedRefreshAttempt(ip);
-            return ApiError.INVALID_CREDENTIALS.createException("Refresh token not found");
-        });
+            throw ApiError.INVALID_CREDENTIALS.createException("Refresh token not found");
+        }
 
-        if (storedToken.isRevoked() || storedToken.getExpiryDate().isBefore(Instant.now()) || !jwtUtils.validateToken(token)) {
+        if (storedToken.getRevoked() || storedToken.getExpiryDate().isBefore(Instant.now()) || !jwtUtils.validateToken(token)) {
             authRateLimitService.recordFailedRefreshAttempt(ip);
             throw ApiError.INVALID_CREDENTIALS.createException("Invalid or expired refresh token");
         }
 
-        BookLoreUserEntity user = storedToken.getUser();
+        BookLoreUserEntity user = userRepository.findById(storedToken.getUserId())
+                .orElseThrow(() -> ApiError.INVALID_CREDENTIALS.createException("Refresh token user not found"));
 
-        storedToken.setRevoked(true);
-        storedToken.setRevocationDate(Instant.now());
-        refreshTokenRepository.save(storedToken);
+        refreshTokenRepository.revokeById(storedToken.getId(), Instant.now());
 
         String newRefreshToken = jwtUtils.generateRefreshToken(user);
-        RefreshTokenEntity newRefreshTokenEntity = RefreshTokenEntity.builder()
-                .user(user)
-                .token(newRefreshToken)
-                .expiryDate(Instant.now().plusMillis(jwtUtils.getRefreshTokenExpirationMs()))
-                .revoked(false)
-                .build();
-
-        refreshTokenRepository.save(newRefreshTokenEntity);
+        refreshTokenRepository.insert(user.getId(), newRefreshToken, Instant.now().plusMillis(jwtUtils.getRefreshTokenExpirationMs()), false);
 
         authRateLimitService.resetRefreshAttempts(ip);
 

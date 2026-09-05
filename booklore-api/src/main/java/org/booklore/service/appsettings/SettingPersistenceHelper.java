@@ -4,10 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.request.MetadataRefreshOptions;
 import org.booklore.model.dto.settings.*;
-import org.booklore.model.entity.AppSettingEntity;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
-import org.booklore.repository.AppSettingsRepository;
+import org.booklore.repository.jooq.JooqAppSettingsRepository;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -21,22 +20,19 @@ import java.util.Set;
 @Slf4j
 public class SettingPersistenceHelper {
 
-    public final AppSettingsRepository appSettingsRepository;
+    public final JooqAppSettingsRepository appSettingsRepository;
     private final ObjectMapper objectMapper;
 
     public String getOrCreateSetting(AppSettingKey key, String defaultValue) {
         var setting = appSettingsRepository.findByName(key.toString());
-        if (setting != null) return setting.getVal();
+        if (setting != null) return setting.getValue();
 
         saveDefaultSetting(key, defaultValue);
         return defaultValue;
     }
 
     public void saveDefaultSetting(AppSettingKey key, String value) {
-        AppSettingEntity setting = new AppSettingEntity();
-        setting.setName(key.toString());
-        setting.setVal(value);
-        appSettingsRepository.save(setting);
+        appSettingsRepository.upsertByName(key.toString(), value);
     }
 
     public <T> T getJsonSetting(Map<String, String> settingsMap, AppSettingKey key, Class<T> clazz, T defaultValue, boolean persistDefault) {

@@ -3,16 +3,14 @@ package org.booklore.service.oidc;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
-import org.booklore.mapper.OidcGroupMappingMapper;
 import org.booklore.model.dto.OidcGroupMapping;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.OidcGroupMappingEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.OidcGroupMappingRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqOidcGroupMappingRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.springframework.stereotype.Service;
@@ -28,46 +26,41 @@ import java.util.Set;
 @AllArgsConstructor
 public class OidcGroupMappingService {
 
-    private final OidcGroupMappingRepository repository;
-    private final OidcGroupMappingMapper mapper;
+    private final JooqOidcGroupMappingRepository repository;
     private final AuditService auditService;
     private final AppSettingService appSettingService;
     private final LibraryRepository libraryRepository;
     private final UserRepository userRepository;
 
     public List<OidcGroupMapping> getAll() {
-        return mapper.toDtoList(repository.findAll());
+        return repository.findAll();
     }
 
     public OidcGroupMapping create(OidcGroupMapping dto) {
-        OidcGroupMappingEntity entity = mapper.toEntity(dto);
-        entity.setId(null);
-        OidcGroupMappingEntity saved = repository.save(entity);
+        OidcGroupMapping saved = repository.insert(dto);
         auditService.log(AuditAction.OIDC_GROUP_MAPPING_CREATED,
-                "Created OIDC group mapping: " + saved.getOidcGroupClaim());
-        return mapper.toDto(saved);
+                "Created OIDC group mapping: " + saved.oidcGroupClaim());
+        return saved;
     }
 
     public OidcGroupMapping update(Long id, OidcGroupMapping dto) {
-        OidcGroupMappingEntity existing = repository.findById(id)
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("OIDC group mapping not found"));
-        existing.setOidcGroupClaim(dto.oidcGroupClaim());
-        existing.setAdmin(dto.isAdmin());
-        existing.setPermissions(mapper.stringListToJson(dto.permissions()));
-        existing.setLibraryIds(mapper.longListToJson(dto.libraryIds()));
-        existing.setDescription(dto.description());
-        OidcGroupMappingEntity saved = repository.save(existing);
+        if (repository.findById(id) == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("OIDC group mapping not found");
+        }
+        OidcGroupMapping saved = repository.update(id, dto);
         auditService.log(AuditAction.OIDC_GROUP_MAPPING_UPDATED,
-                "Updated OIDC group mapping: " + saved.getOidcGroupClaim());
-        return mapper.toDto(saved);
+                "Updated OIDC group mapping: " + saved.oidcGroupClaim());
+        return saved;
     }
 
     public void delete(Long id) {
-        OidcGroupMappingEntity existing = repository.findById(id)
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("OIDC group mapping not found"));
-        repository.delete(existing);
+        OidcGroupMapping existing = repository.findById(id);
+        if (existing == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("OIDC group mapping not found");
+        }
+        repository.deleteById(id);
         auditService.log(AuditAction.OIDC_GROUP_MAPPING_DELETED,
-                "Deleted OIDC group mapping: " + existing.getOidcGroupClaim());
+                "Deleted OIDC group mapping: " + existing.oidcGroupClaim());
     }
 
     @Transactional
@@ -77,17 +70,17 @@ public class OidcGroupMappingService {
         String syncMode = appSettingService.getAppSettings().getOidcGroupSyncMode();
         if (syncMode == null || "DISABLED".equals(syncMode)) return;
 
-        List<OidcGroupMappingEntity> matchingMappings = repository.findByOidcGroupClaimIn(groups);
+        List<OidcGroupMapping> matchingMappings = repository.findByOidcGroupClaimIn(groups);
         if (matchingMappings.isEmpty()) return;
 
         boolean mergedAdmin = false;
         Set<String> mergedPermissions = new HashSet<>();
         Set<Long> mergedLibraryIds = new HashSet<>();
 
-        for (OidcGroupMappingEntity mapping : matchingMappings) {
+        for (OidcGroupMapping mapping : matchingMappings) {
             if (mapping.isAdmin()) mergedAdmin = true;
-            mergedPermissions.addAll(mapper.jsonToStringList(mapping.getPermissions()));
-            mergedLibraryIds.addAll(mapper.jsonToLongList(mapping.getLibraryIds()));
+            mergedPermissions.addAll(mapping.permissions());
+            mergedLibraryIds.addAll(mapping.libraryIds());
         }
 
         UserPermissionsEntity perms = user.getPermissions();

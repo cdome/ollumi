@@ -10,6 +10,12 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.service.progress.ReadingProgressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,11 +33,13 @@ class BookUpdateServiceTest {
     @Mock
     private BookRepository bookRepository;
     @Mock
-    private PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
+    private JooqBookRepository jooqBookRepository;
     @Mock
-    private CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
+    private JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     @Mock
-    private NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
+    private JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
+    @Mock
+    private JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     @Mock
     private ShelfRepository shelfRepository;
     @Mock
@@ -39,7 +47,7 @@ class BookUpdateServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private UserBookProgressRepository userBookProgressRepository;
+    private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -47,7 +55,7 @@ class BookUpdateServiceTest {
     @Mock
     private ReadingProgressService readingProgressService;
     @Mock
-    private EbookViewerPreferenceRepository ebookViewerPreferenceRepository;
+    private JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository;
 
     @InjectMocks
     private BookUpdateService bookUpdateService;
@@ -57,13 +65,14 @@ class BookUpdateServiceTest {
         MockitoAnnotations.openMocks(this);
         bookUpdateService = new BookUpdateService(
                 bookRepository,
+                jooqBookRepository,
                 pdfViewerPreferencesRepository,
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,
                 shelfRepository,
                 bookMapper,
                 userRepository,
-                userBookProgressRepository,
+                jooqUserBookProgressRepository,
                 authenticationService,
                 bookQueryService,
                 readingProgressService,
@@ -85,8 +94,6 @@ class BookUpdateServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
-        PdfViewerPreferencesEntity pdfPrefs = new PdfViewerPreferencesEntity();
-        when(pdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, 2L)).thenReturn(Optional.of(pdfPrefs));
         BookViewerSettings settings = BookViewerSettings.builder()
                 .pdfSettings(PdfViewerPreferences.builder()
                         .zoom("1.5")
@@ -96,9 +103,7 @@ class BookUpdateServiceTest {
 
         bookUpdateService.updateBookViewerSetting(bookId, settings);
 
-        verify(pdfViewerPreferencesRepository).save(pdfPrefs);
-        assertEquals("1.5", pdfPrefs.getZoom());
-        assertEquals("spread", pdfPrefs.getSpread());
+        verify(pdfViewerPreferencesRepository).upsert(bookId, 2L, "1.5", "spread");
     }
 
     @Test
@@ -115,40 +120,27 @@ class BookUpdateServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
-        EbookViewerPreferenceEntity epubPrefs = new EbookViewerPreferenceEntity();
-        when(ebookViewerPreferenceRepository.findByBookIdAndUserId(bookId, 2L)).thenReturn(Optional.of(epubPrefs));
+        EbookViewerPreferences ebookSettings = EbookViewerPreferences.builder()
+                .fontFamily("serif")
+                .fontSize(18)
+                .gap(0.1f)
+                .hyphenate(true)
+                .isDark(true)
+                .justify(true)
+                .lineHeight(1.7f)
+                .maxBlockSize(800)
+                .maxColumnCount(3)
+                .maxInlineSize(1200)
+                .theme("dark")
+                .flow("paginated")
+                .build();
         BookViewerSettings settings = BookViewerSettings.builder()
-                .ebookSettings(EbookViewerPreferences.builder()
-                        .fontFamily("serif")
-                        .fontSize(18)
-                        .gap(0.1f)
-                        .hyphenate(true)
-                        .isDark(true)
-                        .justify(true)
-                        .lineHeight(1.7f)
-                        .maxBlockSize(800)
-                        .maxColumnCount(3)
-                        .maxInlineSize(1200)
-                        .theme("dark")
-                        .flow("paginated")
-                        .build())
+                .ebookSettings(ebookSettings)
                 .build();
 
         bookUpdateService.updateBookViewerSetting(bookId, settings);
 
-        verify(ebookViewerPreferenceRepository).save(epubPrefs);
-        assertEquals("serif", epubPrefs.getFontFamily());
-        assertEquals(18, epubPrefs.getFontSize());
-        assertEquals(0.1f, epubPrefs.getGap());
-        assertTrue(epubPrefs.getHyphenate());
-        assertTrue(epubPrefs.getIsDark());
-        assertTrue(epubPrefs.getJustify());
-        assertEquals(1.7f, epubPrefs.getLineHeight());
-        assertEquals(800, epubPrefs.getMaxBlockSize());
-        assertEquals(3, epubPrefs.getMaxColumnCount());
-        assertEquals(1200, epubPrefs.getMaxInlineSize());
-        assertEquals("dark", epubPrefs.getTheme());
-        assertEquals("paginated", epubPrefs.getFlow());
+        verify(ebookViewerPreferenceRepository).upsert(bookId, 2L, ebookSettings);
     }
 
     @Test
@@ -178,16 +170,16 @@ class BookUpdateServiceTest {
         when(permissions.isCanBulkResetBookReadStatus()).thenReturn(true);
 
         List<Long> bookIds = Arrays.asList(1L, 2L, 3L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(3L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(3L);
         Set<Long> existing = new HashSet<>(Arrays.asList(1L, 2L));
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
         when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
 
         List<BookStatusUpdateResponse> result = bookUpdateService.updateReadStatus(bookIds, "READ");
-        verify(userBookProgressRepository).bulkUpdateReadStatus(eq(1L), eq(new ArrayList<>(existing)), eq(ReadStatus.READ), any(), any());
-        verify(userBookProgressRepository).saveAll(anyList());
+        verify(jooqUserBookProgressRepository).bulkUpdateReadStatus(eq(1L), eq(existing), eq(ReadStatus.READ), any(), any());
+        verify(jooqUserBookProgressRepository).saveAll(anyList());
         assertEquals(3, result.size());
         assertEquals(ReadStatus.READ, result.getFirst().getReadStatus());
     }
@@ -203,7 +195,7 @@ class BookUpdateServiceTest {
         when(permissions.isCanBulkResetBookReadStatus()).thenReturn(false);
 
         List<Long> bookIds = Arrays.asList(1L, 2L, 3L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(3L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(3L);
 
         assertThrows(APIException.class, () -> bookUpdateService.updateReadStatus(bookIds, "READ"));
     }
@@ -219,9 +211,9 @@ class BookUpdateServiceTest {
         when(permissions.isCanBulkResetBookReadStatus()).thenReturn(false);
 
         List<Long> bookIds = Collections.singletonList(1L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(1L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(1L);
         Set<Long> existing = new HashSet<>(bookIds);
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
         when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
@@ -236,16 +228,16 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         List<Long> bookIds = Arrays.asList(1L, 2L, 3L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(3L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(3L);
         Set<Long> existing = new HashSet<>(Arrays.asList(1L, 2L));
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
         when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
 
         List<PersonalRatingUpdateResponse> result = bookUpdateService.updatePersonalRating(bookIds, 5);
-        verify(userBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(new ArrayList<>(existing)), eq(5));
-        verify(userBookProgressRepository).saveAll(anyList());
+        verify(jooqUserBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(existing), eq(5));
+        verify(jooqUserBookProgressRepository).saveAll(anyList());
         assertEquals(3, result.size());
         assertEquals(5, result.getFirst().getPersonalRating());
     }
@@ -257,12 +249,12 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         List<Long> bookIds = Arrays.asList(1L, 2L);
-        when(bookRepository.countByIdIn(bookIds)).thenReturn(2L);
+        when(jooqBookRepository.countByIds(bookIds)).thenReturn(2L);
         Set<Long> existing = new HashSet<>(bookIds);
-        when(userBookProgressRepository.findExistingProgressBookIds(1L, new HashSet<>(bookIds))).thenReturn(existing);
+        when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         List<PersonalRatingUpdateResponse> result = bookUpdateService.resetPersonalRating(bookIds);
-        verify(userBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(new ArrayList<>(bookIds)), isNull());
+        verify(jooqUserBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(existing), isNull());
         assertEquals(2, result.size());
         assertNull(result.getFirst().getPersonalRating());
     }

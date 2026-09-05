@@ -2,16 +2,12 @@ package org.booklore.service.book;
 
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
-import org.booklore.mapper.AnnotationMapper;
 import org.booklore.model.dto.Annotation;
 import org.booklore.model.dto.CreateAnnotationRequest;
 import org.booklore.model.dto.UpdateAnnotationRequest;
-import org.booklore.model.entity.AnnotationEntity;
-import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.AnnotationRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqAnnotationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,24 +23,20 @@ import java.util.Optional;
 @Slf4j
 public class AnnotationService {
 
-    private final AnnotationRepository annotationRepository;
+    private final JooqAnnotationRepository annotationRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
-    private final AnnotationMapper mapper;
 
     @Transactional(readOnly = true)
     public List<Annotation> getAnnotationsForBook(Long bookId) {
         Long userId = getCurrentUserId();
-        return annotationRepository.findByBookIdAndUserIdOrderByCreatedAtDesc(bookId, userId)
-                .stream()
-                .map(mapper::toDto)
-                .toList();
+        return annotationRepository.findByBookIdAndUserIdOrderByCreatedAtDesc(bookId, userId);
     }
 
     @Transactional(readOnly = true)
     public Annotation getAnnotationById(Long annotationId) {
-        return mapper.toDto(findAnnotationByIdAndUser(annotationId));
+        return findAnnotationByIdAndUser(annotationId);
     }
 
     @Transactional
@@ -52,59 +44,56 @@ public class AnnotationService {
         Long userId = getCurrentUserId();
         validateNoDuplicateAnnotation(request.getCfi(), request.getBookId(), userId);
 
+        if (!bookRepository.existsById(request.getBookId())) {
+            throw new EntityNotFoundException("Book not found: " + request.getBookId());
+        }
+        if (!userRepository.existsById(userId)) {
+            throw new EntityNotFoundException("User not found: " + userId);
+        }
+
         String color = request.getColor() != null ? request.getColor() : "#FFFF00";
         String style = request.getStyle() != null ? request.getStyle() : "highlight";
 
-        AnnotationEntity annotation = AnnotationEntity.builder()
-                .cfi(request.getCfi())
-                .text(request.getText())
-                .color(color)
-                .style(style)
-                .note(request.getNote())
-                .chapterTitle(request.getChapterTitle())
-                .book(findBook(request.getBookId()))
-                .user(findUser(userId))
-                .build();
-
         log.info("Creating annotation for book {} by user {}", request.getBookId(), userId);
-        return mapper.toDto(annotationRepository.save(annotation));
+        return annotationRepository.insert(
+                request.getBookId(),
+                userId,
+                request.getCfi(),
+                request.getText(),
+                color,
+                style,
+                request.getNote(),
+                request.getChapterTitle());
     }
 
     @Transactional
     public Annotation updateAnnotation(Long annotationId, UpdateAnnotationRequest request) {
-        AnnotationEntity annotation = findAnnotationByIdAndUser(annotationId);
+        Annotation annotation = findAnnotationByIdAndUser(annotationId);
 
         applyUpdates(annotation, request);
 
         log.info("Updating annotation {}", annotationId);
-        return mapper.toDto(annotationRepository.save(annotation));
+        return annotationRepository.update(annotation);
     }
 
     @Transactional
     public void deleteAnnotation(Long annotationId) {
-        AnnotationEntity annotation = findAnnotationByIdAndUser(annotationId);
+        Annotation annotation = findAnnotationByIdAndUser(annotationId);
         log.info("Deleting annotation {}", annotationId);
-        annotationRepository.delete(annotation);
+        annotationRepository.deleteById(annotation.getId());
     }
 
     private Long getCurrentUserId() {
         return authenticationService.getAuthenticatedUser().getId();
     }
 
-    private AnnotationEntity findAnnotationByIdAndUser(Long annotationId) {
+    private Annotation findAnnotationByIdAndUser(Long annotationId) {
         Long userId = getCurrentUserId();
-        return annotationRepository.findByIdAndUserId(annotationId, userId)
-                .orElseThrow(() -> new EntityNotFoundException("Annotation not found: " + annotationId));
-    }
-
-    private BookEntity findBook(Long bookId) {
-        return bookRepository.findById(bookId)
-                .orElseThrow(() -> new EntityNotFoundException("Book not found: " + bookId));
-    }
-
-    private BookLoreUserEntity findUser(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+        Annotation annotation = annotationRepository.findByIdAndUserId(annotationId, userId);
+        if (annotation == null) {
+            throw new EntityNotFoundException("Annotation not found: " + annotationId);
+        }
+        return annotation;
     }
 
     private void validateNoDuplicateAnnotation(String cfi, Long bookId, Long userId) {
@@ -114,7 +103,7 @@ public class AnnotationService {
         }
     }
 
-    private void applyUpdates(AnnotationEntity annotation, UpdateAnnotationRequest request) {
+    private void applyUpdates(Annotation annotation, UpdateAnnotationRequest request) {
         Optional.ofNullable(request.getColor()).ifPresent(annotation::setColor);
         Optional.ofNullable(request.getStyle()).ifPresent(annotation::setStyle);
         Optional.ofNullable(request.getNote()).ifPresent(annotation::setNote);

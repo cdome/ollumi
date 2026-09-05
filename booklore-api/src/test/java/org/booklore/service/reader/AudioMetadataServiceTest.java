@@ -47,6 +47,9 @@ class AudioMetadataServiceTest {
     @Mock
     BookFileRepository bookFileRepository;
 
+    @Mock
+    org.booklore.repository.jooq.JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
+
     @InjectMocks
     AudioMetadataService audioMetadataService;
 

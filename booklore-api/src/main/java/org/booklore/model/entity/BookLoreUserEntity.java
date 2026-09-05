@@ -71,24 +71,6 @@ public class BookLoreUserEntity {
     @Builder.Default
     private Set<LibraryEntity> libraries = new HashSet<>();
 
-    @BatchSize(size = 20)
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<UserSettingEntity> settings = new HashSet<>();
-
-    @OneToOne(mappedBy = "bookLoreUser", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private KoreaderUserEntity koreaderUser;
-
-    @BatchSize(size = 20)
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<ReadingSessionEntity> readingSessions = new HashSet<>();
-
-    @BatchSize(size = 20)
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<UserContentRestrictionEntity> contentRestrictions = new HashSet<>();
-
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();

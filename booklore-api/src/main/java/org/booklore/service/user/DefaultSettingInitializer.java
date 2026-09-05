@@ -6,8 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.UserSettingEntity;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -26,6 +26,7 @@ public class DefaultSettingInitializer {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final DefaultUserSettingsProvider settingsProvider;
+    private final JooqUserSettingRepository userSettingRepository;
     private static final Set<Long> initializedUsers = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final ConcurrentHashMap<Long, Lock> userLocks = new ConcurrentHashMap<>();
 
@@ -43,7 +44,6 @@ public class DefaultSettingInitializer {
                 addSettingIfMissing(user, key, settingsProvider.getDefaultValue(key));
             }
             patchPerBookSetting(user);
-            userRepository.save(user);
             initializedUsers.add(bookLoreUser.getId());
         } finally {
             lock.unlock();
@@ -52,37 +52,29 @@ public class DefaultSettingInitializer {
     }
 
     private void addSettingIfMissing(BookLoreUserEntity user, UserSettingKey key, Object value) {
-        boolean exists = user.getSettings().stream().anyMatch(s -> s.getSettingKey().equals(key.getDbKey()));
-        if (!exists) {
-            try {
-                String serializedValue = key.isJson()
-                        ? objectMapper.writeValueAsString(value)
-                        : value.toString();
+        try {
+            String serializedValue = key.isJson()
+                    ? objectMapper.writeValueAsString(value)
+                    : value.toString();
 
-                user.getSettings().add(UserSettingEntity.builder()
-                        .user(user)
-                        .settingKey(key.getDbKey())
-                        .settingValue(serializedValue)
-                        .build());
-
+            if (userSettingRepository.insertIfMissing(user.getId(), key.getDbKey(), serializedValue)) {
                 log.info("Added default {} for user {}", key, user.getUsername());
-            } catch (Exception e) {
-                log.error("Failed to add default {} for user {}", key, user.getUsername(), e);
             }
+        } catch (Exception e) {
+            log.error("Failed to add default {} for user {}", key, user.getUsername(), e);
         }
     }
 
     private void patchPerBookSetting(BookLoreUserEntity user) {
-        user.getSettings()
-                .stream()
-                .filter(s -> s.getSettingKey().equals(UserSettingKey.PER_BOOK_SETTING.getDbKey()))
-                .findFirst()
+        userSettingRepository.findByUserIdAndKey(user.getId(), UserSettingKey.PER_BOOK_SETTING.getDbKey())
                 .ifPresent(setting -> {
                     try {
                         var current = objectMapper.readValue(setting.getSettingValue(), BookLoreUser.UserSettings.PerBookSetting.class);
                         if (current.getCbx() == null) {
                             current.setCbx(BookLoreUser.UserSettings.PerBookSetting.GlobalOrIndividual.Individual);
-                            setting.setSettingValue(objectMapper.writeValueAsString(current));
+                            userSettingRepository.upsertSetting(user.getId(),
+                                    UserSettingKey.PER_BOOK_SETTING.getDbKey(),
+                                    objectMapper.writeValueAsString(current));
                         }
                     } catch (Exception e) {
                         log.error("Failed to patch PER_BOOK_SETTING for user {}", user.getUsername(), e);

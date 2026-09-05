@@ -6,9 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
-import org.booklore.model.entity.UserSettingEntity;
 import org.booklore.model.enums.IconType;
 import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -19,6 +19,7 @@ public class UserDefaultsService {
     private final ShelfRepository shelfRepository;
     private final ObjectMapper objectMapper;
     private final DefaultUserSettingsProvider defaultSettingsProvider;
+    private final JooqUserSettingRepository userSettingRepository;
 
     public void addDefaultShelves(BookLoreUserEntity user) {
         ShelfEntity shelf = ShelfEntity.builder()
@@ -43,11 +44,7 @@ public class UserDefaultsService {
                     ? objectMapper.writeValueAsString(value)
                     : value.toString();
 
-            user.getSettings().add(UserSettingEntity.builder()
-                    .user(user)
-                    .settingKey(key.getDbKey())
-                    .settingValue(storedValue)
-                    .build());
+            userSettingRepository.upsertSetting(user.getId(), key.getDbKey(), storedValue);
         } catch (Exception e) {
             log.error("Error serializing setting {} for user {}", key, user.getUsername(), e);
         }

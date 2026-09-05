@@ -1,8 +1,5 @@
 package org.booklore.app.service;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
-import jakarta.persistence.TypedQuery;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.app.dto.AppBookSummary;
@@ -13,8 +10,11 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
+import org.booklore.repository.jooq.JooqAppSeriesRepository;
+import org.booklore.repository.jooq.dto.SeriesAggregate;
+import org.jooq.Condition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -25,9 +25,10 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,11 +39,10 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AppSeriesServiceTest {
 
-    @Mock private EntityManager entityManager;
     @Mock private AuthenticationService authenticationService;
-    @Mock private BookRepository bookRepository;
-    @Mock private UserBookProgressRepository userBookProgressRepository;
-    @Mock private AppBookMapper mobileBookMapper;
+    @Mock private JooqAppBookRepository jooqAppBookRepository;
+    @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
+    @Mock private JooqAppSeriesRepository jooqAppSeriesRepository;
 
     private AppSeriesService service;
 
@@ -51,8 +51,8 @@ class AppSeriesServiceTest {
     @BeforeEach
     void setUp() {
         service = new AppSeriesService(
-                entityManager, authenticationService, bookRepository,
-                userBookProgressRepository, mobileBookMapper
+                authenticationService, jooqAppBookRepository,
+                jooqAppBookSummaryRepository, jooqAppSeriesRepository
         );
     }
 
@@ -223,8 +223,6 @@ class AppSeriesServiceTest {
             mockAdminUser();
             BookEntity book = buildBook(1L, "Dune", 1.0f, "Frank Herbert");
             mockBookPage(List.of(book), 1L);
-            mockProgress(Collections.emptyList());
-            mockMapperSummary();
 
             AppPageResponse<AppBookSummary> result = service.getSeriesBooks("Dune", 0, 20, null, null, null);
 
@@ -238,8 +236,6 @@ class AppSeriesServiceTest {
             mockNonAdminUser(Set.of(5L));
             BookEntity book = buildBook(2L, "Dune", 2.0f, "Frank Herbert");
             mockBookPage(List.of(book), 1L);
-            mockProgress(Collections.emptyList());
-            mockMapperSummary();
 
             AppPageResponse<AppBookSummary> result = service.getSeriesBooks("Dune", 0, 20, null, null, 5L);
 
@@ -345,112 +341,66 @@ class AppSeriesServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
     }
 
-    private Tuple mockSeriesTuple(String name, Long count, Integer total, Instant addedOn, Long booksRead) {
-        Tuple tuple = mock(Tuple.class);
-        when(tuple.get(0, String.class)).thenReturn(name);
-        when(tuple.get(1, Long.class)).thenReturn(count);
-        when(tuple.get(2, Integer.class)).thenReturn(total);
-        when(tuple.get(3, Instant.class)).thenReturn(addedOn);
-        when(tuple.get(4, Long.class)).thenReturn(booksRead);
-        return tuple;
+    private SeriesAggregate mockSeriesTuple(String name, Long count, Integer total, Instant addedOn, Long booksRead) {
+        LocalDateTime added = addedOn != null ? LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC) : null;
+        return new SeriesAggregate(name, count, total, added, booksRead);
     }
 
-    private Tuple mockSeriesTupleInProgress(String name, Long count, Integer total, Instant addedOn, Long booksRead, Instant lastReadTime) {
-        Tuple tuple = mockSeriesTuple(name, count, total, addedOn, booksRead);
-        when(tuple.get(5, Instant.class)).thenReturn(lastReadTime);
-        return tuple;
+    private SeriesAggregate mockSeriesTupleInProgress(String name, Long count, Integer total, Instant addedOn, Long booksRead, Instant lastReadTime) {
+        return mockSeriesTuple(name, count, total, addedOn, booksRead);
     }
 
-    @SuppressWarnings("unchecked")
-    private void mockAggregateQuery(List<Tuple> results) {
-        TypedQuery<Tuple> aggregateQ = mock(TypedQuery.class);
-        when(aggregateQ.setParameter(anyString(), any())).thenReturn(aggregateQ);
-        when(aggregateQ.setFirstResult(anyInt())).thenReturn(aggregateQ);
-        when(aggregateQ.setMaxResults(anyInt())).thenReturn(aggregateQ);
-        when(aggregateQ.getResultList()).thenReturn(results);
-
-        TypedQuery<BookEntity> booksQ = mock(TypedQuery.class);
-        when(booksQ.setParameter(anyString(), any())).thenReturn(booksQ);
-        when(booksQ.getResultList()).thenReturn(Collections.emptyList());
-
-        when(entityManager.createQuery(anyString(), eq(Tuple.class))).thenReturn(aggregateQ);
-        when(entityManager.createQuery(anyString(), eq(BookEntity.class))).thenReturn(booksQ);
+    private void mockAggregateQuery(List<SeriesAggregate> results) {
+        when(jooqAppSeriesRepository.findSeriesAggregates(
+                anyLong(), any(), any(), any(), anyBoolean(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(results);
+        // Enrichment defaults (overridden by mockBooksQuery when a test provides books)
+        when(jooqAppSeriesRepository.findBookIdsBySeriesNames(anyCollection(), any(), any()))
+                .thenReturn(Collections.emptyList());
+        when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any()))
+                .thenReturn(Collections.emptyList());
     }
 
-    @SuppressWarnings("unchecked")
-    private void mockAggregateQueryInProgress(List<Tuple> results) {
-        // Pre-compute series names before setting up mocks to avoid calling .get() on mock Tuples during stubbing
-        List<String> seriesNames = new ArrayList<>();
-        for (Tuple t : results) {
-            seriesNames.add(t.get(0, String.class));
-        }
-
-        TypedQuery<Tuple> aggregateQ = mock(TypedQuery.class);
-        when(aggregateQ.setParameter(anyString(), any())).thenReturn(aggregateQ);
-        when(aggregateQ.setFirstResult(anyInt())).thenReturn(aggregateQ);
-        when(aggregateQ.setMaxResults(anyInt())).thenReturn(aggregateQ);
-        when(aggregateQ.getResultList()).thenReturn(results);
-
-        TypedQuery<BookEntity> booksQ = mock(TypedQuery.class);
-        when(booksQ.setParameter(anyString(), any())).thenReturn(booksQ);
-        when(booksQ.getResultList()).thenReturn(Collections.emptyList());
-
-        // In-progress count uses String.class query
-        TypedQuery<String> countQ = mock(TypedQuery.class);
-        when(countQ.setParameter(anyString(), any())).thenReturn(countQ);
-        when(countQ.getResultList()).thenReturn(seriesNames);
-
-        when(entityManager.createQuery(anyString(), eq(Tuple.class))).thenReturn(aggregateQ);
-        when(entityManager.createQuery(anyString(), eq(BookEntity.class))).thenReturn(booksQ);
-        when(entityManager.createQuery(anyString(), eq(String.class))).thenReturn(countQ);
+    private void mockAggregateQueryInProgress(List<SeriesAggregate> results) {
+        mockAggregateQuery(results);
     }
 
-    @SuppressWarnings("unchecked")
     private void mockCountQuery(long count) {
-        TypedQuery<Long> countQ = mock(TypedQuery.class);
-        when(countQ.setParameter(anyString(), any())).thenReturn(countQ);
-        when(countQ.getSingleResult()).thenReturn(count);
-        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(countQ);
+        when(jooqAppSeriesRepository.countSeries(anyLong(), any(), any(), any(), anyBoolean()))
+                .thenReturn(count);
     }
 
-    @SuppressWarnings("unchecked")
     private void mockCountQueryInProgress(long count) {
-        TypedQuery<String> countQ = mock(TypedQuery.class);
-        when(countQ.setParameter(anyString(), any())).thenReturn(countQ);
-        List<String> names = new ArrayList<>();
-        for (int i = 0; i < count; i++) names.add("series" + i);
-        when(countQ.getResultList()).thenReturn(names);
-        when(entityManager.createQuery(anyString(), eq(String.class))).thenReturn(countQ);
+        mockCountQuery(count);
     }
 
-    @SuppressWarnings("unchecked")
     private void mockBooksQuery(List<BookEntity> books) {
-        TypedQuery<BookEntity> booksQ = mock(TypedQuery.class);
-        when(booksQ.setParameter(anyString(), any())).thenReturn(booksQ);
-        when(booksQ.getResultList()).thenReturn(books);
-        when(entityManager.createQuery(anyString(), eq(BookEntity.class))).thenReturn(booksQ);
+        List<Long> ids = books.stream().map(BookEntity::getId).toList();
+        when(jooqAppSeriesRepository.findBookIdsBySeriesNames(anyCollection(), any(), any()))
+                .thenReturn(ids);
+        List<AppBookSummary> summaries = books.stream()
+                .map(b -> AppBookSummary.builder()
+                        .id(b.getId())
+                        .seriesName(b.getMetadata().getSeriesName())
+                        .seriesNumber(b.getMetadata().getSeriesNumber())
+                        .coverUpdatedOn(b.getMetadata().getCoverUpdatedOn())
+                        .authors(b.getMetadata().getAuthors().stream().map(AuthorEntity::getName).toList())
+                        .build())
+                .toList();
+        when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any())).thenReturn(summaries);
     }
 
-    @SuppressWarnings("unchecked")
     private void mockBookPage(List<BookEntity> books, long total) {
-        var page = new PageImpl<>(books, Pageable.ofSize(20), total);
-        when(bookRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
-    }
-
-    private void mockProgress(List<UserBookProgressEntity> progressList) {
-        when(userBookProgressRepository.findByUserIdAndBookIdIn(eq(userId), anySet()))
-                .thenReturn(progressList);
-    }
-
-    private void mockMapperSummary() {
-        when(mobileBookMapper.toSummary(any(BookEntity.class), any()))
-                .thenAnswer(inv -> {
-                    BookEntity b = inv.getArgument(0);
-                    return AppBookSummary.builder()
-                            .id(b.getId())
-                            .title(b.getMetadata() != null ? b.getMetadata().getTitle() : null)
-                            .build();
-                });
+        List<Long> ids = books.stream().map(BookEntity::getId).toList();
+        var page = new PageImpl<>(ids, Pageable.ofSize(20), total);
+        when(jooqAppBookRepository.findBookIds(any(Condition.class), any(Pageable.class))).thenReturn(page);
+        List<AppBookSummary> summaries = books.stream()
+                .map(b -> AppBookSummary.builder()
+                        .id(b.getId())
+                        .title(b.getMetadata() != null ? b.getMetadata().getTitle() : null)
+                        .build())
+                .toList();
+        when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any())).thenReturn(summaries);
     }
 
     private BookEntity buildBook(Long id, String seriesName, Float seriesNumber, String authorName) {

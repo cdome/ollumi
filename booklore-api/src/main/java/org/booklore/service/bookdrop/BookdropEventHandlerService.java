@@ -1,12 +1,11 @@
 package org.booklore.service.bookdrop;
 
 import org.booklore.model.BookDropFileEvent;
-import org.booklore.model.entity.BookdropFileEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import jakarta.annotation.PostConstruct;
@@ -20,7 +19,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
-import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -30,7 +28,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 @RequiredArgsConstructor
 public class BookdropEventHandlerService {
 
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
     private final NotificationService notificationService;
     private final BookdropNotificationService bookdropNotificationService;
     private final AppSettingService appSettingService;
@@ -100,7 +98,7 @@ public class BookdropEventHandlerService {
                     return;
                 }
 
-                if (bookdropFileRepository.findByFilePath(filePath).isPresent()) {
+                if (bookdropFileRepository.existsByFilePath(filePath)) {
                     log.info("File already exists in Bookdrop and is pending review or acceptance: {}", filePath);
                     return;
                 }
@@ -119,23 +117,14 @@ public class BookdropEventHandlerService {
                         Set.of(PermissionType.ADMIN, PermissionType.MANAGE_LIBRARY)
                 );
 
-                BookdropFileEntity bookdropFileEntity = BookdropFileEntity.builder()
-                        .filePath(filePath)
-                        .fileName(fileName)
-                        .fileSize(Files.size(file))
-                        .status(BookdropFileEntity.Status.PENDING_REVIEW)
-                        .createdAt(Instant.now())
-                        .updatedAt(Instant.now())
-                        .build();
-
-                bookdropFileEntity = bookdropFileRepository.save(bookdropFileEntity);
+                long bookdropFileId = bookdropFileRepository.insert(filePath, fileName, Files.size(file));
 
                 if (appSettingService.getAppSettings().isMetadataDownloadOnBookdrop()) {
-                    bookdropMetadataService.attachInitialMetadata(bookdropFileEntity.getId());
-                    bookdropMetadataService.attachFetchedMetadata(bookdropFileEntity.getId());
+                    bookdropMetadataService.attachInitialMetadata(bookdropFileId);
+                    bookdropMetadataService.attachFetchedMetadata(bookdropFileId);
                 } else {
-                    bookdropMetadataService.attachInitialMetadata(bookdropFileEntity.getId());
-                    log.info("Metadata download is disabled. Only initial metadata extracted for file: {}", bookdropFileEntity.getFileName());
+                    bookdropMetadataService.attachInitialMetadata(bookdropFileId);
+                    log.info("Metadata download is disabled. Only initial metadata extracted for file: {}", fileName);
                 }
 
                 bookdropNotificationService.sendBookdropFileSummaryNotification();

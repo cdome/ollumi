@@ -3,11 +3,11 @@ package org.booklore.service.kobo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.KoboUserSettingsEntity;
+import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.KoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.ShelfRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class KoboAutoShelfService {
 
-    private final KoboUserSettingsRepository koboUserSettingsRepository;
+    private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final ShelfRepository shelfRepository;
     private final BookRepository bookRepository;
     private final KoboCompatibilityService koboCompatibilityService;
@@ -40,7 +40,7 @@ public class KoboAutoShelfService {
             return;
         }
 
-        List<KoboUserSettingsEntity> eligibleUsers = koboUserSettingsRepository.findByAutoAddToShelfTrueAndSyncEnabledTrue();
+        List<KoboUserSettings> eligibleUsers = koboUserSettingsRepository.findByAutoAddToShelfTrueAndSyncEnabledTrue();
 
         if (eligibleUsers.isEmpty()) {
             log.debug("No Kobo auto-add enabled users for book {}", book.getId());
@@ -48,7 +48,7 @@ public class KoboAutoShelfService {
         }
 
         List<Long> userIds = eligibleUsers.stream()
-                .map(KoboUserSettingsEntity::getUserId)
+                .map(KoboUserSettings::getUserId)
                 .toList();
 
         List<ShelfEntity> shelves = shelfRepository.findByUserIdInAndName(userIds, ShelfType.KOBO.getName());
@@ -59,7 +59,7 @@ public class KoboAutoShelfService {
 
         boolean modified = false;
 
-        for (KoboUserSettingsEntity setting : eligibleUsers) {
+        for (KoboUserSettings setting : eligibleUsers) {
             ShelfEntity shelf = shelfByUser.get(setting.getUserId());
 
             if (shelf == null) {

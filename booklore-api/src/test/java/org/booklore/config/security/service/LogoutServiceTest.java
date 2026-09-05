@@ -8,12 +8,12 @@ import org.booklore.model.dto.response.LogoutResponse;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.OidcSessionEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.OidcSessionRepository;
-import org.booklore.repository.RefreshTokenRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.dto.OidcSession;
+import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.junit.jupiter.api.Test;
@@ -23,22 +23,22 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class LogoutServiceTest {
 
     @Mock
-    private RefreshTokenRepository refreshTokenRepository;
+    private JooqRefreshTokenRepository refreshTokenRepository;
 
     @Mock
-    private OidcSessionRepository oidcSessionRepository;
+    private JooqOidcSessionRepository oidcSessionRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -62,7 +62,6 @@ class LogoutServiceTest {
     void logout_withAuthenticatedLocalUser_returnsNullLogoutUrl() {
         var user = buildUser(1L, "testuser", ProvisioningMethod.LOCAL);
         stubAuthenticated("testuser", user);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, null);
 
@@ -74,7 +73,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubFullOidcFlow(user, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -89,11 +87,10 @@ class LogoutServiceTest {
     @Test
     void logout_withRefreshToken_resolvesUser() {
         var user = buildUser(2L, "tokenuser", ProvisioningMethod.LOCAL);
-        var tokenEntity = new RefreshTokenEntity();
-        tokenEntity.setUser(user);
+        var tokenRecord = new RefreshToken(1L, 2L, "valid-token", java.time.Instant.now(), false, null);
 
-        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(Optional.of(tokenEntity));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
+        when(refreshTokenRepository.findByToken("valid-token")).thenReturn(tokenRecord);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
 
         LogoutResponse response = logoutService.logout(null, "valid-token", null);
 
@@ -115,7 +112,7 @@ class LogoutServiceTest {
 
     @Test
     void logout_withRefreshTokenNotFound_throwsUnauthorized() {
-        when(refreshTokenRepository.findByToken("invalid")).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByToken("invalid")).thenReturn(null);
 
         assertThatThrownBy(() -> logoutService.logout(null, "invalid", null))
                 .isInstanceOf(APIException.class);
@@ -137,19 +134,9 @@ class LogoutServiceTest {
         var user = buildUser(1L, "testuser", ProvisioningMethod.LOCAL);
         stubAuthenticated("testuser", user);
 
-        var token1 = new RefreshTokenEntity();
-        token1.setUser(user);
-        var token2 = new RefreshTokenEntity();
-        token2.setUser(user);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of(token1, token2));
-
         logoutService.logout(mockAuth(), null, null);
 
-        assertThat(token1.isRevoked()).isTrue();
-        assertThat(token1.getRevocationDate()).isNotNull();
-        assertThat(token2.isRevoked()).isTrue();
-        assertThat(token2.getRevocationDate()).isNotNull();
-        verify(refreshTokenRepository, times(2)).save(any(RefreshTokenEntity.class));
+        verify(refreshTokenRepository).revokeAllActiveByUserId(eq(1L), any());
     }
 
     @Test
@@ -157,18 +144,13 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
 
-        var oidcSession = OidcSessionEntity.builder()
-                .user(user)
-                .idTokenHint("token-hint")
-                .build();
+        var oidcSession = buildSession(5L, user.getId(), "token-hint");
 
-        stubOidcWithSession(oidcSession, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
+        stubOidcWithSession(oidcSession, user.getId(), "https://idp.example.com/logout");
 
         logoutService.logout(mockAuth(), null, "https://app.example.com");
 
-        assertThat(oidcSession.isRevoked()).isTrue();
-        verify(oidcSessionRepository).save(oidcSession);
+        verify(oidcSessionRepository).revokeById(5L);
     }
 
     @Test
@@ -176,7 +158,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubFullOidcFlow(user, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://myapp.com");
 
@@ -192,7 +173,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubFullOidcFlow(user, "https://idp.example.com/logout");
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, null);
 
@@ -204,9 +184,8 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubAppSettings(true, buildProviderDetails());
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(1L))
-                .thenReturn(Optional.empty());
+                .thenReturn(null);
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -218,13 +197,9 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
 
-        var oidcSession = OidcSessionEntity.builder()
-                .user(user)
-                .idTokenHint("hint")
-                .build();
+        var oidcSession = buildSession(6L, user.getId(), "hint");
 
-        stubOidcWithSession(oidcSession, null);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
+        stubOidcWithSession(oidcSession, user.getId(), null);
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -236,7 +211,6 @@ class LogoutServiceTest {
         var user = buildUser(1L, "oidcuser", ProvisioningMethod.OIDC);
         stubAuthenticated("oidcuser", user);
         stubAppSettings(false, null);
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -256,7 +230,6 @@ class LogoutServiceTest {
 
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(1L))
                 .thenThrow(new RuntimeException("db error"));
-        when(refreshTokenRepository.findAllByUserAndRevokedFalse(user)).thenReturn(List.of());
 
         LogoutResponse response = logoutService.logout(mockAuth(), null, "https://app.example.com");
 
@@ -308,23 +281,25 @@ class LogoutServiceTest {
         );
     }
 
+    private OidcSession buildSession(long id, Long userId, String idTokenHint) {
+        return new OidcSession(id, userId, "sub", "https://idp.example.com", "sid", idTokenHint,
+                java.time.Instant.now(), null, false);
+    }
+
     private void stubFullOidcFlow(BookLoreUserEntity user, String endSessionEndpoint) {
         stubAppSettings(true, buildProviderDetails());
 
-        var oidcSession = OidcSessionEntity.builder()
-                .user(user)
-                .idTokenHint("id-token-hint-value")
-                .build();
+        var oidcSession = buildSession(1L, user.getId(), "id-token-hint-value");
         when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(user.getId()))
-                .thenReturn(Optional.of(oidcSession));
+                .thenReturn(oidcSession);
         when(discoveryService.discover("https://idp.example.com")).thenReturn(buildDiscovery(endSessionEndpoint));
     }
 
-    private void stubOidcWithSession(OidcSessionEntity session, String endSessionEndpoint) {
+    private void stubOidcWithSession(OidcSession session, Long userId, String endSessionEndpoint) {
         stubAppSettings(true, buildProviderDetails());
 
-        when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(session.getUser().getId()))
-                .thenReturn(Optional.of(session));
+        when(oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(userId))
+                .thenReturn(session);
         when(discoveryService.discover("https://idp.example.com")).thenReturn(buildDiscovery(endSessionEndpoint));
     }
 }

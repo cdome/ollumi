@@ -3,9 +3,9 @@ package org.booklore.service;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.KoboReadingState;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ReadStatus;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
 import org.booklore.service.kobo.KoboSettingsService;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,7 +109,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should build StatusInfo with FINISHED status and finishedDate")
         void buildStatusInfo_WithFinishedDate() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setReadStatus(ReadStatus.READ);
             progress.setDateFinished(Instant.parse("2025-11-15T10:30:00Z"));
 
@@ -124,7 +124,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should build StatusInfo with READING status")
         void buildStatusInfo_Reading() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setReadStatus(ReadStatus.READING);
 
             KoboReadingState.StatusInfo statusInfo = builder.buildStatusInfoFromProgress(
@@ -138,7 +138,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should build StatusInfo with READY_TO_READ and zero times started")
         void buildStatusInfo_ReadyToRead() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setReadStatus(ReadStatus.UNREAD);
 
             KoboReadingState.StatusInfo statusInfo = builder.buildStatusInfoFromProgress(
@@ -152,7 +152,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should handle FINISHED without dateFinished")
         void buildStatusInfo_FinishedWithoutDate() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setReadStatus(ReadStatus.READ);
             progress.setDateFinished(null);
 
@@ -184,7 +184,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should build bookmark from progress with location")
         void buildBookmarkFromProgress_WithLocation() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setKoboProgressPercent(75.5f);
             progress.setKoboLocation("epubcfi(/6/4[chap01ref]!/4/2/1:3)");
             progress.setKoboLocationType("EpubCfi");
@@ -204,7 +204,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should build bookmark without location when null")
         void buildBookmarkFromProgress_NoLocation() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setKoboProgressPercent(50f);
             progress.setKoboLocation(null);
             progress.setKoboProgressReceivedTime(Instant.now());
@@ -219,7 +219,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should use default time when progress received time is null")
         void buildBookmarkFromProgress_UseDefaultTime() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setKoboProgressPercent(25f);
             progress.setKoboProgressReceivedTime(null);
 
@@ -233,7 +233,7 @@ class KoboReadingStateBuilderTest {
         @Test
         @DisplayName("Should round progress percentage correctly")
         void buildBookmarkFromProgress_RoundProgress() {
-            UserBookProgressEntity progress = new UserBookProgressEntity();
+            UserBookProgressRow progress = new UserBookProgressRow();
             progress.setKoboProgressPercent(33.7f);
             progress.setKoboProgressReceivedTime(Instant.now());
 
@@ -253,8 +253,8 @@ class KoboReadingStateBuilderTest {
             BookEntity book = new BookEntity();
             book.setId(100L);
 
-            UserBookProgressEntity progress = new UserBookProgressEntity();
-            progress.setBook(book);
+            UserBookProgressRow progress = new UserBookProgressRow();
+            progress.setBookId(book.getId());
             progress.setKoboProgressPercent(75f);
             progress.setKoboLocation("epubcfi(/6/4!)");
             progress.setKoboLocationType("EpubCfi");

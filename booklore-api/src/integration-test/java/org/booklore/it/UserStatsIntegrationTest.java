@@ -8,16 +8,15 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.ReadingSessionEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.CategoryRepository;
-import org.booklore.repository.ReadingSessionRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqReadingSessionRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -45,10 +44,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class UserStatsIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private ReadingSessionRepository readingSessionRepository;
+    private JooqReadingSessionRepository readingSessionRepository;
 
     @Autowired
-    private UserBookProgressRepository userBookProgressRepository;
+    private JooqUserBookProgressRepository userBookProgressRepository;
 
     @Autowired
     private BookMetadataRepository bookMetadataRepository;
@@ -292,13 +291,12 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         BookLoreUserEntity user = createStatsUser("distributions");
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), user.getUsername(), "password");
         BookEntity book = createBookWithCategory(user, "Distributions Book");
-        UserBookProgressEntity progress = UserBookProgressEntity.builder()
-                .user(user)
-                .book(book)
-                .readStatus(ReadStatus.READ)
-                .personalRating(4)
-                .epubProgressPercent(0.75f)
-                .build();
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(user.getId());
+        progress.setBookId(book.getId());
+        progress.setReadStatus(ReadStatus.READ);
+        progress.setPersonalRating(4);
+        progress.setEpubProgressPercent(0.75f);
         userBookProgressRepository.save(progress);
 
         ResponseEntity<Map> response = rest.exchange(
@@ -650,30 +648,23 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
     private void createReadingSession(BookLoreUserEntity user, BookEntity book, BookFileType bookType,
                                       Instant startTime, int durationSeconds,
                                       float startProgress, float endProgress, float progressDelta) {
-        ReadingSessionEntity session = ReadingSessionEntity.builder()
-                .user(user)
-                .book(book)
-                .bookType(bookType)
-                .startTime(startTime)
-                .endTime(startTime.plusSeconds(durationSeconds))
-                .durationSeconds(durationSeconds)
-                .startProgress(startProgress)
-                .endProgress(endProgress)
-                .progressDelta(progressDelta)
-                .build();
-        readingSessionRepository.save(session);
+        readingSessionRepository.insert(
+                user.getId(), book.getId(), bookType,
+                startTime, startTime.plusSeconds(durationSeconds), durationSeconds,
+                null,
+                startProgress, endProgress, progressDelta,
+                null, null);
     }
 
     private void createUserBookProgress(BookLoreUserEntity user, BookEntity book, ReadStatus status,
                                         Instant finishedAt, int rating) {
-        UserBookProgressEntity progress = UserBookProgressEntity.builder()
-                .user(user)
-                .book(book)
-                .readStatus(status)
-                .dateFinished(finishedAt)
-                .readStatusModifiedTime(finishedAt)
-                .personalRating(rating)
-                .build();
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(user.getId());
+        progress.setBookId(book.getId());
+        progress.setReadStatus(status);
+        progress.setDateFinished(finishedAt);
+        progress.setReadStatusModifiedTime(finishedAt);
+        progress.setPersonalRating(rating);
         userBookProgressRepository.save(progress);
     }
 }

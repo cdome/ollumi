@@ -10,7 +10,7 @@ import org.booklore.config.security.userdetails.UserAuthenticationDetails;
 import org.booklore.mapper.custom.BookLoreUserTransformer;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.KoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -28,7 +28,7 @@ import java.util.List;
 @Component
 public class KoboAuthFilter extends OncePerRequestFilter {
 
-    private final KoboUserSettingsRepository koboUserSettingsRepository;
+    private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final UserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
 
@@ -51,14 +51,13 @@ public class KoboAuthFilter extends OncePerRequestFilter {
 
         String token = parts[3];
 
-        var userTokenOpt = koboUserSettingsRepository.findByToken(token);
-        if (userTokenOpt.isEmpty()) {
+        var userToken = koboUserSettingsRepository.findByToken(token);
+        if (userToken == null) {
             log.warn("Invalid KOBO token: {}", token);
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid KOBO token");
             return;
         }
 
-        var userToken = userTokenOpt.get();
         var userOpt = userRepository.findByIdWithDetails(userToken.getUserId());
 
         if (userOpt.isEmpty()) {

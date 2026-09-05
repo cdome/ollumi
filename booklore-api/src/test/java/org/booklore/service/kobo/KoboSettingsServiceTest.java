@@ -5,10 +5,10 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.Shelf;
 import org.booklore.model.dto.request.ShelfCreateRequest;
-import org.booklore.model.entity.KoboUserSettingsEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.KoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
+import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.service.ShelfService;
 import org.booklore.service.hardcover.HardcoverSyncSettingsService;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,13 +20,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class KoboSettingsServiceTest {
 
     @Mock
-    private KoboUserSettingsRepository repository;
+    private JooqKoboUserSettingsRepository repository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -38,43 +39,61 @@ class KoboSettingsServiceTest {
     private KoboSettingsService service;
 
     private BookLoreUser user;
-    private KoboUserSettingsEntity settingsEntity;
+    private KoboUserSettings settings;
 
     @BeforeEach
     void setUp() {
         user = BookLoreUser.builder().id(1L).isDefaultPassword(false).build();
-        settingsEntity = KoboUserSettingsEntity.builder()
-                .id(10L)
-                .userId(1L)
-                .token("token")
-                .syncEnabled(true)
-                .autoAddToShelf(true)
-                .progressMarkAsReadingThreshold(0.5f)
-                .progressMarkAsFinishedThreshold(0.9f)
-                .build();
+        settings = rec("token", true, true, 0.5f, 0.9f);
+    }
+
+    private KoboUserSettings rec(String token, boolean syncEnabled, boolean autoAdd, Float reading, Float finished) {
+        return new KoboUserSettings(10L, 1L, token, syncEnabled, reading, finished, autoAdd, null, false, false);
+    }
+
+    /** Echoes the token passed to insert(userId, token, syncEnabled) back into a record. */
+    private void stubInsertEchoingToken() {
+        when(repository.insert(anyLong(), anyString(), anyBoolean())).thenAnswer(inv ->
+                new KoboUserSettings(10L, inv.getArgument(0), inv.getArgument(1), inv.getArgument(2),
+                        1f, 99f, false, null, false, false));
+    }
+
+    /** Echoes the token passed to updateTokenByUserId(userId, token) into a record based on `settings`. */
+    private void stubUpdateTokenEchoingToken() {
+        when(repository.updateTokenByUserId(anyLong(), anyString())).thenAnswer(inv ->
+                new KoboUserSettings(10L, inv.getArgument(0), inv.getArgument(1), settings.getSyncEnabled(),
+                        settings.getProgressMarkAsReadingThreshold(), settings.getProgressMarkAsFinishedThreshold(),
+                        settings.getAutoAddToShelf(), null, false, false));
+    }
+
+    /** Echoes the args of updateSettingsByUserId back into a record. */
+    private void stubUpdateSettingsEchoingArgs() {
+        when(repository.updateSettingsByUserId(anyLong(), anyBoolean(), any(), any(), anyBoolean(), anyBoolean()))
+                .thenAnswer(inv -> new KoboUserSettings(10L, inv.getArgument(0), "token", inv.getArgument(1),
+                        inv.getArgument(2), inv.getArgument(3), inv.getArgument(4), null, false, inv.getArgument(5)));
     }
 
     @Test
     void getCurrentUserSettings_existingSettings() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
+        when(repository.findByUserId(1L)).thenReturn(settings);
 
         KoboSyncSettings dto = service.getCurrentUserSettings();
 
-        assertEquals(settingsEntity.getId(), dto.getId());
-        assertEquals(settingsEntity.getUserId().toString(), dto.getUserId());
-        assertEquals(settingsEntity.getToken(), dto.getToken());
+        assertEquals(settings.getId(), dto.getId());
+        assertEquals(String.valueOf(settings.getUserId()), dto.getUserId());
+        assertEquals(settings.getToken(), dto.getToken());
         assertTrue(dto.isSyncEnabled());
         assertTrue(dto.isAutoAddToShelf());
-        assertEquals(settingsEntity.getProgressMarkAsReadingThreshold(), dto.getProgressMarkAsReadingThreshold());
-        assertEquals(settingsEntity.getProgressMarkAsFinishedThreshold(), dto.getProgressMarkAsFinishedThreshold());
+        assertEquals(settings.getProgressMarkAsReadingThreshold(), dto.getProgressMarkAsReadingThreshold());
+        assertEquals(settings.getProgressMarkAsFinishedThreshold(), dto.getProgressMarkAsFinishedThreshold());
     }
 
     @Test
     void getCurrentUserSettings_noSettings_createsDefault() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findByUserId(1L)).thenReturn(null);
+        stubInsertEchoingToken();
         when(shelfService.getShelf(eq(1L), eq(ShelfType.KOBO.getName()))).thenReturn(Optional.empty());
         doReturn(Shelf.builder().id(100L).build()).when(shelfService).createShelf(any(ShelfCreateRequest.class));
 
@@ -88,13 +107,13 @@ class KoboSettingsServiceTest {
     @Test
     void createOrUpdateToken_existingSettings() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findByUserId(1L)).thenReturn(settings);
+        stubUpdateTokenEchoingToken();
         when(shelfService.getShelf(eq(1L), eq(ShelfType.KOBO.getName()))).thenReturn(Optional.of(ShelfEntity.builder().id(100L).build()));
 
         KoboSyncSettings dto = service.createOrUpdateToken();
 
-        assertEquals(settingsEntity.getUserId().toString(), dto.getUserId());
+        assertEquals(String.valueOf(settings.getUserId()), dto.getUserId());
         assertNotNull(dto.getToken());
         assertNotEquals("token", dto.getToken());
     }
@@ -102,8 +121,8 @@ class KoboSettingsServiceTest {
     @Test
     void createOrUpdateToken_noSettings_createsNew() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findByUserId(1L)).thenReturn(null);
+        stubInsertEchoingToken();
         when(shelfService.getShelf(eq(1L), eq(ShelfType.KOBO.getName()))).thenReturn(Optional.empty());
         doReturn(Shelf.builder().id(100L).build()).when(shelfService).createShelf(any(ShelfCreateRequest.class));
 
@@ -117,10 +136,10 @@ class KoboSettingsServiceTest {
     @Test
     void updateSettings_disableSync_deletesShelf() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
+        when(repository.findByUserId(1L)).thenReturn(settings);
         Shelf shelf = Shelf.builder().id(100L).build();
         when(shelfService.getUserKoboShelf()).thenReturn(shelf);
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        stubUpdateSettingsEchoingArgs();
 
         KoboSyncSettings update = new KoboSyncSettings();
         update.setSyncEnabled(false);
@@ -136,10 +155,10 @@ class KoboSettingsServiceTest {
     @Test
     void updateSettings_enableSync_createsShelf() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        settingsEntity.setSyncEnabled(false);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
+        settings = rec("token", false, true, 0.5f, 0.9f);
+        when(repository.findByUserId(1L)).thenReturn(settings);
         when(shelfService.getUserKoboShelf()).thenReturn(null);
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        stubUpdateSettingsEchoingArgs();
         when(shelfService.getShelf(eq(1L), eq(ShelfType.KOBO.getName()))).thenReturn(Optional.empty());
         doReturn(Shelf.builder().id(100L).build()).when(shelfService).createShelf(any(ShelfCreateRequest.class));
 
@@ -157,8 +176,8 @@ class KoboSettingsServiceTest {
     @Test
     void updateSettings_updatesThresholds() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findByUserId(1L)).thenReturn(settings);
+        stubUpdateSettingsEchoingArgs();
 
         KoboSyncSettings update = new KoboSyncSettings();
         update.setSyncEnabled(true);
@@ -168,18 +187,18 @@ class KoboSettingsServiceTest {
 
         KoboSyncSettings dto = service.updateSettings(update);
 
-        assertEquals((Float)0.7f, dto.getProgressMarkAsReadingThreshold());
-        assertEquals((Float)0.95f, dto.getProgressMarkAsFinishedThreshold());
+        assertEquals((Float) 0.7f, dto.getProgressMarkAsReadingThreshold());
+        assertEquals((Float) 0.95f, dto.getProgressMarkAsFinishedThreshold());
     }
 
     @Test
     void updateSettings_nullThresholds_shouldNotChangeExisting() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findByUserId(1L)).thenReturn(settings);
+        stubUpdateSettingsEchoingArgs();
 
-        Float originalReading = settingsEntity.getProgressMarkAsReadingThreshold();
-        Float originalFinished = settingsEntity.getProgressMarkAsFinishedThreshold();
+        Float originalReading = settings.getProgressMarkAsReadingThreshold();
+        Float originalFinished = settings.getProgressMarkAsFinishedThreshold();
 
         KoboSyncSettings update = new KoboSyncSettings();
         update.setSyncEnabled(true);
@@ -195,9 +214,9 @@ class KoboSettingsServiceTest {
 
     @Test
     void getCurrentUserSettings_settingsWithNullToken_shouldReturnDtoWithNullToken() {
-        settingsEntity.setToken(null);
+        settings = rec(null, true, true, 0.5f, 0.9f);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
+        when(repository.findByUserId(1L)).thenReturn(settings);
 
         KoboSyncSettings dto = service.getCurrentUserSettings();
 
@@ -213,9 +232,9 @@ class KoboSettingsServiceTest {
     @Test
     void updateSettings_getUserKoboShelfReturnsNull_shouldNotThrow() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByUserId(1L)).thenReturn(Optional.of(settingsEntity));
+        when(repository.findByUserId(1L)).thenReturn(settings);
         when(shelfService.getUserKoboShelf()).thenReturn(null);
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        stubUpdateSettingsEchoingArgs();
 
         KoboSyncSettings update = new KoboSyncSettings();
         update.setSyncEnabled(false);
@@ -265,9 +284,10 @@ class KoboSettingsServiceTest {
     void createOrUpdateToken_multipleCalls_generateDifferentTokens() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(repository.findByUserId(1L))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(settingsEntity));
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+                .thenReturn(null)
+                .thenReturn(settings);
+        stubInsertEchoingToken();
+        stubUpdateTokenEchoingToken();
         when(shelfService.getShelf(eq(1L), eq(ShelfType.KOBO.getName()))).thenReturn(Optional.empty());
         doReturn(Shelf.builder().id(100L).build()).when(shelfService).createShelf(any(ShelfCreateRequest.class));
 

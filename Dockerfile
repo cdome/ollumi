@@ -19,6 +19,7 @@ WORKDIR /springboot-app
 
 # Copy only build files first to cache dependencies
 COPY ./booklore-api/build.gradle ./booklore-api/settings.gradle /springboot-app/
+COPY ./booklore-api/lombok.config /springboot-app/
 
 # Download dependencies (cached layer)
 RUN --mount=type=cache,target=/home/gradle/.gradle \

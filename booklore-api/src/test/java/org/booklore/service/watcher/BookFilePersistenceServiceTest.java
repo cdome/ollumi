@@ -4,6 +4,9 @@ import org.booklore.mapper.BookMapper;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookFileRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
@@ -32,6 +35,8 @@ class BookFilePersistenceServiceTest {
     @Mock private EntityManager entityManager;
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
+    @Mock private LibraryPathRepository libraryPathRepository;
+    @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private NotificationService notificationService;
     @Mock private BookMapper bookMapper;
 
@@ -46,7 +51,7 @@ class BookFilePersistenceServiceTest {
     @BeforeEach
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
-        service = new BookFilePersistenceService(entityManager, bookRepository, bookFileRepository, notificationService, bookMapper);
+        service = new BookFilePersistenceService(entityManager, bookRepository, bookFileRepository, libraryPathRepository, jooqLibraryPathRepository, notificationService, bookMapper);
 
         fileUtilsMock = mockStatic(FileUtils.class);
         fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("sub");
@@ -60,6 +65,11 @@ class BookFilePersistenceServiceTest {
                 .name("Test Library")
                 .libraryPaths(List.of(libraryPath))
                 .build();
+
+        // paths are read via jOOQ now, not off the LAZY entity collection
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
+                .thenReturn(List.of(new LibraryPathRow(1L, "/library")));
+        when(libraryPathRepository.findById(1L)).thenReturn(Optional.of(libraryPath));
     }
 
     @AfterEach
@@ -135,7 +145,9 @@ class BookFilePersistenceServiceTest {
             LibraryPathEntity deeperPath = new LibraryPathEntity();
             deeperPath.setId(2L);
             deeperPath.setPath("/library/sub");
-            library.setLibraryPaths(List.of(libraryPath, deeperPath));
+            when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(
+                    List.of(new LibraryPathRow(1L, "/library"), new LibraryPathRow(2L, "/library/sub")));
+            when(libraryPathRepository.findById(2L)).thenReturn(Optional.of(deeperPath));
 
             LibraryPathEntity result = service.getLibraryPathEntityForFile(library, "/library/sub/test.epub");
 

@@ -3,9 +3,9 @@ package org.booklore.it;
 import org.booklore.config.AppProperties;
 import org.booklore.it.util.AuthTestHelper;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.CustomFontEntity;
+import org.booklore.repository.jooq.dto.CustomFont;
 import org.booklore.model.enums.FontFormat;
-import org.booklore.repository.CustomFontRepository;
+import org.booklore.repository.jooq.JooqCustomFontRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -25,13 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class CustomFontIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private CustomFontRepository customFontRepository;
+    private JooqCustomFontRepository customFontRepository;
 
     @Autowired
     private AppProperties appProperties;
 
-    private CustomFontEntity seedFont(Long userId) throws Exception {
-        BookLoreUserEntity user = userRepository.findById(userId).orElseThrow();
+    private CustomFont seedFont(Long userId) throws Exception {
         String fileName = "user_" + userId + "_font_" + UUID.randomUUID().toString().substring(0, 8) + ".ttf";
 
         Path fontDir = Path.of(appProperties.getPathConfig(), "custom-fonts", String.valueOf(userId));
@@ -39,24 +38,21 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
         Path fontFile = fontDir.resolve(fileName);
         Files.writeString(fontFile, "dummy font content");
 
-        CustomFontEntity font = CustomFontEntity.builder()
-                .user(user)
-                .fontName("IT Font")
-                .fileName(fileName)
-                .originalFileName("it-font.ttf")
-                .format(FontFormat.TTF)
-                .fileSize(Files.size(fontFile))
-                .uploadedAt(LocalDateTime.now())
-                .build();
-
-        return customFontRepository.save(font);
+        return customFontRepository.insert(
+                userId,
+                "IT Font",
+                fileName,
+                "it-font.ttf",
+                FontFormat.TTF,
+                Files.size(fontFile),
+                LocalDateTime.now());
     }
 
     @Test
     void adminCanListSeededFont() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
-        CustomFontEntity font = seedFont(admin.getId());
+        CustomFont font = seedFont(admin.getId());
 
         ResponseEntity<List<Map<String, Object>>> response = rest.exchange(
                 baseUrl() + "/api/v1/custom-fonts",
@@ -68,7 +64,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).anySatisfy(f ->
-                assertThat(f.get("id")).isEqualTo(font.getId().intValue())
+                assertThat(f.get("id")).isEqualTo((int) font.getId())
         );
 
         rest.exchange(
@@ -83,7 +79,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
     void adminCanDownloadSeededFontFile() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
-        CustomFontEntity font = seedFont(admin.getId());
+        CustomFont font = seedFont(admin.getId());
 
         ResponseEntity<byte[]> response = rest.exchange(
                 baseUrl() + "/api/v1/custom-fonts/" + font.getId() + "/file?token=" + tokens.accessToken(),
@@ -108,7 +104,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
     void adminCanDeleteSeededFont() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
-        CustomFontEntity font = seedFont(admin.getId());
+        CustomFont font = seedFont(admin.getId());
 
         ResponseEntity<Void> deleteResponse = rest.exchange(
                 baseUrl() + "/api/v1/custom-fonts/" + font.getId(),
@@ -127,7 +123,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
         );
 
         assertThat(listResponse.getBody()).noneSatisfy(f ->
-                assertThat(f.get("id")).isEqualTo(font.getId().intValue())
+                assertThat(f.get("id")).isEqualTo((int) font.getId())
         );
     }
 }

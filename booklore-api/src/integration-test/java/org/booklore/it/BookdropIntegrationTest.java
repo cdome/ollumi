@@ -4,7 +4,7 @@ import org.booklore.it.util.AuthTestHelper;
 import org.booklore.it.util.FixtureFactory;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.settings.AppSettingKey;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class BookdropIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
 
     @BeforeEach
     void prepareBookdrop() throws Exception {
@@ -59,7 +59,7 @@ public class BookdropIntegrationTest extends RestApiIntegrationTest {
                         });
             }
         }
-        bookdropFileRepository.deleteAll();
+        bookdropFileRepository.deleteAllById(bookdropFileRepository.findAllIds());
 
         TimeUnit.MILLISECONDS.sleep(300);
     }

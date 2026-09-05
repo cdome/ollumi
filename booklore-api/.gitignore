@@ -38,3 +38,6 @@ out/
 
 ### Local scripts ###
 local/
+
+### jOOQ generated sources ###
+src/generated/

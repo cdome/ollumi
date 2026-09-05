@@ -25,14 +25,15 @@ public interface UserRepository extends JpaRepository<BookLoreUserEntity, Long> 
      * Fetch a user with all eagerly-needed associations (settings, libraries, permissions)
      * in a single query to prevent N+1 problems after OSIV is disabled.
      */
-    @EntityGraph(attributePaths = {"settings", "libraries", "libraries.libraryPaths", "permissions"})
+    @EntityGraph(attributePaths = {"libraries", "libraries.libraryPaths", "permissions"})
     @Query("SELECT u FROM BookLoreUserEntity u WHERE u.id = :id")
     Optional<BookLoreUserEntity> findByIdWithDetails(@Param("id") Long id);
 
     /**
-     * Fetch a user with settings and permissions (without libraries) for settings-related operations.
+     * Fetch a user with permissions (without libraries) for settings-related operations.
+     * User settings now live in user_settings (jOOQ), no longer eager-loaded here.
      */
-    @EntityGraph(attributePaths = {"settings", "permissions"})
+    @EntityGraph(attributePaths = {"permissions"})
     @Query("SELECT u FROM BookLoreUserEntity u WHERE u.id = :id")
     Optional<BookLoreUserEntity> findByIdWithSettings(@Param("id") Long id);
 
@@ -54,16 +55,9 @@ public interface UserRepository extends JpaRepository<BookLoreUserEntity, Long> 
      * Fetch all users with their settings, libraries, and permissions in a single query.
      * Prevents N+1 when listing all users (admin panel).
      */
-    @EntityGraph(attributePaths = {"settings", "libraries", "libraries.libraryPaths", "permissions"})
+    @EntityGraph(attributePaths = {"libraries", "libraries.libraryPaths", "permissions"})
     @Query("SELECT DISTINCT u FROM BookLoreUserEntity u")
     List<BookLoreUserEntity> findAllWithDetails();
-
-    /**
-     * Fetch a user by username with all associations needed for authentication/DTO mapping.
-     */
-    @EntityGraph(attributePaths = {"settings", "libraries", "libraries.libraryPaths", "permissions"})
-    @Query("SELECT u FROM BookLoreUserEntity u WHERE u.username = :username")
-    Optional<BookLoreUserEntity> findByUsernameWithDetails(@Param("username") String username);
 
     long countByProvisioningMethod(ProvisioningMethod provisioningMethod);
 

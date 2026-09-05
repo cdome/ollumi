@@ -89,10 +89,6 @@ public class BookEntity {
     @Builder.Default
     private List<BookFileEntity> bookFiles = new ArrayList<>();
 
-    @BatchSize(size = 20)
-    @OneToMany(mappedBy = "book", fetch = FetchType.LAZY)
-    private List<UserBookProgressEntity> userBookProgress;
-
     public Path getFullFilePath() {
         BookFileEntity primaryBookFile = getPrimaryBookFile();
         if (primaryBookFile == null || libraryPath == null || libraryPath.getPath() == null || primaryBookFile.getFileSubPath() == null || primaryBookFile.getFileName() == null) {

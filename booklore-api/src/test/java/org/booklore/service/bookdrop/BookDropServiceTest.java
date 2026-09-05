@@ -10,13 +10,14 @@ import org.booklore.model.dto.BookdropFileNotification;
 import org.booklore.model.dto.request.BookdropFinalizeRequest;
 import org.booklore.model.dto.response.BookdropFinalizeResult;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookdropFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
+import org.booklore.model.enums.BookdropFileStatus;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.BookdropFileRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileMovingHelper;
 import org.booklore.service.fileprocessor.BookFileProcessor;
@@ -58,7 +59,7 @@ import static org.mockito.Mockito.*;
 class BookDropServiceTest {
 
     @Mock
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
     @Mock
     private MonitoringRegistrationService monitoringRegistrationService;
     @Mock
@@ -94,7 +95,7 @@ class BookDropServiceTest {
     @TempDir
     Path tempDir;
 
-    private BookdropFileEntity bookdropFileEntity;
+    private BookdropFileRow bookdropFileEntity;
     private LibraryEntity libraryEntity;
     private BookdropFile bookdropFile;
 
@@ -109,13 +110,16 @@ class BookDropServiceTest {
         libraryEntity.setName("Test Library");
         libraryEntity.setLibraryPaths(List.of(libraryPathEntity));
 
-        bookdropFileEntity = new BookdropFileEntity();
-        bookdropFileEntity.setId(1L);
-        bookdropFileEntity.setFileName("test-book.pdf");
-        bookdropFileEntity.setFilePath(tempDir.resolve("test-book.pdf").toString());
-        bookdropFileEntity.setStatus(BookdropFileEntity.Status.PENDING_REVIEW);
-        bookdropFileEntity.setOriginalMetadata("{\"title\":\"Test Book\"}");
-        bookdropFileEntity.setFetchedMetadata(null);
+        bookdropFileEntity = new BookdropFileRow(
+                1L,
+                tempDir.resolve("test-book.pdf").toString(),
+                "test-book.pdf",
+                null,
+                BookdropFileStatus.PENDING_REVIEW,
+                "{\"title\":\"Test Book\"}",
+                null,
+                null,
+                null);
 
         bookdropFile = new BookdropFile();
         bookdropFile.setId(1L);
@@ -144,7 +148,7 @@ class BookDropServiceTest {
 
     @Test
     void getFileNotificationSummary_ShouldReturnCorrectCounts() {
-        when(bookdropFileRepository.countByStatus(BookdropFileEntity.Status.PENDING_REVIEW)).thenReturn(5L);
+        when(bookdropFileRepository.countByStatus(BookdropFileStatus.PENDING_REVIEW)).thenReturn(5L);
         when(bookdropFileRepository.count()).thenReturn(10L);
 
         BookdropFileNotification result = bookDropService.getFileNotificationSummary();
@@ -152,17 +156,17 @@ class BookDropServiceTest {
         assertEquals(5, result.getPendingCount());
         assertEquals(10, result.getTotalCount());
         assertNotNull(result.getLastUpdatedAt());
-        verify(bookdropFileRepository).countByStatus(BookdropFileEntity.Status.PENDING_REVIEW);
+        verify(bookdropFileRepository).countByStatus(BookdropFileStatus.PENDING_REVIEW);
         verify(bookdropFileRepository).count();
     }
 
     @Test
     void getFilesByStatus_WhenStatusIsPending_ShouldReturnPendingFiles() {
         Pageable pageable = PageRequest.of(0, 10);
-        Page<BookdropFileEntity> entityPage = new PageImpl<>(List.of(bookdropFileEntity));
+        Page<BookdropFileRow> entityPage = new PageImpl<>(List.of(bookdropFileEntity));
         Page<BookdropFile> expectedPage = new PageImpl<>(List.of(bookdropFile));
 
-        when(bookdropFileRepository.findAllByStatus(BookdropFileEntity.Status.PENDING_REVIEW, pageable))
+        when(bookdropFileRepository.findAllByStatus(BookdropFileStatus.PENDING_REVIEW, pageable))
                 .thenReturn(entityPage);
         when(mapper.toDto(bookdropFileEntity)).thenReturn(bookdropFile);
 
@@ -170,14 +174,14 @@ class BookDropServiceTest {
 
         assertEquals(1, result.getContent().size());
         assertEquals(bookdropFile, result.getContent().getFirst());
-        verify(bookdropFileRepository).findAllByStatus(BookdropFileEntity.Status.PENDING_REVIEW, pageable);
+        verify(bookdropFileRepository).findAllByStatus(BookdropFileStatus.PENDING_REVIEW, pageable);
         verify(mapper).toDto(bookdropFileEntity);
     }
 
     @Test
     void getFilesByStatus_WhenStatusIsNotPending_ShouldReturnAllFiles() {
         Pageable pageable = PageRequest.of(0, 10);
-        Page<BookdropFileEntity> entityPage = new PageImpl<>(List.of(bookdropFileEntity));
+        Page<BookdropFileRow> entityPage = new PageImpl<>(List.of(bookdropFileEntity));
 
         when(bookdropFileRepository.findAll(pageable)).thenReturn(entityPage);
         when(mapper.toDto(bookdropFileEntity)).thenReturn(bookdropFile);
@@ -310,9 +314,16 @@ class BookDropServiceTest {
     @Test
     void discardSelectedFiles_WhenSelectAllTrue_ShouldDeleteAllExceptExcluded() throws IOException {
         List<Long> excludedIds = List.of(2L);
-        BookdropFileEntity fileToDelete = new BookdropFileEntity();
-        fileToDelete.setId(1L);
-        fileToDelete.setFilePath(tempDir.resolve("file-to-delete.pdf").toString());
+        BookdropFileRow fileToDelete = new BookdropFileRow(
+                1L,
+                tempDir.resolve("file-to-delete.pdf").toString(),
+                "file-to-delete.pdf",
+                null,
+                BookdropFileStatus.PENDING_REVIEW,
+                null,
+                null,
+                null,
+                null);
 
         Files.createFile(tempDir.resolve("file-to-delete.pdf"));
 
@@ -331,7 +342,7 @@ class BookDropServiceTest {
             bookDropService.discardSelectedFiles(true, excludedIds, null);
 
             verify(bookdropFileRepository).findAll();
-            verify(bookdropFileRepository).deleteAllByIdInBatch(List.of(1L));
+            verify(bookdropFileRepository).deleteAllById(List.of(1L));
             verify(bookdropNotificationService).sendBookdropFileSummaryNotification();
             verify(bookdropMonitoringService).pauseMonitoring();
             verify(bookdropMonitoringService).resumeMonitoring();
@@ -356,7 +367,7 @@ class BookDropServiceTest {
             bookDropService.discardSelectedFiles(false, null, selectedIds);
 
             verify(bookdropFileRepository).findAllById(selectedIds);
-            verify(bookdropFileRepository).deleteAllByIdInBatch(List.of(1L));
+            verify(bookdropFileRepository).deleteAllById(List.of(1L));
             verify(bookdropNotificationService).sendBookdropFileSummaryNotification();
         }
     }
@@ -382,12 +393,16 @@ class BookDropServiceTest {
         request.setDefaultLibraryId(1L);
         request.setDefaultPathId(1L);
 
-        BookdropFileEntity missingFileEntity = new BookdropFileEntity();
-        missingFileEntity.setId(2L);
-        missingFileEntity.setFileName("missing-file.pdf");
-        missingFileEntity.setFilePath("/non-existent/missing-file.pdf");
-        missingFileEntity.setOriginalMetadata("{\"title\":\"Missing Book\"}");
-        missingFileEntity.setFetchedMetadata(null);
+        BookdropFileRow missingFileEntity = new BookdropFileRow(
+                2L,
+                "/non-existent/missing-file.pdf",
+                "missing-file.pdf",
+                null,
+                BookdropFileStatus.PENDING_REVIEW,
+                "{\"title\":\"Missing Book\"}",
+                null,
+                null,
+                null);
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(2L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(missingFileEntity));
@@ -405,7 +420,7 @@ class BookDropServiceTest {
 
             BookdropFinalizeResult result = bookDropService.finalizeImport(request);
 
-            verify(bookdropFileRepository).deleteAllByIdInBatch(List.of(2L));
+            verify(bookdropFileRepository).deleteById(2L);
             verify(bookdropNotificationService).sendBookdropFileSummaryNotification();
             assertNotNull(result);
             assertEquals(1, result.getTotalFiles());
@@ -480,7 +495,7 @@ class BookDropServiceTest {
         
         when(bookRepository.save(any())).thenAnswer(i -> i.getArguments()[0]);
 
-        doNothing().when(bookdropFileRepository).deleteAllByIdInBatch(any());
+        doNothing().when(bookdropFileRepository).deleteById(anyLong());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();
         doNothing().when(notificationService).sendMessage(any(), any());
         lenient().doNothing().when(metadataRefreshService).updateBookMetadata(any());
@@ -563,7 +578,16 @@ class BookDropServiceTest {
         Path sourceFile = tempDir.resolve("metadata-failure-test-book.pdf");
         Files.createFile(sourceFile);
         assertTrue(Files.exists(sourceFile), "Source file should exist");
-        bookdropFileEntity.setFilePath(sourceFile.toString());
+        bookdropFileEntity = new BookdropFileRow(
+                bookdropFileEntity.getId(),
+                sourceFile.toString(),
+                bookdropFileEntity.getFileName(),
+                bookdropFileEntity.getFileSize(),
+                bookdropFileEntity.getStatus(),
+                bookdropFileEntity.getOriginalMetadata(),
+                bookdropFileEntity.getFetchedMetadata(),
+                bookdropFileEntity.getCreatedAt(),
+                bookdropFileEntity.getUpdatedAt());
 
         Path targetDir = tempDir.resolve("library");
         Files.createDirectories(targetDir);
@@ -596,7 +620,7 @@ class BookDropServiceTest {
         bookEntity.setId(1L);
         when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
 
-        doNothing().when(bookdropFileRepository).deleteAllByIdInBatch(any());
+        doNothing().when(bookdropFileRepository).deleteById(anyLong());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();
         doNothing().when(notificationService).sendMessage(any(), any());
 

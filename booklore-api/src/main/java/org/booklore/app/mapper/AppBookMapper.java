@@ -7,6 +7,10 @@ import org.booklore.app.dto.AppLibrarySummary;
 import org.booklore.app.dto.AppMagicShelfSummary;
 import org.booklore.app.dto.AppShelfSummary;
 import org.booklore.model.entity.*;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.mapstruct.*;
 
@@ -34,7 +38,7 @@ public interface AppBookMapper {
     @Mapping(target = "coverUpdatedOn", source = "book.metadata.coverUpdatedOn")
     @Mapping(target = "audiobookCoverUpdatedOn", source = "book.metadata.audiobookCoverUpdatedOn")
     @Mapping(target = "isPhysical", source = "book.isPhysical")
-    AppBookSummary toSummary(BookEntity book, UserBookProgressEntity progress);
+    AppBookSummary toSummary(BookEntity book, UserBookProgressRow progress);
 
     @Mapping(target = "id", source = "book.id")
     @Mapping(target = "title", source = "book.metadata.title")
@@ -71,7 +75,7 @@ public interface AppBookMapper {
     @Mapping(target = "cbxProgress", source = "progress", qualifiedByName = "mapCbxProgress")
     @Mapping(target = "audiobookProgress", source = "fileProgress", qualifiedByName = "mapAudiobookProgress")
     @Mapping(target = "koreaderProgress", source = "progress", qualifiedByName = "mapKoreaderProgress")
-    AppBookDetail toDetail(BookEntity book, UserBookProgressEntity progress, UserBookFileProgressEntity fileProgress);
+    AppBookDetail toDetail(BookEntity book, UserBookProgressRow progress, UserBookFileProgressRow fileProgress);
 
     @Named("mapAuthors")
     default List<String> mapAuthors(List<AuthorEntity> authors) {
@@ -125,7 +129,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapReadProgress")
-    default Float mapReadProgress(UserBookProgressEntity progress) {
+    default Float mapReadProgress(UserBookProgressRow progress) {
         if (progress == null) {
             return null;
         }
@@ -148,7 +152,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapEpubProgress")
-    default AppBookDetail.EpubProgress mapEpubProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.EpubProgress mapEpubProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getEpubProgress() == null) {
             return null;
         }
@@ -161,7 +165,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapPdfProgress")
-    default AppBookDetail.PdfProgress mapPdfProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.PdfProgress mapPdfProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getPdfProgress() == null) {
             return null;
         }
@@ -173,7 +177,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapCbxProgress")
-    default AppBookDetail.CbxProgress mapCbxProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.CbxProgress mapCbxProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getCbxProgress() == null) {
             return null;
         }
@@ -185,7 +189,7 @@ public interface AppBookMapper {
     }
 
     @Named("mapKoreaderProgress")
-    default AppBookDetail.KoreaderProgress mapKoreaderProgress(UserBookProgressEntity progress) {
+    default AppBookDetail.KoreaderProgress mapKoreaderProgress(UserBookProgressRow progress) {
         if (progress == null || progress.getKoreaderProgressPercent() == null) {
             return null;
         }
@@ -198,10 +202,9 @@ public interface AppBookMapper {
     }
 
     @Named("mapAudiobookProgress")
-    default AppBookDetail.AudiobookProgress mapAudiobookProgress(UserBookFileProgressEntity fileProgress) {
+    default AppBookDetail.AudiobookProgress mapAudiobookProgress(UserBookFileProgressRow fileProgress) {
         if (fileProgress == null) return null;
-        if (fileProgress.getBookFile() == null ||
-            fileProgress.getBookFile().getBookType() != BookFileType.AUDIOBOOK) {
+        if (fileProgress.getBookType() != BookFileType.AUDIOBOOK) {
             return null;
         }
 
@@ -294,19 +297,21 @@ public interface AppBookMapper {
                 .collect(Collectors.toList());
     }
 
-    default AppLibrarySummary toLibrarySummary(LibraryEntity library, long bookCount) {
+    /**
+     * Paths are passed in (read via jOOQ by the caller) rather than taken from the LAZY
+     * library.getLibraryPaths(): this runs outside a transaction, where that collection would throw.
+     */
+    default AppLibrarySummary toLibrarySummary(LibraryEntity library, long bookCount, List<LibraryPathRow> pathRows) {
         if (library == null) {
             return null;
         }
-        List<AppLibrarySummary.PathSummary> paths = Collections.emptyList();
-        if (library.getLibraryPaths() != null && !library.getLibraryPaths().isEmpty()) {
-            paths = library.getLibraryPaths().stream()
+        List<AppLibrarySummary.PathSummary> paths = pathRows == null ? Collections.emptyList()
+                : pathRows.stream()
                     .map(lp -> AppLibrarySummary.PathSummary.builder()
                             .id(lp.getId())
                             .path(lp.getPath())
                             .build())
                     .collect(Collectors.toList());
-        }
         return AppLibrarySummary.builder()
                 .id(library.getId())
                 .name(library.getName())
@@ -330,7 +335,7 @@ public interface AppBookMapper {
                 .build();
     }
 
-    default AppMagicShelfSummary toMagicShelfSummary(MagicShelfEntity magicShelf) {
+    default AppMagicShelfSummary toMagicShelfSummary(MagicShelfRow magicShelf) {
         if (magicShelf == null) {
             return null;
         }

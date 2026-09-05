@@ -96,6 +96,9 @@ public class AdditionalFileService {
         }
     }
 
+    // readOnly tx: getFullFilePath() walks book -> libraryPath, both LAZY, and open-in-view is off.
+    // The returned Resource is filesystem-backed, so streaming after commit needs no session.
+    @Transactional(readOnly = true)
     public ResponseEntity<Resource> downloadAdditionalFile(Long fileId) throws IOException {
         Optional<BookFileEntity> fileOpt = additionalFileRepository.findById(fileId);
         if (fileOpt.isEmpty()) {

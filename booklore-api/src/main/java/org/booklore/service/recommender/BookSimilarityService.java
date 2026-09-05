@@ -2,10 +2,8 @@ package org.booklore.service.recommender;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +33,15 @@ public class BookSimilarityService {
         }
     }
 
-    public double calculateSimilarity(BookEntity a, BookEntity b) {
+    /**
+     * Computes similarity between two books. Author/category names are supplied by the caller as
+     * pre-fetched, lowercased name sets keyed by book id (jOOQ relations reader) so a batch of
+     * candidate comparisons against a fixed target does not re-query per pair. Title/series/rating
+     * are still read from the (scalar) metadata entity.
+     */
+    public double calculateSimilarity(BookEntity a, BookEntity b,
+                                      Map<Long, Set<String>> authorNamesByBook,
+                                      Map<Long, Set<String>> categoryNamesByBook) {
         if (a.getMetadata() == null || b.getMetadata() == null) {
             return 0.0;
         }
@@ -46,10 +52,12 @@ public class BookSimilarityService {
         double score = 0;
 
         score += SimilarityWeight.AUTHORS.getWeight() *
-                jaccardSimilarity(extractNames(metaA.getAuthors()), extractNames(metaB.getAuthors()));
+                jaccardSimilarity(authorNamesByBook.getOrDefault(a.getId(), Set.of()),
+                        authorNamesByBook.getOrDefault(b.getId(), Set.of()));
 
         score += SimilarityWeight.CATEGORIES.getWeight() *
-                jaccardSimilarity(extractNames(metaA.getCategories()), extractNames(metaB.getCategories()));
+                jaccardSimilarity(categoryNamesByBook.getOrDefault(a.getId(), Set.of()),
+                        categoryNamesByBook.getOrDefault(b.getId(), Set.of()));
 
         score += SimilarityWeight.TITLE.getWeight() *
                 cosineSimilarity(tokenize(metaA.getTitle()), tokenize(metaB.getTitle()));
@@ -62,19 +70,6 @@ public class BookSimilarityService {
                 ratingSimilarity(metaA.getRating(), metaB.getRating());
 
         return round(score, 5);
-    }
-
-    private Set<String> extractNames(Collection<?> entities) {
-        if (entities == null) return Collections.emptySet();
-        Set<String> names = new HashSet<>();
-        for (Object obj : entities) {
-            if (obj instanceof AuthorEntity author && author.getName() != null) {
-                names.add(author.getName().toLowerCase());
-            } else if (obj instanceof CategoryEntity category && category.getName() != null) {
-                names.add(category.getName().toLowerCase());
-            }
-        }
-        return names;
     }
 
     private boolean isEqualIgnoreCase(String s1, String s2) {

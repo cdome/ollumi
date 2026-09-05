@@ -9,7 +9,8 @@ import org.booklore.model.dto.response.DetachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.BookCoverService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -31,7 +32,7 @@ import static org.mockito.Mockito.*;
 class BookFileDetachmentServiceTest {
 
     @Mock private BookRepository bookRepository;
-    @Mock private UserBookProgressRepository userBookProgressRepository;
+    @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
     @Mock private BookMapper bookMapper;
@@ -94,7 +95,7 @@ class BookFileDetachmentServiceTest {
         user.setId(1L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(userBookProgressRepository.findByUserIdAndBookId(anyLong(), anyLong()))
-                .thenReturn(Optional.of(new UserBookProgressEntity()));
+                .thenReturn(Optional.of(new UserBookProgressRow()));
         when(readingProgressService.fetchUserFileProgress(anyLong(), anySet()))
                 .thenReturn(new HashMap<>());
         when(bookMapper.toBook(any(BookEntity.class))).thenReturn(Book.builder().build());

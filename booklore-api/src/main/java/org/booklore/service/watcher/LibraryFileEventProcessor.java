@@ -10,6 +10,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.library.LibraryProcessingService;
 import org.booklore.util.FileUtils;
@@ -41,6 +42,7 @@ public class LibraryFileEventProcessor {
 
     private final BlockingQueue<FileEvent> eventQueue = new LinkedBlockingQueue<>();
     private final LibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final BookRepository bookRepository;
     private final BookFileTransactionalHandler bookFileTransactionalHandler;
     private final BookFilePersistenceService bookFilePersistenceService;
@@ -132,7 +134,9 @@ public class LibraryFileEventProcessor {
         LibraryEntity library = libraryRepository.findById(event.libraryId())
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(event.libraryId()));
 
-        if (library.getLibraryPaths().stream().noneMatch(lp -> path.startsWith(lp.getPath()))) {
+        // jOOQ, not library.getLibraryPaths(): this runs on the watcher thread with a detached entity.
+        if (jooqLibraryPathRepository.findPathsByLibraryId(library.getId()).stream()
+                .noneMatch(lp -> path.startsWith(lp.getPath()))) {
             log.warn("[SKIP] Path outside of library: '{}'", path);
             return;
         }

@@ -1,7 +1,6 @@
 package org.booklore.service.migration;
 
-import org.booklore.model.entity.AppMigrationEntity;
-import org.booklore.repository.AppMigrationRepository;
+import org.booklore.repository.jooq.JooqAppMigrationRepository;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,19 +13,18 @@ import java.time.LocalDateTime;
 @Service
 public class AppMigrationService {
 
-    private AppMigrationRepository migrationRepository;
+    private JooqAppMigrationRepository migrationRepository;
 
 
     @Transactional
     public void executeMigration(Migration migration) {
-        if (migrationRepository.existsById(migration.getKey())) {
+        if (migrationRepository.existsByKey(migration.getKey())) {
             log.debug("Migration '{}' already executed, skipping", migration.getKey());
             return;
         }
         try {
             migration.execute();
-            AppMigrationEntity entity = new AppMigrationEntity(migration.getKey(), LocalDateTime.now(), migration.getDescription());
-            migrationRepository.save(entity);
+            migrationRepository.insert(migration.getKey(), LocalDateTime.now(), migration.getDescription());
 
             log.info("Migration '{}' completed successfully", migration.getKey());
         } catch (Exception e) {

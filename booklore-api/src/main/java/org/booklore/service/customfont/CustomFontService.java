@@ -2,13 +2,11 @@ package org.booklore.service.customfont;
 
 import org.booklore.config.AppProperties;
 import org.booklore.exception.APIException;
-import org.booklore.mapper.CustomFontMapper;
 import org.booklore.model.dto.CustomFontDto;
-import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.CustomFontEntity;
 import org.booklore.model.enums.FontFormat;
-import org.booklore.repository.CustomFontRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqCustomFontRepository;
+import org.booklore.repository.jooq.dto.CustomFont;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
@@ -38,9 +36,8 @@ public class CustomFontService {
     private static final Pattern SPECIAL_CHARS_PATTERN = Pattern.compile("[<>\"'`]");
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final Pattern CONTROL_CHARS_PATTERN = Pattern.compile("[\\p{Cntrl}\\p{Cc}\\p{Cf}\\p{Co}\\p{Cn}]");
-    private final CustomFontRepository customFontRepository;
+    private final JooqCustomFontRepository customFontRepository;
     private final UserRepository userRepository;
-    private final CustomFontMapper customFontMapper;
     private final AppProperties appProperties;
 
     private static final int MAX_FONTS_PER_USER = 10;
@@ -51,13 +48,14 @@ public class CustomFontService {
     @Transactional
     public CustomFontDto uploadFont(MultipartFile file, String fontName, Long userId) {
         Path fontPath = null;
-        CustomFontEntity savedEntity = null;
+        CustomFont savedFont = null;
 
         try {
             validateFontUpload(file, userId);
 
-            BookLoreUserEntity user = userRepository.findById(userId)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            if (!userRepository.existsById(userId)) {
+                throw new IllegalArgumentException("User not found");
+            }
 
             String originalFilename = file.getOriginalFilename();
             if (originalFilename == null || originalFilename.isEmpty()) {
@@ -82,26 +80,23 @@ public class CustomFontService {
 
             String sanitizedFontName = sanitizeFontName(fontName, originalFilename);
 
-            CustomFontEntity entity = CustomFontEntity.builder()
-                    .user(user)
-                    .fontName(sanitizedFontName)
-                    .fileName(fileName)
-                    .originalFileName(originalFilename)
-                    .format(format)
-                    .fileSize(file.getSize())
-                    .uploadedAt(LocalDateTime.now())
-                    .build();
-
-            savedEntity = customFontRepository.save(entity);
+            savedFont = customFontRepository.insert(
+                    userId,
+                    sanitizedFontName,
+                    fileName,
+                    originalFilename,
+                    format,
+                    file.getSize(),
+                    LocalDateTime.now());
             log.info("Font uploaded successfully for user {}: {} ({})", userId, sanitizedFontName, fileName);
 
-            return customFontMapper.toDto(savedEntity);
+            return toDto(savedFont);
 
         } catch (IOException e) {
             log.error("Failed to upload font for user {}: {}", userId, e.getMessage(), e);
             throw new APIException("Failed to upload font. Please try again or contact support if the problem persists.", HttpStatus.INTERNAL_SERVER_ERROR);
         } finally {
-            if (fontPath != null && savedEntity == null) {
+            if (fontPath != null && savedFont == null) {
                 try {
                     Files.deleteIfExists(fontPath);
                     log.debug("Cleaned up orphaned font file after upload failure: {}", fontPath);
@@ -113,16 +108,17 @@ public class CustomFontService {
     }
 
     public List<CustomFontDto> getUserFonts(Long userId) {
-        List<CustomFontEntity> fonts = customFontRepository.findByUserId(userId);
-        return fonts.stream()
-                .map(customFontMapper::toDto)
+        return customFontRepository.findByUserId(userId).stream()
+                .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public void deleteFont(Long fontId, Long userId) {
-        CustomFontEntity font = customFontRepository.findByIdAndUserId(fontId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Font not found or access denied"));
+        CustomFont font = customFontRepository.findByIdAndUserId(fontId, userId);
+        if (font == null) {
+            throw new IllegalArgumentException("Font not found or access denied");
+        }
 
         IOException fileDeleteException = null;
 
@@ -139,7 +135,7 @@ public class CustomFontService {
         }
 
         try {
-            customFontRepository.delete(font);
+            customFontRepository.deleteById(font.getId());
             log.info("Font deleted successfully for user {}: {} ({})", userId, font.getFontName(), font.getFileName());
         } catch (Exception dbException) {
             log.error("Failed to delete font from database for user {}: {}", userId, dbException.getMessage(), dbException);
@@ -157,8 +153,10 @@ public class CustomFontService {
     }
 
     public Resource getFontFile(Long fontId, Long userId) {
-        CustomFontEntity font = customFontRepository.findByIdAndUserId(fontId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Font not found or access denied"));
+        CustomFont font = customFontRepository.findByIdAndUserId(fontId, userId);
+        if (font == null) {
+            throw new IllegalArgumentException("Font not found or access denied");
+        }
 
         Path fontDir = getFontDirectory(userId);
         Path fontPath = fontDir.resolve(font.getFileName());
@@ -180,9 +178,22 @@ public class CustomFontService {
     }
 
     public FontFormat getFontFormat(Long fontId, Long userId) {
-        CustomFontEntity font = customFontRepository.findByIdAndUserId(fontId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Font not found or access denied"));
+        CustomFont font = customFontRepository.findByIdAndUserId(fontId, userId);
+        if (font == null) {
+            throw new IllegalArgumentException("Font not found or access denied");
+        }
         return font.getFormat();
+    }
+
+    private CustomFontDto toDto(CustomFont font) {
+        return CustomFontDto.builder()
+                .id(font.getId())
+                .fontName(font.getFontName())
+                .originalFileName(font.getOriginalFileName())
+                .format(font.getFormat())
+                .fileSize(font.getFileSize())
+                .uploadedAt(font.getUploadedAt())
+                .build();
     }
 
     private void validateFontUpload(MultipartFile file, Long userId) {

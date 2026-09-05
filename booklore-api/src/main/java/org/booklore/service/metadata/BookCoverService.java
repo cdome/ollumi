@@ -11,7 +11,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.projection.BookCoverUpdateProjection;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.dto.BookCoverUpdate;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
@@ -46,6 +47,7 @@ public class BookCoverService {
 
     private final AppProperties appProperties;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final NotificationService notificationService;
     private final AppSettingService appSettingService;
     private final FileService fileService;
@@ -602,7 +604,7 @@ public class BookCoverService {
     }
 
     private void notifyBookCoverUpdate(BookEntity bookEntity) {
-        List<BookCoverUpdateProjection> updates = bookRepository.findCoverUpdateInfoByIds(List.of(bookEntity.getId()));
+        List<BookCoverUpdate> updates = jooqBookRepository.findCoverUpdateInfoByIds(List.of(bookEntity.getId()));
         if (!updates.isEmpty()) {
             notificationService.sendMessage(Topic.BOOKS_COVER_UPDATE, updates);
         }
@@ -612,7 +614,7 @@ public class BookCoverService {
         if (refreshedIds.isEmpty()) {
             return;
         }
-        List<BookCoverUpdateProjection> updates = bookRepository.findCoverUpdateInfoByIds(refreshedIds);
+        List<BookCoverUpdate> updates = jooqBookRepository.findCoverUpdateInfoByIds(refreshedIds);
         if (!updates.isEmpty()) {
             notificationService.sendMessage(Topic.BOOKS_COVER_UPDATE, updates);
         }

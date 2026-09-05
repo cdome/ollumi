@@ -1,0 +1,9 @@
+app:
+  path-book: '../shared/books'
+  path-config: '..shared/config'
+spring:
+  datasource:
+  driver-class-name: org.mariadb.jdbc.Driver
+  url: jdbc:mariadb://localhost:3366/booklore?createDatabaseIfNotExist=true
+  username: booklore_user
+  password: your_password

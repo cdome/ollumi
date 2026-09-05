@@ -7,7 +7,7 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.MetadataRefreshOptions;
 import org.booklore.model.dto.settings.*;
-import org.booklore.model.entity.AppSettingEntity;
+import org.booklore.repository.jooq.dto.AppSetting;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.service.audit.AuditService;
@@ -70,13 +70,8 @@ public class AppSettingService {
             validateOidcForceOnlyMode(val);
         }
 
-        var setting = settingPersistenceHelper.appSettingsRepository.findByName(key.toString());
-        if (setting == null) {
-            setting = new AppSettingEntity();
-            setting.setName(key.toString());
-        }
-        setting.setVal(settingPersistenceHelper.serializeSettingValue(key, val));
-        settingPersistenceHelper.appSettingsRepository.save(setting);
+        settingPersistenceHelper.appSettingsRepository.upsertByName(
+                key.toString(), settingPersistenceHelper.serializeSettingValue(key, val));
         refreshCache();
 
         AuditAction action = switch (key) {
@@ -133,8 +128,8 @@ public class AppSettingService {
 
     private Map<String, String> getSettingsMap() {
         return settingPersistenceHelper.appSettingsRepository.findAll().stream()
-                .filter(entity -> entity.getName() != null && entity.getVal() != null)
-                .collect(Collectors.toMap(AppSettingEntity::getName, AppSettingEntity::getVal));
+                .filter(entity -> entity.getName() != null && entity.getValue() != null)
+                .collect(Collectors.toMap(AppSetting::getName, AppSetting::getValue));
     }
 
     private PublicAppSetting buildPublicSetting() {
@@ -215,18 +210,12 @@ public class AppSettingService {
 
     public String getSettingValue(String key) {
         var setting = settingPersistenceHelper.appSettingsRepository.findByName(key);
-        return setting != null ? setting.getVal() : null;
+        return setting != null ? setting.getValue() : null;
     }
 
     @CacheEvict(value = "publicSettings", allEntries = true)
     @Transactional
     public void saveSetting(String key, String value) {
-        var setting = settingPersistenceHelper.appSettingsRepository.findByName(key);
-        if (setting == null) {
-            setting = new AppSettingEntity();
-            setting.setName(key);
-        }
-        setting.setVal(value);
-        settingPersistenceHelper.appSettingsRepository.save(setting);
+        settingPersistenceHelper.appSettingsRepository.upsertByName(key, value);
     }
 }

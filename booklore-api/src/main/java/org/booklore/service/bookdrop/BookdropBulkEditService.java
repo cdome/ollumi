@@ -3,8 +3,8 @@ package org.booklore.service.bookdrop;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.request.BookdropBulkEditRequest;
 import org.booklore.model.dto.response.BookdropBulkEditResult;
-import org.booklore.model.entity.BookdropFileEntity;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,7 +19,7 @@ public class BookdropBulkEditService {
 
     private static final int BATCH_SIZE = 500;
 
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
     private final BookdropMetadataHelper metadataHelper;
 
     @Transactional
@@ -60,36 +60,31 @@ public class BookdropBulkEditService {
     private BatchEditResult processSingleBatch(List<Long> allFileIds, int batchStart, int batchEnd, 
                                                 BookdropBulkEditRequest request) {
         List<Long> batchIds = allFileIds.subList(batchStart, batchEnd);
-        List<BookdropFileEntity> batchFiles = bookdropFileRepository.findAllById(batchIds);
-        
+        List<BookdropFileRow> batchFiles = bookdropFileRepository.findAllById(batchIds);
+
         int successCount = 0;
         int failureCount = 0;
-        Set<Long> failedFileIds = new HashSet<>();
+        Map<Long, String> updatesById = new LinkedHashMap<>();
 
-        for (BookdropFileEntity file : batchFiles) {
+        for (BookdropFileRow file : batchFiles) {
             try {
-                updateFileMetadata(file, request);
+                updatesById.put(file.getId(), buildUpdatedFetchedMetadata(file, request));
                 successCount++;
             } catch (RuntimeException e) {
-                log.error("Failed to update metadata for file {} ({}): {}", 
+                log.error("Failed to update metadata for file {} ({}): {}",
                          file.getId(), file.getFileName(), e.getMessage(), e);
                 failureCount++;
-                failedFileIds.add(file.getId());
             }
         }
 
-        List<BookdropFileEntity> filesToSave = batchFiles.stream()
-                .filter(file -> !failedFileIds.contains(file.getId()))
-                .toList();
-
-        if (!filesToSave.isEmpty()) {
-            bookdropFileRepository.saveAll(filesToSave);
+        if (!updatesById.isEmpty()) {
+            bookdropFileRepository.updateFetchedMetadataForIds(updatesById);
         }
-        
+
         return new BatchEditResult(successCount, failureCount);
     }
 
-    private void updateFileMetadata(BookdropFileEntity file, BookdropBulkEditRequest request) {
+    private String buildUpdatedFetchedMetadata(BookdropFileRow file, BookdropBulkEditRequest request) {
         BookMetadata currentMetadata = metadataHelper.getCurrentMetadata(file);
         BookMetadata updates = request.getFields();
         Set<String> enabledFields = request.getEnabledFields();
@@ -114,10 +109,10 @@ public class BookdropBulkEditService {
                 currentMetadata::setCategories, mergeArrays);
         updateArrayField("moods", enabledFields, currentMetadata.getMoods(), updates.getMoods(), 
                 currentMetadata::setMoods, mergeArrays);
-        updateArrayField("tags", enabledFields, currentMetadata.getTags(), updates.getTags(), 
+        updateArrayField("tags", enabledFields, currentMetadata.getTags(), updates.getTags(),
                 currentMetadata::setTags, mergeArrays);
 
-        metadataHelper.updateFetchedMetadata(file, currentMetadata);
+        return metadataHelper.serializeMetadata(file, currentMetadata);
     }
 
     private void updateArrayField(String fieldName, Set<String> enabledFields,

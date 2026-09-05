@@ -12,11 +12,11 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.BookCoverService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -39,7 +39,7 @@ import java.util.Set;
 public class BookFileDetachmentService {
 
     private final BookRepository bookRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final BookMapper bookMapper;
@@ -209,9 +209,9 @@ public class BookFileDetachmentService {
         BookEntity refreshedBook = bookRepository.findByIdWithBookFiles(bookId)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
-        UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
-                .orElse(new UserBookProgressEntity());
-        UserBookFileProgressEntity fileProgress = readingProgressService
+        UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
+                .orElse(new UserBookProgressRow());
+        UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 

@@ -14,8 +14,6 @@ import org.booklore.model.dto.request.MetadataRefreshRequest;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.MetadataFetchJobEntity;
-import org.booklore.model.entity.MetadataFetchProposalEntity;
 import org.booklore.model.enums.FetchedMetadataProposalStatus;
 import org.booklore.model.enums.MetadataFetchTaskStatus;
 import org.booklore.model.enums.MetadataProvider;
@@ -23,7 +21,8 @@ import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.MetadataFetchJobRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.parser.BookParser;
@@ -49,7 +48,7 @@ import static org.booklore.model.enums.MetadataProvider.*;
 public class MetadataRefreshService {
 
     private final LibraryRepository libraryRepository;
-    private final MetadataFetchJobRepository metadataFetchJobRepository;
+    private final JooqMetadataFetchJobRepository metadataFetchJobRepository;
     private final BookMapper bookMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
     private final NotificationService notificationService;
@@ -57,6 +56,7 @@ public class MetadataRefreshService {
     private final Map<MetadataProvider, BookParser> parserMap;
     private final ObjectMapper objectMapper;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final PlatformTransactionManager transactionManager;
     private final AuthenticationService authenticationService;
     private final TaskCancellationManager cancellationManager;
@@ -87,23 +87,18 @@ public class MetadataRefreshService {
                     (libraryRefreshOptions != null ? libraryRefreshOptions : appSettings.getDefaultMetadataRefreshOptions());
             boolean isReviewMode = Boolean.TRUE.equals(reviewModeOptions.getReviewBeforeApply());
 
-            MetadataFetchJobEntity task = MetadataFetchJobEntity.builder()
-                    .taskId(jobId)
-                    .userId(userId)
-                    .status(MetadataFetchTaskStatus.IN_PROGRESS)
-                    .startedAt(Instant.now())
-                    .totalBooksCount(totalBooks)
-                    .completedBooks(0)
-                    .build();
-            metadataFetchJobRepository.save(task);
+            metadataFetchJobRepository.insertJob(jobId, userId, MetadataFetchTaskStatus.IN_PROGRESS, Instant.now(), totalBooks, 0);
 
             TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
             int completedCount = 0;
+            // Mirrors the old entity's persisted completedBooks (only bumped on non-skipped books via
+            // reportProgressIfNeeded) so the cancel notification reports the same figure as before.
+            int[] lastReportedCompleted = {0};
 
             for (Long bookId : actualBookIds) {
                 if (cancellationManager.isTaskCancelled(jobId)) {
                     log.info("RefreshMetadataTask {} was cancelled, stopping execution", jobId);
-                    cancelTask(task);
+                    cancelTask(jobId, lastReportedCompleted[0], totalBooks);
                     cancellationManager.clearCancellation(jobId);
                     return;
                 }
@@ -134,7 +129,8 @@ public class MetadataRefreshService {
                             providers = prepareProviders(refreshOptions);
                         }
 
-                        reportProgressIfNeeded(task, jobId, finalCompletedCount, totalBooks, book, isReviewMode);
+                        reportProgressIfNeeded(jobId, finalCompletedCount, totalBooks, book, isReviewMode);
+                        lastReportedCompleted[0] = finalCompletedCount;
                         Map<MetadataProvider, BookMetadata> metadataMap = fetchMetadataForBook(providers, book);
                         if (providers.contains(GoodReads)) {
                             try {
@@ -153,7 +149,7 @@ public class MetadataRefreshService {
                         }
 
                         if (bookReviewMode) {
-                            saveProposal(task, book.getId(), fetched);
+                            saveProposal(jobId, book.getId(), fetched);
                         } else {
                             // Use the replaceMode from options - allows user to control whether to replace existing or only fill missing
                             MetadataReplaceMode replaceMode = refreshOptions.getReplaceMode() != null 
@@ -178,7 +174,7 @@ public class MetadataRefreshService {
                 completedCount++;
             }
 
-            completeTask(task, completedCount, totalBooks, isReviewMode);
+            completeTask(jobId, completedCount, totalBooks, isReviewMode);
             cancellationManager.clearCancellation(jobId);
             log.info("Metadata refresh task {} completed successfully", jobId);
 
@@ -238,10 +234,8 @@ public class MetadataRefreshService {
                 ));
     }
 
-    private void reportProgressIfNeeded(MetadataFetchJobEntity task, String taskId, int completedCount, int total, BookEntity book, boolean isReviewMode) {
-        if (task == null) return;
-        task.setCompletedBooks(completedCount);
-        metadataFetchJobRepository.save(task);
+    private void reportProgressIfNeeded(String taskId, int completedCount, int total, BookEntity book, boolean isReviewMode) {
+        metadataFetchJobRepository.updateCompletedBooks(taskId, completedCount);
         String message = String.format("Processing '%s'", book.getMetadata().getTitle());
         sendBatchProgressNotification(taskId, completedCount, total, message, MetadataFetchTaskStatus.IN_PROGRESS, isReviewMode);
     }
@@ -260,30 +254,18 @@ public class MetadataRefreshService {
         notificationService.sendMessage(Topic.BOOK_METADATA_BATCH_PROGRESS, new MetadataBatchProgressNotification(taskId, current, total, message, status.name(), isReview));
     }
 
-    private void completeTask(MetadataFetchJobEntity task, int completed, int total, boolean isReviewMode) {
-        task.setStatus(MetadataFetchTaskStatus.COMPLETED);
-        task.setCompletedAt(Instant.now());
-        task.setCompletedBooks(completed);
-        metadataFetchJobRepository.save(task);
-        sendBatchProgressNotification(task.getTaskId(), completed, total, "Batch metadata fetch successfully completed!", MetadataFetchTaskStatus.COMPLETED, isReviewMode);
+    private void completeTask(String taskId, int completed, int total, boolean isReviewMode) {
+        metadataFetchJobRepository.markCompleted(taskId, completed, Instant.now());
+        sendBatchProgressNotification(taskId, completed, total, "Batch metadata fetch successfully completed!", MetadataFetchTaskStatus.COMPLETED, isReviewMode);
     }
 
-    private void cancelTask(MetadataFetchJobEntity task) {
-        task.setStatus(MetadataFetchTaskStatus.CANCELLED);
-        task.setCompletedAt(Instant.now());
-        metadataFetchJobRepository.save(task);
-        sendBatchProgressNotification(task.getTaskId(), task.getCompletedBooks(), task.getTotalBooksCount(), "Task cancelled by user", MetadataFetchTaskStatus.CANCELLED, false);
+    private void cancelTask(String taskId, int completedBooks, int totalBooks) {
+        metadataFetchJobRepository.markCancelled(taskId, Instant.now());
+        sendBatchProgressNotification(taskId, completedBooks, totalBooks, "Task cancelled by user", MetadataFetchTaskStatus.CANCELLED, false);
     }
 
-    private void saveProposal(MetadataFetchJobEntity job, Long bookId, BookMetadata metadata) throws JacksonException {
-        MetadataFetchProposalEntity proposal = MetadataFetchProposalEntity.builder()
-                .job(job)
-                .bookId(bookId)
-                .metadataJson(objectMapper.writeValueAsString(metadata))
-                .status(FetchedMetadataProposalStatus.FETCHED)
-                .fetchedAt(Instant.now())
-                .build();
-        job.getProposals().add(proposal);
+    private void saveProposal(String taskId, Long bookId, BookMetadata metadata) throws JacksonException {
+        metadataFetchJobRepository.insertProposal(taskId, bookId, objectMapper.writeValueAsString(metadata), FetchedMetadataProposalStatus.FETCHED, Instant.now());
     }
 
 
@@ -770,7 +752,7 @@ public class MetadataRefreshService {
         return switch (refreshType) {
             case LIBRARY -> {
                 LibraryEntity libraryEntity = libraryRepository.findById(request.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(request.getLibraryId()));
-                yield bookRepository.findBookIdsByLibraryId(libraryEntity.getId());
+                yield jooqBookRepository.findBookIdsByLibraryId(libraryEntity.getId());
             }
             case BOOKS -> request.getBookIds();
         };

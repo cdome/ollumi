@@ -6,7 +6,7 @@ import org.booklore.model.dto.request.TaskCreateRequest;
 import org.booklore.model.dto.response.TaskCreateResponse;
 import org.booklore.model.enums.TaskType;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.task.TaskStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ import java.util.UUID;
 @Slf4j
 public class DeletedBooksCleanupTask implements Task {
 
-    private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
 
     @Override
     public void validatePermissions(BookLoreUser user, TaskCreateRequest request) {
@@ -43,10 +43,10 @@ public class DeletedBooksCleanupTask implements Task {
             int deletedCount;
             if (request.isTriggeredByCron()) {
                 Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);
-                deletedCount = bookRepository.deleteSoftDeletedBefore(cutoff);
+                deletedCount = jooqBookRepository.deleteSoftDeletedBefore(cutoff);
                 log.info("{}: Removed {} deleted books older than {}", getTaskType(), deletedCount, cutoff);
             } else {
-                deletedCount = bookRepository.deleteAllSoftDeleted();
+                deletedCount = jooqBookRepository.deleteAllSoftDeleted();
                 log.info("{}: Removed all {} deleted books (on-demand execution)", getTaskType(), deletedCount);
             }
             builder.status(TaskStatus.COMPLETED);
@@ -68,7 +68,7 @@ public class DeletedBooksCleanupTask implements Task {
 
     @Override
     public String getMetadata() {
-        long deleted = bookRepository.countAllSoftDeleted();
+        long deleted = jooqBookRepository.countSoftDeleted();
         return "Book" + (deleted != 1 ? "s" : "") + " pending cleanup: " + deleted;
     }
 }

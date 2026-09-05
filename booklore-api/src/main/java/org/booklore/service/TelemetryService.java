@@ -12,6 +12,15 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqBookNoteRepository;
+import org.booklore.repository.jooq.JooqBookMarkRepository;
+import org.booklore.repository.jooq.JooqKoreaderUserRepository;
+import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,24 +37,26 @@ public class TelemetryService {
 
     private final VersionService versionService;
     private final LibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final BookRepository bookRepository;
-    private final BookMarkRepository bookMarkRepository;
-    private final BookNoteRepository bookNoteRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMarkRepository bookMarkRepository;
+    private final JooqBookNoteRepository bookNoteRepository;
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AuthorRepository authorRepository;
     private final ShelfRepository shelfRepository;
-    private final MagicShelfRepository magicShelfRepository;
+    private final JooqMagicShelfRepository magicShelfRepository;
     private final CategoryRepository categoryRepository;
     private final TagRepository tagRepository;
     private final MoodRepository moodRepository;
     private final UserRepository userRepository;
-    private final EmailProviderV2Repository emailProviderV2Repository;
-    private final EmailRecipientV2Repository emailRecipientV2Repository;
+    private final org.booklore.repository.jooq.JooqEmailProviderV2Repository emailProviderV2Repository;
+    private final org.booklore.repository.jooq.JooqEmailRecipientV2Repository emailRecipientV2Repository;
     private final AppSettingService appSettingService;
-    private final KoboUserSettingsRepository koboUserSettingsRepository;
-    private final UserSettingRepository userSettingRepository;
-    private final KoreaderUserRepository koreaderUserRepository;
-    private final OpdsUserV2Repository opdsUserV2Repository;
+    private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
+    private final JooqUserSettingRepository userSettingRepository;
+    private final JooqKoreaderUserRepository koreaderUserRepository;
+    private final JooqOpdsUserV2Repository opdsUserV2Repository;
     private final InstallationService installationService;
 
     public InstallationPing getInstallationPing() {
@@ -135,15 +146,15 @@ public class TelemetryService {
     private Map<String, Long> getBookFileTypeCounts() {
         Map<String, Long> countByType = new HashMap<>();
         for (BookFileType type : BookFileType.values()) {
-            countByType.put(type.name(), bookRepository.countByBookType(type));
+            countByType.put(type.name(), jooqBookRepository.countByBookType(type));
         }
         return countByType;
     }
 
     private BookloreTelemetry.LibraryStatistics mapLibraryStatistics(LibraryEntity lib) {
         return BookloreTelemetry.LibraryStatistics.builder()
-                .totalLibraryPaths(lib.getLibraryPaths() != null ? lib.getLibraryPaths().size() : 0)
-                .bookCount(bookRepository.countByLibraryId(lib.getId()))
+                .totalLibraryPaths(jooqLibraryPathRepository.countPathsByLibraryId(lib.getId()))
+                .bookCount(jooqBookRepository.countByLibraryId(lib.getId()))
                 .watchEnabled(lib.isWatch())
                 .iconType(lib.getIconType() != null ? lib.getIconType().name() : null)
                 .build();

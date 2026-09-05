@@ -66,7 +66,7 @@ spring:
       minimum-idle: 2              # Minimal warm connections; virtual threads handle bursts
       idle-timeout: 300000         # 5 minutes before idle connections are closed
   jpa:
-    open-in-view: true # true until we implement proper DTOs and service-layer data fetching
+    open-in-view: false # web Book read paths (and the app path) now use jOOQ DTO projections; no lazy loading in the view layer
     hibernate:
       naming:
         physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
@@ -86,6 +86,8 @@ spring:
           batch_versioned_data: true  # Allow batching UPDATEs on @Version entities
         default_batch_fetch_size: 16  # Global batch fetch for all lazy collections (prevents N+1)
         generate_statistics: ${HIBERNATE_STATISTICS:false}
+  jooq:
+    sql-dialect: MARIADB
   threads:
     virtual:
       enabled: true

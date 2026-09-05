@@ -11,6 +11,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.reader.CbxReaderService;
@@ -37,6 +38,7 @@ public class KomgaService {
 
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final LibraryRepository libraryRepository;
     private final KomgaMapper komgaMapper;
     private final MagicShelfService magicShelfService;
@@ -66,20 +68,11 @@ public class KomgaService {
         List<String> sortedSeriesNames;
         if (groupUnknown) {
             // Use optimized query that groups books without series as "Unknown Series"
-            if (libraryId != null) {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesGroupedByLibraryId(
-                    libraryId, komgaMapper.getUnknownSeriesName());
-            } else {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesGrouped(
-                    komgaMapper.getUnknownSeriesName());
-            }
+            sortedSeriesNames = jooqBookRepository.findDistinctSeriesNamesGrouped(
+                komgaMapper.getUnknownSeriesName(), libraryId);
         } else {
             // Use query that gives each book without series its own entry
-            if (libraryId != null) {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesUngroupedByLibraryId(libraryId);
-            } else {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesUngrouped();
-            }
+            sortedSeriesNames = jooqBookRepository.findDistinctSeriesNamesUngrouped(libraryId);
         }
         
         log.debug("Found {} distinct series names from database (optimized)", sortedSeriesNames.size());
@@ -113,13 +106,10 @@ public class KomgaService {
                 // Load only the books for this specific series
                 List<BookEntity> seriesBooks;
                 if (libraryId != null) {
-                    if (groupUnknown) {
-                        seriesBooks = bookRepository.findBooksBySeriesNameGroupedByLibraryId(
-                            seriesName, libraryId, komgaMapper.getUnknownSeriesName());
-                    } else {
-                        seriesBooks = bookRepository.findBooksBySeriesNameUngroupedByLibraryId(
-                            seriesName, libraryId);
-                    }
+                    List<Long> seriesBookIds = groupUnknown
+                            ? jooqBookRepository.findBookIdsBySeriesNameGrouped(seriesName, libraryId)
+                            : jooqBookRepository.findBookIdsBySeriesNameUngrouped(seriesName, libraryId);
+                    seriesBooks = loadBooksPreservingOrder(seriesBookIds);
                 } else {
                     // For all libraries, need to load all books and filter (less common case)
                     List<BookEntity> allBooks = bookRepository.findAllWithMetadata();
@@ -315,6 +305,18 @@ public class KomgaService {
         }
         
         return pages;
+    }
+
+    private List<BookEntity> loadBooksPreservingOrder(List<Long> bookIds) {
+        if (bookIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+                .collect(Collectors.toMap(BookEntity::getId, book -> book));
+        return bookIds.stream()
+                .map(booksById::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private Map<String, List<BookEntity>> groupBooksBySeries(List<BookEntity> books) {

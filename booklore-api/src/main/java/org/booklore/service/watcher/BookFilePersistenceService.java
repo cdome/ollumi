@@ -10,6 +10,9 @@ import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
 import jakarta.persistence.EntityManager;
@@ -34,6 +37,8 @@ public class BookFilePersistenceService {
     private final EntityManager entityManager;
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
+    private final LibraryPathRepository libraryPathRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
     private final BookMapper bookMapper;
 
@@ -69,8 +74,13 @@ public class BookFilePersistenceService {
         notificationService.sendMessageToPermissions(Topic.BOOK_ADD, bookMapper.toBookWithDescription(book, false), Set.of(ADMIN, MANAGE_LIBRARY));
     }
 
+    /**
+     * Reads the library's paths via jOOQ instead of the LAZY libraryEntity.getLibraryPaths(): callers on
+     * the file-watcher thread hold a detached LibraryEntity, so touching that collection would throw
+     * LazyInitializationException with open-in-view disabled.
+     */
     String findMatchingLibraryPath(LibraryEntity libraryEntity, Path filePath) {
-        return libraryEntity.getLibraryPaths().stream()
+        return jooqLibraryPathRepository.findPathsByLibraryId(libraryEntity.getId()).stream()
                 .map(lp -> Paths.get(lp.getPath()).toAbsolutePath().normalize())
                 .filter(base -> filePath.toAbsolutePath().normalize().startsWith(base))
                 .map(Path::toString)
@@ -78,13 +88,16 @@ public class BookFilePersistenceService {
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException("No matching libraryPath for: " + filePath));
     }
 
+    /** Same jOOQ-backed lookup as {@link #findMatchingLibraryPath}, resolving the winning row to its entity. */
     LibraryPathEntity getLibraryPathEntityForFile(LibraryEntity libraryEntity, String inputPath) {
         Path fullPath = Paths.get(inputPath).toAbsolutePath().normalize();
-        return libraryEntity.getLibraryPaths().stream()
+        LibraryPathRow match = jooqLibraryPathRepository.findPathsByLibraryId(libraryEntity.getId()).stream()
                 .map(lp -> Map.entry(lp, Paths.get(lp.getPath()).toAbsolutePath().normalize()))
                 .filter(entry -> fullPath.startsWith(entry.getValue()))
                 .max(Comparator.comparingInt(entry -> entry.getValue().getNameCount()))
                 .map(Map.Entry::getKey)
+                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(inputPath));
+        return libraryPathRepository.findById(match.getId())
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(inputPath));
     }
 

@@ -5,13 +5,12 @@ import static org.mockito.Mockito.*;
 
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
-import org.booklore.mapper.KoreaderUserMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.KoreaderUser;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.KoreaderUserEntity;
-import org.booklore.repository.KoreaderUserRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqKoreaderUserRepository;
+import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.service.koreader.KoreaderUserService;
 import org.booklore.util.Md5Util;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,14 +29,12 @@ class KoreaderUserServiceTest {
 
     @Mock AuthenticationService authService;
     @Mock UserRepository userRepository;
-    @Mock KoreaderUserRepository koreaderUserRepository;
-    @Mock KoreaderUserMapper koreaderUserMapper;
+    @Mock JooqKoreaderUserRepository koreaderUserRepository;
     @InjectMocks
     KoreaderUserService service;
 
     private BookLoreUserEntity ownerEntity;
-    private KoreaderUserEntity entity;
-    private KoreaderUser dto;
+    private KoreaderUserRow entity;
 
     @BeforeEach
     void init() {
@@ -50,28 +47,21 @@ class KoreaderUserServiceTest {
         ownerEntity.setId(123L);
         ownerEntity.setUsername("ownerName");
 
-        entity = new KoreaderUserEntity();
+        entity = new KoreaderUserRow();
         entity.setId(10L);
-        entity.setBookLoreUser(ownerEntity);
+        entity.setBookLoreUserId(123L);
         entity.setUsername("kvUser");
-
-        dto = new KoreaderUser(10L, "kvUser", null, null, false, true);
-        when(koreaderUserMapper.toDto(any(KoreaderUserEntity.class))).thenReturn(dto);
+        entity.setSyncWithBookloreReader(true);
     }
 
     @Test
     void upsertUser_createsNew_whenAbsent() {
         when(userRepository.findById(123L)).thenReturn(Optional.of(ownerEntity));
         when(koreaderUserRepository.findByBookLoreUserId(123L)).thenReturn(Optional.empty());
-        when(koreaderUserRepository.save(any(KoreaderUserEntity.class))).thenAnswer(invocation -> {
-            KoreaderUserEntity arg = invocation.getArgument(0);
+        when(koreaderUserRepository.save(any(KoreaderUserRow.class))).thenAnswer(invocation -> {
+            KoreaderUserRow arg = invocation.getArgument(0);
             arg.setId(42L);
             return arg;
-        });
-
-        when(koreaderUserMapper.toDto(any(KoreaderUserEntity.class))).thenAnswer(invocation -> {
-            KoreaderUserEntity u = invocation.getArgument(0);
-            return new KoreaderUser(u.getId(), u.getUsername(), u.getPassword(), u.getPasswordMD5(), u.isSyncEnabled(), u.isSyncWithBookloreReader());
         });
 
         KoreaderUser result = service.upsertUser("userA", "passA");
@@ -79,7 +69,7 @@ class KoreaderUserServiceTest {
         assertEquals(42L, result.getId());
         assertEquals("userA", result.getUsername());
         verify(koreaderUserRepository).save(argThat(u ->
-            u.getBookLoreUser() == ownerEntity &&
+            u.getBookLoreUserId() == 123L &&
             u.getUsername().equals("userA") &&
             u.getPasswordMD5().equals(Md5Util.md5Hex("passA"))
         ));
@@ -93,7 +83,8 @@ class KoreaderUserServiceTest {
 
         KoreaderUser result = service.upsertUser("newName", "newPass");
 
-        assertEquals(dto, result);
+        assertEquals(10L, result.getId());
+        assertEquals("newName", result.getUsername());
         verify(koreaderUserRepository).save(entity);
         assertEquals("newName", entity.getUsername());
         assertEquals(Md5Util.md5Hex("newPass"), entity.getPasswordMD5());
@@ -110,7 +101,9 @@ class KoreaderUserServiceTest {
     void getUser_returnsDto_whenFound() {
         when(koreaderUserRepository.findByBookLoreUserId(123L)).thenReturn(Optional.of(entity));
         KoreaderUser result = service.getUser();
-        assertEquals(dto, result);
+        assertEquals(10L, result.getId());
+        assertEquals("kvUser", result.getUsername());
+        assertTrue(result.isSyncWithBookloreReader());
     }
 
     @Test
@@ -123,7 +116,7 @@ class KoreaderUserServiceTest {
     void toggleSync_setsFlag_andSaves() {
         when(koreaderUserRepository.findByBookLoreUserId(123L)).thenReturn(Optional.of(entity));
         service.toggleSync(true);
-        assertTrue(entity.isSyncEnabled());
+        assertTrue(entity.getSyncEnabled());
         verify(koreaderUserRepository).save(entity);
     }
 

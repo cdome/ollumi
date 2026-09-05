@@ -3,21 +3,24 @@ package org.booklore.service.restriction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
+import org.booklore.model.dto.Book;
+import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ContentRestriction;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.UserContentRestrictionEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
-import org.booklore.repository.UserContentRestrictionRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqUserContentRestrictionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -25,26 +28,24 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContentRestrictionService {
 
-    private final UserContentRestrictionRepository restrictionRepository;
+    private final JooqUserContentRestrictionRepository restrictionRepository;
     private final UserRepository userRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
 
     @Transactional(readOnly = true)
     public List<ContentRestriction> getUserRestrictions(Long userId) {
-        return restrictionRepository.findByUserId(userId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return restrictionRepository.findByUserId(userId);
     }
 
     @Transactional(readOnly = true)
     public ContentRestriction getRestriction(Long restrictionId) {
         return restrictionRepository.findById(restrictionId)
-                .map(this::toDto)
                 .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Content restriction not found"));
     }
 
     @Transactional
     public ContentRestriction addRestriction(Long userId, ContentRestriction restriction) {
-        BookLoreUserEntity user = userRepository.findById(userId)
+        userRepository.findById(userId)
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
         if (restrictionRepository.existsByUserIdAndRestrictionTypeAndValue(
@@ -52,35 +53,17 @@ public class ContentRestrictionService {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Restriction already exists");
         }
 
-        UserContentRestrictionEntity entity = UserContentRestrictionEntity.builder()
-                .user(user)
-                .restrictionType(restriction.getRestrictionType())
-                .mode(restriction.getMode())
-                .value(restriction.getValue())
-                .build();
-
-        return toDto(restrictionRepository.save(entity));
+        return restrictionRepository.insert(userId, restriction.getRestrictionType(), restriction.getMode(), restriction.getValue());
     }
 
     @Transactional
     public List<ContentRestriction> updateRestrictions(Long userId, List<ContentRestriction> restrictions) {
-        BookLoreUserEntity user = userRepository.findById(userId)
+        userRepository.findById(userId)
                 .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
 
         restrictionRepository.deleteByUserId(userId);
 
-        List<UserContentRestrictionEntity> entities = restrictions.stream()
-                .map(r -> UserContentRestrictionEntity.builder()
-                        .user(user)
-                        .restrictionType(r.getRestrictionType())
-                        .mode(r.getMode())
-                        .value(r.getValue())
-                        .build())
-                .collect(Collectors.toList());
-
-        return restrictionRepository.saveAll(entities).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return restrictionRepository.insertAll(userId, restrictions);
     }
 
     @Transactional
@@ -98,12 +81,28 @@ public class ContentRestrictionService {
 
     @Transactional(readOnly = true)
     public List<BookEntity> applyRestrictions(List<BookEntity> books, Long userId) {
-        List<UserContentRestrictionEntity> restrictions = restrictionRepository.findByUserId(userId);
-
+        List<ContentRestriction> restrictions = restrictionRepository.findByUserId(userId);
         if (restrictions.isEmpty()) {
             return books;
         }
+        List<Long> bookIds = books.stream().map(BookEntity::getId).filter(Objects::nonNull).toList();
+        Map<Long, Set<String>> categoriesByBook = relationsRepository.findCategoryNamesByBookIds(bookIds);
+        Map<Long, Set<String>> tagsByBook = relationsRepository.findTagNamesByBookIds(bookIds);
+        Map<Long, Set<String>> moodsByBook = relationsRepository.findMoodNamesByBookIds(bookIds);
+        return filterByContent(books, restrictions, book -> contentOf(book, categoriesByBook, tagsByBook, moodsByBook));
+    }
 
+    /** DTO-based counterpart of {@link #applyRestrictions}, sharing the same filter logic. */
+    @Transactional(readOnly = true)
+    public List<Book> applyRestrictionsToDtos(List<Book> books, Long userId) {
+        List<ContentRestriction> restrictions = restrictionRepository.findByUserId(userId);
+        if (restrictions.isEmpty()) {
+            return books;
+        }
+        return filterByContent(books, restrictions, this::contentOf);
+    }
+
+    private <T> List<T> filterByContent(List<T> books, List<ContentRestriction> restrictions, Function<T, BookContent> toContent) {
         Set<String> excludedCategories = getValuesForTypeAndMode(restrictions, ContentRestrictionType.CATEGORY, ContentRestrictionMode.EXCLUDE);
         Set<String> excludedTags = getValuesForTypeAndMode(restrictions, ContentRestrictionType.TAG, ContentRestrictionMode.EXCLUDE);
         Set<String> excludedMoods = getValuesForTypeAndMode(restrictions, ContentRestrictionType.MOOD, ContentRestrictionMode.EXCLUDE);
@@ -117,13 +116,49 @@ public class ContentRestrictionService {
         Integer maxAgeRating = getMaxAgeRating(restrictions);
 
         return books.stream()
-                .filter(book -> !hasExcludedContent(book, excludedCategories, excludedTags, excludedMoods, excludedContentRatings))
-                .filter(book -> matchesAllowList(book, allowedCategories, allowedTags, allowedMoods, allowedContentRatings))
-                .filter(book -> isWithinAgeRating(book, maxAgeRating))
+                .filter(book -> {
+                    BookContent content = toContent.apply(book);
+                    return !hasExcludedContent(content, excludedCategories, excludedTags, excludedMoods, excludedContentRatings)
+                            && matchesAllowList(content, allowedCategories, allowedTags, allowedMoods, allowedContentRatings)
+                            && isWithinAgeRating(content, maxAgeRating);
+                })
                 .collect(Collectors.toList());
     }
 
-    private Set<String> getValuesForTypeAndMode(List<UserContentRestrictionEntity> restrictions,
+    /** Normalized view of the content fields the restrictions filter on. */
+    private record BookContent(Set<String> categories, Set<String> tags, Set<String> moods,
+                               String contentRating, Integer ageRating) {
+    }
+
+    private BookContent contentOf(BookEntity book,
+                                  Map<Long, Set<String>> categoriesByBook,
+                                  Map<Long, Set<String>> tagsByBook,
+                                  Map<Long, Set<String>> moodsByBook) {
+        BookMetadataEntity m = book.getMetadata();
+        if (m == null) {
+            return new BookContent(Set.of(), Set.of(), Set.of(), null, null);
+        }
+        Long id = book.getId();
+        return new BookContent(
+                categoriesByBook.getOrDefault(id, Set.of()),
+                tagsByBook.getOrDefault(id, Set.of()),
+                moodsByBook.getOrDefault(id, Set.of()),
+                m.getContentRating(), m.getAgeRating());
+    }
+
+    private BookContent contentOf(Book book) {
+        BookMetadata m = book.getMetadata();
+        if (m == null) {
+            return new BookContent(Set.of(), Set.of(), Set.of(), null, null);
+        }
+        return new BookContent(
+                m.getCategories() == null ? Set.of() : m.getCategories(),
+                m.getTags() == null ? Set.of() : m.getTags(),
+                m.getMoods() == null ? Set.of() : m.getMoods(),
+                m.getContentRating(), m.getAgeRating());
+    }
+
+    private Set<String> getValuesForTypeAndMode(List<ContentRestriction> restrictions,
                                                  ContentRestrictionType type,
                                                  ContentRestrictionMode mode) {
         return restrictions.stream()
@@ -132,7 +167,7 @@ public class ContentRestrictionService {
                 .collect(Collectors.toSet());
     }
 
-    private Integer getMaxAgeRating(List<UserContentRestrictionEntity> restrictions) {
+    private Integer getMaxAgeRating(List<ContentRestriction> restrictions) {
         return restrictions.stream()
                 .filter(r -> r.getRestrictionType() == ContentRestrictionType.AGE_RATING)
                 .filter(r -> r.getMode() == ContentRestrictionMode.EXCLUDE)
@@ -148,130 +183,57 @@ public class ContentRestrictionService {
                 .orElse(null);
     }
 
-    private boolean hasExcludedContent(BookEntity book,
+    private boolean hasExcludedContent(BookContent content,
                                        Set<String> excludedCategories,
                                        Set<String> excludedTags,
                                        Set<String> excludedMoods,
                                        Set<String> excludedContentRatings) {
-        BookMetadataEntity metadata = book.getMetadata();
-        if (metadata == null) {
-            return false;
+        if (!excludedCategories.isEmpty()
+                && content.categories().stream().anyMatch(c -> excludedCategories.contains(c.toLowerCase()))) {
+            return true;
         }
-
-        if (!excludedCategories.isEmpty() && metadata.getCategories() != null) {
-            boolean hasExcludedCategory = metadata.getCategories().stream()
-                    .anyMatch(c -> excludedCategories.contains(c.getName().toLowerCase()));
-            if (hasExcludedCategory) {
-                return true;
-            }
+        if (!excludedTags.isEmpty()
+                && content.tags().stream().anyMatch(t -> excludedTags.contains(t.toLowerCase()))) {
+            return true;
         }
-
-        if (!excludedTags.isEmpty() && metadata.getTags() != null) {
-            boolean hasExcludedTag = metadata.getTags().stream()
-                    .anyMatch(t -> excludedTags.contains(t.getName().toLowerCase()));
-            if (hasExcludedTag) {
-                return true;
-            }
+        if (!excludedMoods.isEmpty()
+                && content.moods().stream().anyMatch(m -> excludedMoods.contains(m.toLowerCase()))) {
+            return true;
         }
-
-        if (!excludedMoods.isEmpty() && metadata.getMoods() != null) {
-            boolean hasExcludedMood = metadata.getMoods().stream()
-                    .anyMatch(m -> excludedMoods.contains(m.getName().toLowerCase()));
-            if (hasExcludedMood) {
-                return true;
-            }
-        }
-
-        if (!excludedContentRatings.isEmpty() && metadata.getContentRating() != null) {
-            if (excludedContentRatings.contains(metadata.getContentRating().toLowerCase())) {
-                return true;
-            }
-        }
-
-        return false;
+        return !excludedContentRatings.isEmpty()
+                && content.contentRating() != null
+                && excludedContentRatings.contains(content.contentRating().toLowerCase());
     }
 
-    private boolean matchesAllowList(BookEntity book,
+    private boolean matchesAllowList(BookContent content,
                                      Set<String> allowedCategories,
                                      Set<String> allowedTags,
                                      Set<String> allowedMoods,
                                      Set<String> allowedContentRatings) {
-        BookMetadataEntity metadata = book.getMetadata();
-
         if (allowedCategories.isEmpty() && allowedTags.isEmpty() && allowedMoods.isEmpty() && allowedContentRatings.isEmpty()) {
             return true;
         }
 
-        if (metadata == null) {
+        if (!allowedCategories.isEmpty()
+                && content.categories().stream().noneMatch(c -> allowedCategories.contains(c.toLowerCase()))) {
             return false;
         }
-
-        if (!allowedCategories.isEmpty()) {
-            if (metadata.getCategories() == null || metadata.getCategories().isEmpty()) {
-                return false;
-            }
-            boolean hasAllowedCategory = metadata.getCategories().stream()
-                    .anyMatch(c -> allowedCategories.contains(c.getName().toLowerCase()));
-            if (!hasAllowedCategory) {
-                return false;
-            }
+        if (!allowedTags.isEmpty()
+                && content.tags().stream().noneMatch(t -> allowedTags.contains(t.toLowerCase()))) {
+            return false;
         }
-
-        if (!allowedTags.isEmpty()) {
-            if (metadata.getTags() == null || metadata.getTags().isEmpty()) {
-                return false;
-            }
-            boolean hasAllowedTag = metadata.getTags().stream()
-                    .anyMatch(t -> allowedTags.contains(t.getName().toLowerCase()));
-            if (!hasAllowedTag) {
-                return false;
-            }
+        if (!allowedMoods.isEmpty()
+                && content.moods().stream().noneMatch(m -> allowedMoods.contains(m.toLowerCase()))) {
+            return false;
         }
-
-        if (!allowedMoods.isEmpty()) {
-            if (metadata.getMoods() == null || metadata.getMoods().isEmpty()) {
-                return false;
-            }
-            boolean hasAllowedMood = metadata.getMoods().stream()
-                    .anyMatch(m -> allowedMoods.contains(m.getName().toLowerCase()));
-            if (!hasAllowedMood) {
-                return false;
-            }
-        }
-
-        if (!allowedContentRatings.isEmpty()) {
-            if (metadata.getContentRating() == null) {
-                return false;
-            }
-            if (!allowedContentRatings.contains(metadata.getContentRating().toLowerCase())) {
-                return false;
-            }
-        }
-
-        return true;
+        return allowedContentRatings.isEmpty()
+                || (content.contentRating() != null && allowedContentRatings.contains(content.contentRating().toLowerCase()));
     }
 
-    private boolean isWithinAgeRating(BookEntity book, Integer maxAgeRating) {
-        if (maxAgeRating == null) {
+    private boolean isWithinAgeRating(BookContent content, Integer maxAgeRating) {
+        if (maxAgeRating == null || content.ageRating() == null) {
             return true;
         }
-
-        BookMetadataEntity metadata = book.getMetadata();
-        if (metadata == null || metadata.getAgeRating() == null) {
-            return true;
-        }
-
-        return metadata.getAgeRating() < maxAgeRating;
-    }
-
-    private ContentRestriction toDto(UserContentRestrictionEntity entity) {
-        return ContentRestriction.builder()
-                .id(entity.getId())
-                .userId(entity.getUser().getId())
-                .restrictionType(entity.getRestrictionType())
-                .mode(entity.getMode())
-                .value(entity.getValue())
-                .createdAt(entity.getCreatedAt())
-                .build();
+        return content.ageRating() < maxAgeRating;
     }
 }

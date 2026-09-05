@@ -11,25 +11,23 @@ import org.booklore.model.dto.settings.KoboSettings;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.MagicShelfEntity;
+import org.booklore.repository.jooq.dto.MagicShelfRow;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.MagicShelfRepository;
+import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.kobo.KoboCompatibilityService;
-import org.booklore.mapper.KoboReadingStateMapper;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.*;
-import org.booklore.model.entity.KoboReadingStateEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.KoboReadingStateRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.kobo.KoboEntitlementService;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
 import org.booklore.service.kobo.KoboSettingsService;
@@ -84,19 +82,16 @@ class KoboEntitlementServiceTest {
     private ShelfRepository shelfRepository;
 
     @Mock
-    private MagicShelfRepository magicShelfRepository;
+    private JooqMagicShelfRepository magicShelfRepository;
 
     @Mock
     private MagicShelfBookService magicShelfBookService;
 
     @Mock
-    private UserBookProgressRepository progressRepository;
+    private JooqUserBookProgressRepository progressRepository;
 
     @Mock
-    private KoboReadingStateRepository readingStateRepository;
-
-    @Mock
-    private KoboReadingStateMapper readingStateMapper;
+    private JooqKoboReadingStateRepository readingStateRepository;
 
     @Mock
     private KoboReadingStateBuilder readingStateBuilder;
@@ -112,7 +107,7 @@ class KoboEntitlementServiceTest {
     @BeforeEach
     void setUp() {
         BookLoreUser.UserPermissions permissions = new BookLoreUser.UserPermissions();
-        user = BookLoreUser.builder().permissions(permissions).build();
+        user = BookLoreUser.builder().id(1L).permissions(permissions).build();
     }
 
     @Test
@@ -198,15 +193,9 @@ class KoboEntitlementServiceTest {
         ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1, book2)).build();
         ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").bookEntities(Set.of(book1)).build();
 
-        MagicShelfEntity magicShelf = MagicShelfEntity.builder()
-                .id(201L)
-                .userId(user.getId())
-                .name("Sci-Fi Books")
-                .icon("pi-book")
-                .filterJson("{}")
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
+        MagicShelfRow magicShelf = new MagicShelfRow(
+                201L, user.getId(), "Sci-Fi Books", "pi-book", null, "{}", false,
+                LocalDateTime.now(), LocalDateTime.now());
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
@@ -340,15 +329,8 @@ class KoboEntitlementServiceTest {
 
         LocalDateTime createdAt = LocalDateTime.of(2024, 1, 15, 10, 30, 0);
         LocalDateTime updatedAt = LocalDateTime.of(2024, 6, 20, 14, 45, 0);
-        MagicShelfEntity magicShelf = MagicShelfEntity.builder()
-                .id(201L)
-                .userId(user.getId())
-                .name("Fantasy")
-                .icon("pi-book")
-                .filterJson("{}")
-                .createdAt(createdAt)
-                .updatedAt(updatedAt)
-                .build();
+        MagicShelfRow magicShelf = new MagicShelfRow(
+                201L, user.getId(), "Fantasy", "pi-book", null, "{}", false, createdAt, updatedAt);
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
@@ -454,10 +436,10 @@ class KoboEntitlementServiceTest {
             when(koboUrlBuilder.downloadUrl("token1", 1L)).thenReturn("http://test.com/download/1");
             when(appSettingService.getAppSettings()).thenReturn(createAppSettingsWithKoboSettings());
             when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-            when(progressRepository.findByUserIdAndBookId(any(), eq(1L))).thenReturn(Optional.empty());
-            when(readingStateRepository.findByEntitlementIdAndUserId(anyString(), any())).thenReturn(Optional.empty());
-            when(readingStateRepository.findFirstByEntitlementIdAndUserIdIsNullOrderByPriorityTimestampDescLastModifiedStringDescIdDesc(anyString()))
-                    .thenReturn(Optional.empty());
+            when(progressRepository.findByUserIdAndBookId(anyLong(), eq(1L))).thenReturn(Optional.empty());
+            when(readingStateRepository.findByEntitlementIdAndUserId(anyString(), anyLong())).thenReturn(null);
+            when(readingStateRepository.findFirstByEntitlementIdWithNullUserOrderByPriority(anyString()))
+                    .thenReturn(null);
 
             KoboSyncSettings settings = new KoboSyncSettings();
             when(koboSettingsService.getCurrentUserSettings()).thenReturn(settings);
@@ -543,8 +525,8 @@ class KoboEntitlementServiceTest {
             BookEntity book = new BookEntity();
             book.setId(1L);
 
-            UserBookProgressEntity progress = new UserBookProgressEntity();
-            progress.setBook(book);
+            UserBookProgressRow progress = new UserBookProgressRow();
+            progress.setBookId(book.getId());
             progress.setKoboProgressPercent(50f);
             progress.setReadStatus(ReadStatus.READING);
 
@@ -578,8 +560,8 @@ class KoboEntitlementServiceTest {
             BookEntity book = new BookEntity();
             book.setId(1L);
 
-            UserBookProgressEntity progress = new UserBookProgressEntity();
-            progress.setBook(book);
+            UserBookProgressRow progress = new UserBookProgressRow();
+            progress.setBookId(book.getId());
             progress.setReadStatus(ReadStatus.UNREAD);
 
             KoboSyncSettings settings = new KoboSyncSettings();
@@ -604,8 +586,8 @@ class KoboEntitlementServiceTest {
             BookEntity book = new BookEntity();
             book.setId(1L);
 
-            UserBookProgressEntity progress = new UserBookProgressEntity();
-            progress.setBook(book);
+            UserBookProgressRow progress = new UserBookProgressRow();
+            progress.setBookId(book.getId());
             progress.setEpubProgressPercent(70f);
             progress.setReadStatus(ReadStatus.READING);
 
@@ -637,8 +619,8 @@ class KoboEntitlementServiceTest {
             BookEntity book = new BookEntity();
             book.setId(1L);
 
-            UserBookProgressEntity progress = new UserBookProgressEntity();
-            progress.setBook(book);
+            UserBookProgressRow progress = new UserBookProgressRow();
+            progress.setBookId(book.getId());
             progress.setKoboProgressPercent(null);
             progress.setEpubProgressPercent(70f);
             progress.setReadStatus(ReadStatus.READING);

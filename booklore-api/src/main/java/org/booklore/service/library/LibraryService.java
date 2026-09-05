@@ -22,6 +22,7 @@ import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.monitoring.LibraryWatchService;
@@ -67,6 +68,7 @@ public class LibraryService {
     private final LibraryRepository libraryRepository;
     private final LibraryPathRepository libraryPathRepository;
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final LibraryProcessingService libraryProcessingService;
     private final BookMapper bookMapper;
     private final LibraryMapper libraryMapper;
@@ -123,7 +125,7 @@ public class LibraryService {
                     .collect(Collectors.toSet());
 
             library.getLibraryPaths().removeAll(pathsToRemove);
-            List<Long> books = bookRepository.findAllBookIdsByLibraryPathIdIn(
+            List<Long> books = jooqBookRepository.findBookIdsByLibraryPathIds(
                     pathsToRemove.stream().map(LibraryPathEntity::getId).collect(Collectors.toSet()));
 
             if (!books.isEmpty()) {
@@ -290,7 +292,7 @@ public class LibraryService {
         libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
         Map<String, Long> counts = new HashMap<>();
         for (BookFileType type : BookFileType.values()) {
-            long count = bookRepository.countByLibraryIdAndBookType(libraryId, type);
+            long count = jooqBookRepository.countByLibraryIdAndBookType(libraryId, type);
             if (count > 0) {
                 counts.put(type.name(), count);
             }

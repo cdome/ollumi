@@ -1,7 +1,7 @@
 package org.booklore.service.bookdrop;
 
 import org.booklore.config.AppProperties;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -18,7 +18,7 @@ class BookdropMonitoringServiceTest {
 
     private AppProperties appProperties;
     private BookdropEventHandlerService eventHandler;
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
     private BookdropMonitoringService monitoringService;
 
     @TempDir
@@ -28,7 +28,7 @@ class BookdropMonitoringServiceTest {
     void setUp() {
         appProperties = mock(AppProperties.class);
         eventHandler = mock(BookdropEventHandlerService.class);
-        bookdropFileRepository = mock(BookdropFileRepository.class);
+        bookdropFileRepository = mock(JooqBookdropFileRepository.class);
         
         when(appProperties.getBookdropFolder()).thenReturn(tempDir.toString());
         monitoringService = new BookdropMonitoringService(appProperties, eventHandler, bookdropFileRepository);

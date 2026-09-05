@@ -1,7 +1,7 @@
 package org.booklore.service.task;
 
-import org.booklore.repository.TaskHistoryRepository;
-import org.booklore.model.entity.TaskHistoryEntity;
+import org.booklore.repository.jooq.JooqTaskHistoryRepository;
+import org.booklore.repository.jooq.dto.TaskHistory;
 import org.booklore.task.TaskStatus;
 import org.booklore.model.dto.response.TasksHistoryResponse;
 import org.booklore.model.enums.TaskType;
@@ -23,21 +23,12 @@ import org.booklore.service.audit.AuditService;
 @Slf4j
 public class TaskHistoryService {
 
-    private final TaskHistoryRepository taskHistoryRepository;
+    private final JooqTaskHistoryRepository taskHistoryRepository;
     private final AuditService auditService;
 
     @Transactional
     public void createTask(String taskId, TaskType type, Long userId, Map<String, Object> options) {
-        TaskHistoryEntity task = TaskHistoryEntity.builder()
-                .id(taskId)
-                .type(type)
-                .status(TaskStatus.ACCEPTED)
-                .userId(userId)
-                .createdAt(LocalDateTime.now())
-                .progressPercentage(0)
-                .taskOptions(options)
-                .build();
-        taskHistoryRepository.save(task);
+        taskHistoryRepository.insert(taskId, type, TaskStatus.ACCEPTED, userId, LocalDateTime.now(), 0, options);
         auditService.log(AuditAction.TASK_EXECUTED, "Task", null, buildTaskDescription(type, options));
     }
 
@@ -80,35 +71,24 @@ public class TaskHistoryService {
 
     @Transactional
     public void updateTaskStatus(String taskId, TaskStatus status, String message) {
-        taskHistoryRepository.findById(taskId).ifPresent(task -> {
-            task.setStatus(status);
-            task.setMessage(message);
-            task.setUpdatedAt(LocalDateTime.now());
-
-            if (status == TaskStatus.COMPLETED || status == TaskStatus.FAILED) {
-                task.setCompletedAt(LocalDateTime.now());
-                task.setProgressPercentage(100);
-            }
-
-            taskHistoryRepository.save(task);
-        });
+        LocalDateTime now = LocalDateTime.now();
+        if (status == TaskStatus.COMPLETED || status == TaskStatus.FAILED) {
+            taskHistoryRepository.completeStatus(taskId, status, message, now, now, 100);
+        } else {
+            taskHistoryRepository.updateStatus(taskId, status, message, now);
+        }
     }
 
     @Transactional
     public void updateTaskError(String taskId, String errorDetails) {
-        taskHistoryRepository.findById(taskId).ifPresent(task -> {
-            task.setStatus(TaskStatus.FAILED);
-            task.setErrorDetails(errorDetails);
-            task.setCompletedAt(LocalDateTime.now());
-            task.setUpdatedAt(LocalDateTime.now());
-            taskHistoryRepository.save(task);
-            log.error("Task failed: id={}", taskId);
-        });
+        LocalDateTime now = LocalDateTime.now();
+        taskHistoryRepository.updateError(taskId, errorDetails, now, now);
+        log.error("Task failed: id={}", taskId);
     }
 
     @Transactional(readOnly = true)
     public TasksHistoryResponse getLatestTasksForEachType() {
-        List<TaskHistoryEntity> latestTasks;
+        List<TaskHistory> latestTasks;
         try {
             latestTasks = taskHistoryRepository.findLatestTaskForEachType();
         } catch (Exception e) {
@@ -116,16 +96,8 @@ public class TaskHistoryService {
             latestTasks = Collections.emptyList();
         }
 
-        Map<TaskType, TaskHistoryEntity> taskHistoryMap = latestTasks.stream()
-                .filter(task -> {
-                    try {
-                        return task.getType() != null;
-                    } catch (Exception e) {
-                        log.warn("Skipping task with invalid type: taskId={}", task.getId());
-                        return false;
-                    }
-                })
-                .collect(Collectors.toMap(TaskHistoryEntity::getType, task -> task, (existing, replacement) -> existing));
+        Map<TaskType, TaskHistory> taskHistoryMap = latestTasks.stream()
+                .collect(Collectors.toMap(TaskHistory::getType, task -> task, (existing, replacement) -> existing));
 
         List<TasksHistoryResponse.TaskHistory> allTasks = new ArrayList<>();
 
@@ -134,7 +106,7 @@ public class TaskHistoryService {
                 continue;
             }
 
-            TaskHistoryEntity existingTask = taskHistoryMap.get(taskType);
+            TaskHistory existingTask = taskHistoryMap.get(taskType);
 
             if (existingTask != null) {
                 allTasks.add(mapToTaskInfo(existingTask));
@@ -148,7 +120,7 @@ public class TaskHistoryService {
                 .build();
     }
 
-    private TasksHistoryResponse.TaskHistory mapToTaskInfo(TaskHistoryEntity task) {
+    private TasksHistoryResponse.TaskHistory mapToTaskInfo(TaskHistory task) {
         return TasksHistoryResponse.TaskHistory.builder()
                 .id(task.getId())
                 .type(task.getType())

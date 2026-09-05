@@ -3,8 +3,9 @@ package org.booklore.service.bookdrop;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.request.BookdropBulkEditRequest;
 import org.booklore.model.dto.response.BookdropBulkEditResult;
-import org.booklore.model.entity.BookdropFileEntity;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.model.enums.BookdropFileStatus;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,7 +24,7 @@ import static org.mockito.Mockito.*;
 class BookdropBulkEditServiceTest {
 
     @Mock
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
 
     @Mock
     private BookdropMetadataHelper metadataHelper;
@@ -32,29 +33,26 @@ class BookdropBulkEditServiceTest {
     private BookdropBulkEditService bulkEditService;
 
     @Captor
-    private ArgumentCaptor<List<BookdropFileEntity>> filesCaptor;
+    private ArgumentCaptor<Map<Long, String>> mapCaptor;
 
-    private BookdropFileEntity createFileEntity(Long id, String fileName, BookMetadata metadata) {
-        BookdropFileEntity entity = new BookdropFileEntity();
-        entity.setId(id);
-        entity.setFileName(fileName);
-        entity.setFilePath("/bookdrop/" + fileName);
-        return entity;
+    private BookdropFileRow createFileEntity(Long id, String fileName, BookMetadata metadata) {
+        return new BookdropFileRow(id, "/bookdrop/" + fileName, fileName, null,
+                BookdropFileStatus.PENDING_REVIEW, null, null, null, null);
     }
 
     @BeforeEach
     void setUp() {
         when(metadataHelper.getCurrentMetadata(any())).thenReturn(new BookMetadata());
-        doNothing().when(metadataHelper).updateFetchedMetadata(any(), any());
+        when(metadataHelper.serializeMetadata(any(), any())).thenReturn("{}");
     }
 
     @Test
     void bulkEdit_WithSingleValueFields_ShouldUpdateTextAndNumericFields() {
         BookMetadata existingMetadata = new BookMetadata();
         existingMetadata.setSeriesName("Old Series");
-        
-        BookdropFileEntity file1 = createFileEntity(1L, "file1.cbz", existingMetadata);
-        BookdropFileEntity file2 = createFileEntity(2L, "file2.cbz", existingMetadata);
+
+        BookdropFileRow file1 = createFileEntity(1L, "file1.cbz", existingMetadata);
+        BookdropFileRow file2 = createFileEntity(2L, "file2.cbz", existingMetadata);
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L, 2L)))
                 .thenReturn(List.of(1L, 2L));
@@ -80,8 +78,8 @@ class BookdropBulkEditServiceTest {
         assertEquals(2, result.getSuccessfullyUpdated());
         assertEquals(0, result.getFailed());
 
-        verify(metadataHelper, times(2)).updateFetchedMetadata(any(), any());
-        verify(bookdropFileRepository, times(1)).saveAll(anyList());
+        verify(metadataHelper, times(2)).serializeMetadata(any(), any());
+        verify(bookdropFileRepository, times(1)).updateFetchedMetadataForIds(anyMap());
     }
 
     @Test
@@ -91,8 +89,8 @@ class BookdropBulkEditServiceTest {
         existingMetadata.setCategories(new LinkedHashSet<>(List.of("Category 1")));
 
         when(metadataHelper.getCurrentMetadata(any())).thenReturn(existingMetadata);
-        
-        BookdropFileEntity file = createFileEntity(1L, "file.cbz", existingMetadata);
+
+        BookdropFileRow file = createFileEntity(1L, "file.cbz", existingMetadata);
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L)))
                 .thenReturn(List.of(1L));
@@ -117,7 +115,7 @@ class BookdropBulkEditServiceTest {
         assertEquals(0, result.getFailed());
 
         ArgumentCaptor<BookMetadata> metadataCaptor = ArgumentCaptor.forClass(BookMetadata.class);
-        verify(metadataHelper).updateFetchedMetadata(any(), metadataCaptor.capture());
+        verify(metadataHelper).serializeMetadata(any(), metadataCaptor.capture());
 
         BookMetadata captured = metadataCaptor.getValue();
         assertTrue(captured.getAuthors().contains("Author 1"));
@@ -132,8 +130,8 @@ class BookdropBulkEditServiceTest {
         existingMetadata.setAuthors(new ArrayList<>(List.of("Author 1")));
 
         when(metadataHelper.getCurrentMetadata(any())).thenReturn(existingMetadata);
-        
-        BookdropFileEntity file = createFileEntity(1L, "file.cbz", existingMetadata);
+
+        BookdropFileRow file = createFileEntity(1L, "file.cbz", existingMetadata);
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L)))
                 .thenReturn(List.of(1L));
@@ -153,7 +151,7 @@ class BookdropBulkEditServiceTest {
         bulkEditService.bulkEdit(request);
 
         ArgumentCaptor<BookMetadata> metadataCaptor = ArgumentCaptor.forClass(BookMetadata.class);
-        verify(metadataHelper).updateFetchedMetadata(any(), metadataCaptor.capture());
+        verify(metadataHelper).serializeMetadata(any(), metadataCaptor.capture());
 
         BookMetadata captured = metadataCaptor.getValue();
         assertFalse(captured.getAuthors().contains("Author 1"));
@@ -168,8 +166,8 @@ class BookdropBulkEditServiceTest {
         existingMetadata.setPublisher("Original Publisher");
 
         when(metadataHelper.getCurrentMetadata(any())).thenReturn(existingMetadata);
-        
-        BookdropFileEntity file = createFileEntity(1L, "file.cbz", existingMetadata);
+
+        BookdropFileRow file = createFileEntity(1L, "file.cbz", existingMetadata);
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L)))
                 .thenReturn(List.of(1L));
@@ -190,7 +188,7 @@ class BookdropBulkEditServiceTest {
         bulkEditService.bulkEdit(request);
 
         ArgumentCaptor<BookMetadata> metadataCaptor = ArgumentCaptor.forClass(BookMetadata.class);
-        verify(metadataHelper).updateFetchedMetadata(any(), metadataCaptor.capture());
+        verify(metadataHelper).serializeMetadata(any(), metadataCaptor.capture());
 
         BookMetadata captured = metadataCaptor.getValue();
         assertEquals("New Series", captured.getSeriesName());
@@ -199,9 +197,9 @@ class BookdropBulkEditServiceTest {
 
     @Test
     void bulkEdit_WithSelectAll_ShouldProcessAllFiles() {
-        BookdropFileEntity file1 = createFileEntity(1L, "file1.cbz", new BookMetadata());
-        BookdropFileEntity file2 = createFileEntity(2L, "file2.cbz", new BookMetadata());
-        BookdropFileEntity file3 = createFileEntity(3L, "file3.cbz", new BookMetadata());
+        BookdropFileRow file1 = createFileEntity(1L, "file1.cbz", new BookMetadata());
+        BookdropFileRow file2 = createFileEntity(2L, "file2.cbz", new BookMetadata());
+        BookdropFileRow file3 = createFileEntity(3L, "file3.cbz", new BookMetadata());
 
         when(metadataHelper.resolveFileIds(true, List.of(2L), null))
                 .thenReturn(List.of(1L, 3L));
@@ -222,14 +220,14 @@ class BookdropBulkEditServiceTest {
 
         assertEquals(2, result.getTotalFiles());
         assertEquals(2, result.getSuccessfullyUpdated());
-        verify(metadataHelper, times(2)).updateFetchedMetadata(any(), any());
+        verify(metadataHelper, times(2)).serializeMetadata(any(), any());
     }
 
     @Test
     void bulkEdit_WithOneFileError_ShouldContinueWithOthers() {
-        BookdropFileEntity file1 = createFileEntity(1L, "file1.cbz", new BookMetadata());
-        BookdropFileEntity file2 = createFileEntity(2L, "file2.cbz", new BookMetadata());
-        BookdropFileEntity file3 = createFileEntity(3L, "file3.cbz", new BookMetadata());
+        BookdropFileRow file1 = createFileEntity(1L, "file1.cbz", new BookMetadata());
+        BookdropFileRow file2 = createFileEntity(2L, "file2.cbz", new BookMetadata());
+        BookdropFileRow file3 = createFileEntity(3L, "file3.cbz", new BookMetadata());
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L, 2L, 3L)))
                 .thenReturn(List.of(1L, 2L, 3L));
@@ -237,7 +235,7 @@ class BookdropBulkEditServiceTest {
                 .thenReturn(List.of(file1, file2, file3));
 
         doThrow(new RuntimeException("JSON serialization error"))
-                .when(metadataHelper).updateFetchedMetadata(eq(file2), any());
+                .when(metadataHelper).serializeMetadata(eq(file2), any());
 
         BookMetadata updates = new BookMetadata();
         updates.setLanguage("en");
@@ -255,17 +253,17 @@ class BookdropBulkEditServiceTest {
         assertEquals(2, result.getSuccessfullyUpdated());
         assertEquals(1, result.getFailed());
 
-        verify(bookdropFileRepository).saveAll(filesCaptor.capture());
-        List<BookdropFileEntity> savedFiles = filesCaptor.getValue();
+        verify(bookdropFileRepository).updateFetchedMetadataForIds(mapCaptor.capture());
+        Map<Long, String> savedFiles = mapCaptor.getValue();
         assertEquals(2, savedFiles.size());
-        assertTrue(savedFiles.stream().anyMatch(f -> f.getId().equals(1L)));
-        assertTrue(savedFiles.stream().anyMatch(f -> f.getId().equals(3L)));
-        assertFalse(savedFiles.stream().anyMatch(f -> f.getId().equals(2L)));
+        assertTrue(savedFiles.containsKey(1L));
+        assertTrue(savedFiles.containsKey(3L));
+        assertFalse(savedFiles.containsKey(2L));
     }
 
     @Test
     void bulkEdit_WithEmptyEnabledFields_ShouldNotUpdateAnything() {
-        BookdropFileEntity file = createFileEntity(1L, "file.cbz", new BookMetadata());
+        BookdropFileRow file = createFileEntity(1L, "file.cbz", new BookMetadata());
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L)))
                 .thenReturn(List.of(1L));
@@ -285,23 +283,23 @@ class BookdropBulkEditServiceTest {
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 
         assertEquals(1, result.getSuccessfullyUpdated());
-        
+
         ArgumentCaptor<BookMetadata> metadataCaptor = ArgumentCaptor.forClass(BookMetadata.class);
-        verify(metadataHelper).updateFetchedMetadata(any(), metadataCaptor.capture());
+        verify(metadataHelper).serializeMetadata(any(), metadataCaptor.capture());
 
         assertNull(metadataCaptor.getValue().getSeriesName());
     }
 
     @Test
     void bulkEdit_WithLargeSelection_ShouldProcessInBatches() {
-        List<BookdropFileEntity> batch1 = new ArrayList<>();
-        List<BookdropFileEntity> batch2 = new ArrayList<>();
-        List<BookdropFileEntity> batch3 = new ArrayList<>();
+        List<BookdropFileRow> batch1 = new ArrayList<>();
+        List<BookdropFileRow> batch2 = new ArrayList<>();
+        List<BookdropFileRow> batch3 = new ArrayList<>();
         List<Long> manyIds = new ArrayList<>();
-        
+
         for (long i = 1; i <= 1500; i++) {
             manyIds.add(i);
-            BookdropFileEntity file = createFileEntity(i, "file" + i + ".cbz", new BookMetadata());
+            BookdropFileRow file = createFileEntity(i, "file" + i + ".cbz", new BookMetadata());
             if (i <= 500) {
                 batch1.add(file);
             } else if (i <= 1000) {
@@ -313,7 +311,7 @@ class BookdropBulkEditServiceTest {
 
         when(metadataHelper.resolveFileIds(false, null, manyIds))
                 .thenReturn(manyIds);
-        
+
         when(bookdropFileRepository.findAllById(anyList()))
                 .thenReturn(batch1, batch2, batch3);
 
@@ -332,8 +330,8 @@ class BookdropBulkEditServiceTest {
         assertEquals(1500, result.getTotalFiles());
         assertEquals(1500, result.getSuccessfullyUpdated());
         assertEquals(0, result.getFailed());
-        
+
         verify(bookdropFileRepository, times(3)).findAllById(anyList());
-        verify(bookdropFileRepository, times(3)).saveAll(anyList());
+        verify(bookdropFileRepository, times(3)).updateFetchedMetadataForIds(anyMap());
     }
 }

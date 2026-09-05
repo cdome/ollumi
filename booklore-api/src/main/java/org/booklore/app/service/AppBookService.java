@@ -7,8 +7,6 @@ import org.booklore.app.dto.AppBookDetail;
 import org.booklore.app.dto.AppBookSummary;
 import org.booklore.app.dto.AppFilterOptions;
 import org.booklore.app.dto.AppPageResponse;
-import org.booklore.app.mapper.AppBookMapper;
-import org.booklore.app.specification.AppBookSpecification;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
@@ -17,19 +15,21 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserBookFileProgressRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.AppBookConditions;
+import org.booklore.repository.jooq.JooqAppBookDetailRepository;
+import org.booklore.repository.jooq.JooqAppBookRepository;
+import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.opds.MagicShelfBookService;
+import org.jooq.Condition;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -44,13 +44,13 @@ public class AppBookService {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final BookRepository bookRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
-    private final UserBookFileProgressRepository userBookFileProgressRepository;
+    private final JooqAppBookRepository jooqAppBookRepository;
+    private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
+    private final JooqAppBookDetailRepository jooqAppBookDetailRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
     private final ShelfRepository shelfRepository;
     private final AuthenticationService authenticationService;
-    private final AppBookMapper mobileBookMapper;
     private final MagicShelfBookService magicShelfBookService;
-    private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public AppPageResponse<AppBookSummary> getBooks(
@@ -78,12 +78,12 @@ public class AppBookService {
         Sort sort = buildSort(sortBy, sortDir);
         Pageable pageable = PageRequest.of(pageNum, pageSize, sort);
 
-        Specification<BookEntity> spec = buildSpecification(
+        Condition condition = buildCondition(
                 accessibleLibraryIds, libraryId, shelfId, status, search, userId,
                 fileType, minRating, maxRating, authors, language);
 
-        Page<BookEntity> bookPage = bookRepository.findAll(spec, pageable);
-        return buildPageResponse(bookPage, userId, pageNum, pageSize);
+        Page<Long> idPage = jooqAppBookRepository.findBookIds(condition, pageable);
+        return buildPageResponse(idPage, userId, pageNum, pageSize);
     }
 
     @Transactional(readOnly = true)
@@ -92,22 +92,16 @@ public class AppBookService {
         Long userId = user.getId();
         Set<Long> accessibleLibraryIds = getAccessibleLibraryIds(user);
 
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        AppBookDetail detail = jooqAppBookDetailRepository.findDetailById(bookId, userId);
+        if (detail == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
-        if (accessibleLibraryIds != null && !accessibleLibraryIds.contains(book.getLibrary().getId())) {
+        if (accessibleLibraryIds != null && !accessibleLibraryIds.contains(detail.getLibraryId())) {
             throw ApiError.FORBIDDEN.createException("Access denied to this book");
         }
 
-        UserBookProgressEntity progress = userBookProgressRepository
-                .findByUserIdAndBookId(userId, bookId)
-                .orElse(null);
-
-        UserBookFileProgressEntity fileProgress = userBookFileProgressRepository
-                .findMostRecentAudiobookProgressByUserIdAndBookId(userId, bookId)
-                .orElse(null);
-
-        return mobileBookMapper.toDetail(book, progress, fileProgress);
+        return detail;
     }
 
     @Transactional(readOnly = true)
@@ -129,15 +123,13 @@ public class AppBookService {
 
         Pageable pageable = PageRequest.of(pageNum, pageSize, Sort.by(Sort.Direction.DESC, "addedOn"));
 
-        Specification<BookEntity> spec = AppBookSpecification.combine(
-                AppBookSpecification.notDeleted(),
-                AppBookSpecification.hasDigitalFile(),
-                AppBookSpecification.inLibraries(accessibleLibraryIds),
-                AppBookSpecification.searchText(query)
-        );
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile())
+                .and(AppBookConditions.inLibraries(accessibleLibraryIds))
+                .and(AppBookConditions.searchText(query));
 
-        Page<BookEntity> bookPage = bookRepository.findAll(spec, pageable);
-        return buildPageResponse(bookPage, userId, pageNum, pageSize);
+        Page<Long> idPage = jooqAppBookRepository.findBookIds(condition, pageable);
+        return buildPageResponse(idPage, userId, pageNum, pageSize);
     }
 
     @Transactional(readOnly = true)
@@ -148,40 +140,33 @@ public class AppBookService {
 
         int maxItems = validateLimit(limit, 10);
 
-        Specification<BookEntity> spec = AppBookSpecification.combine(
-                AppBookSpecification.notDeleted(),
-                AppBookSpecification.hasDigitalFile(),
-                AppBookSpecification.inLibraries(accessibleLibraryIds),
-                AppBookSpecification.inProgress(userId),
-                AppBookSpecification.hasNonAudiobookFile()
-        );
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile())
+                .and(AppBookConditions.inLibraries(accessibleLibraryIds))
+                .and(AppBookConditions.inProgress(userId))
+                .and(AppBookConditions.hasNonAudiobookFile());
 
-        List<BookEntity> books = bookRepository.findAll(spec);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, books);
+        List<Long> allIds = jooqAppBookRepository.findAllBookIds(condition);
+        if (allIds.isEmpty()) return Collections.emptyList();
 
-        List<Long> topIds = books.stream()
-                .filter(b -> progressMap.containsKey(b.getId()))
-                .sorted((b1, b2) -> {
-                    Instant t1 = progressMap.get(b1.getId()).getLastReadTime();
-                    Instant t2 = progressMap.get(b2.getId()).getLastReadTime();
+        Map<Long, UserBookProgressRow> progressMap = getProgressMap(userId, new LinkedHashSet<>(allIds));
+
+        List<Long> topIds = allIds.stream()
+                .filter(progressMap::containsKey)
+                .sorted((id1, id2) -> {
+                    Instant t1 = progressMap.get(id1).getLastReadTime();
+                    Instant t2 = progressMap.get(id2).getLastReadTime();
                     if (t1 == null && t2 == null) return 0;
                     if (t1 == null) return 1;
                     if (t2 == null) return -1;
                     return t2.compareTo(t1);
                 })
                 .limit(maxItems)
-                .map(BookEntity::getId)
                 .collect(Collectors.toList());
 
         if (topIds.isEmpty()) return Collections.emptyList();
 
-        Map<Long, BookEntity> enrichedMap = bookRepository.findAllForSummaryByIds(topIds)
-                .stream().collect(Collectors.toMap(BookEntity::getId, b -> b));
-
-        return topIds.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
+        return assembleSummaries(topIds, userId);
     }
 
     @Transactional(readOnly = true)
@@ -192,40 +177,33 @@ public class AppBookService {
 
         int maxItems = validateLimit(limit, 10);
 
-        Specification<BookEntity> spec = AppBookSpecification.combine(
-                AppBookSpecification.notDeleted(),
-                AppBookSpecification.hasDigitalFile(),
-                AppBookSpecification.inLibraries(accessibleLibraryIds),
-                AppBookSpecification.inProgress(userId),
-                AppBookSpecification.hasAudiobookFile()
-        );
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile())
+                .and(AppBookConditions.inLibraries(accessibleLibraryIds))
+                .and(AppBookConditions.inProgress(userId))
+                .and(AppBookConditions.hasAudiobookFile());
 
-        List<BookEntity> books = bookRepository.findAll(spec);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, books);
+        List<Long> allIds = jooqAppBookRepository.findAllBookIds(condition);
+        if (allIds.isEmpty()) return Collections.emptyList();
 
-        List<Long> topIds = books.stream()
-                .filter(b -> progressMap.containsKey(b.getId()))
-                .sorted((b1, b2) -> {
-                    Instant t1 = progressMap.get(b1.getId()).getLastReadTime();
-                    Instant t2 = progressMap.get(b2.getId()).getLastReadTime();
+        Map<Long, UserBookProgressRow> progressMap = getProgressMap(userId, new LinkedHashSet<>(allIds));
+
+        List<Long> topIds = allIds.stream()
+                .filter(progressMap::containsKey)
+                .sorted((id1, id2) -> {
+                    Instant t1 = progressMap.get(id1).getLastReadTime();
+                    Instant t2 = progressMap.get(id2).getLastReadTime();
                     if (t1 == null && t2 == null) return 0;
                     if (t1 == null) return 1;
                     if (t2 == null) return -1;
                     return t2.compareTo(t1);
                 })
                 .limit(maxItems)
-                .map(BookEntity::getId)
                 .collect(Collectors.toList());
 
         if (topIds.isEmpty()) return Collections.emptyList();
 
-        Map<Long, BookEntity> enrichedMap = bookRepository.findAllForSummaryByIds(topIds)
-                .stream().collect(Collectors.toMap(BookEntity::getId, b -> b));
-
-        return topIds.stream()
-                .filter(enrichedMap::containsKey)
-                .map(id -> mobileBookMapper.toSummary(enrichedMap.get(id), progressMap.get(id)))
-                .collect(Collectors.toList());
+        return assembleSummaries(topIds, userId);
     }
 
     @Transactional(readOnly = true)
@@ -236,20 +214,17 @@ public class AppBookService {
 
         int maxItems = validateLimit(limit, 10);
 
-        Specification<BookEntity> spec = AppBookSpecification.combine(
-                AppBookSpecification.notDeleted(),
-                AppBookSpecification.hasDigitalFile(),
-                AppBookSpecification.inLibraries(accessibleLibraryIds),
-                AppBookSpecification.addedWithinDays(30)
-        );
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile())
+                .and(AppBookConditions.inLibraries(accessibleLibraryIds))
+                .and(AppBookConditions.addedWithinDays(30));
 
         Pageable pageable = PageRequest.of(0, maxItems, Sort.by(Sort.Direction.DESC, "addedOn"));
-        Page<BookEntity> bookPage = bookRepository.findAll(spec, pageable);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, bookPage.getContent());
+        Page<Long> idPage = jooqAppBookRepository.findBookIds(condition, pageable);
+        List<Long> ids = idPage.getContent();
+        if (ids.isEmpty()) return Collections.emptyList();
 
-        return bookPage.getContent().stream()
-                .map(book -> mobileBookMapper.toSummary(book, progressMap.get(book.getId())))
-                .collect(Collectors.toList());
+        return assembleSummaries(ids, userId);
     }
 
     @Transactional(readOnly = true)
@@ -260,19 +235,16 @@ public class AppBookService {
 
         int maxItems = validateLimit(limit, 10);
 
-        Specification<BookEntity> spec = AppBookSpecification.combine(
-                AppBookSpecification.notDeleted(),
-                AppBookSpecification.hasScannedOn(),
-                AppBookSpecification.inLibraries(accessibleLibraryIds)
-        );
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasScannedOn())
+                .and(AppBookConditions.inLibraries(accessibleLibraryIds));
 
         Pageable pageable = PageRequest.of(0, maxItems, Sort.by(Sort.Direction.DESC, "scannedOn"));
-        Page<BookEntity> bookPage = bookRepository.findAll(spec, pageable);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, bookPage.getContent());
+        Page<Long> idPage = jooqAppBookRepository.findBookIds(condition, pageable);
+        List<Long> ids = idPage.getContent();
+        if (ids.isEmpty()) return Collections.emptyList();
 
-        return bookPage.getContent().stream()
-                .map(book -> mobileBookMapper.toSummary(book, progressMap.get(book.getId())))
-                .collect(Collectors.toList());
+        return assembleSummaries(ids, userId);
     }
 
     @Transactional(readOnly = true)
@@ -288,9 +260,9 @@ public class AppBookService {
         int pageNum = validatePageNumber(page);
         int pageSize = validatePageSize(size);
 
-        Specification<BookEntity> spec = buildBaseSpecification(accessibleLibraryIds, libraryId);
+        Condition condition = buildBaseCondition(accessibleLibraryIds, libraryId);
 
-        long totalElements = bookRepository.count(spec);
+        long totalElements = jooqAppBookRepository.countBooks(condition);
 
         if (totalElements == 0) {
             return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, 0L);
@@ -300,9 +272,9 @@ public class AppBookService {
         int randomOffset = ThreadLocalRandom.current().nextInt((int) maxOffset + 1);
 
         Pageable pageable = PageRequest.of(randomOffset / pageSize, pageSize);
-        Page<BookEntity> bookPage = bookRepository.findAll(spec, pageable);
+        Page<Long> idPage = jooqAppBookRepository.findBookIds(condition, pageable);
 
-        return buildPageResponse(bookPage, userId, pageNum, pageSize);
+        return buildPageResponse(idPage, userId, pageNum, pageSize);
     }
 
     @Transactional(readOnly = true)
@@ -327,13 +299,11 @@ public class AppBookService {
             return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, 0L);
         }
 
-        List<BookEntity> bookEntities = bookRepository.findAllForSummaryByIds(bookIds);
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, bookEntities);
+        // Restrict to books that actually have files (mirrors the old hasFiles filter)
+        List<Long> idsWithFiles = jooqAppBookRepository.findAllBookIds(
+                AppBookConditions.withBookIds(bookIds).and(AppBookConditions.hasDigitalFile()));
 
-        List<AppBookSummary> summaries = bookEntities.stream()
-                .filter(BookEntity::hasFiles)
-                .map(bookEntity -> mobileBookMapper.toSummary(bookEntity, progressMap.get(bookEntity.getId())))
-                .collect(Collectors.toList());
+        List<AppBookSummary> summaries = assembleSummaries(idsWithFiles, userId);
 
         return AppPageResponse.of(summaries, pageNum, pageSize, booksPage.getTotalElements());
     }
@@ -372,109 +342,56 @@ public class AppBookService {
             }
         }
 
-        // Build scoping clauses
-        String libraryClause = "";
-        String shelfClause = "";
-        String magicBookClause = "";
-
-        if (magicBookIds != null) {
-            magicBookClause = "AND b.id IN :magicBookIds";
-        } else if (shelfId != null) {
-            shelfClause = "AND b.id IN (SELECT sb.id FROM ShelfEntity s JOIN s.bookEntities sb WHERE s.id = :shelfId)";
-        }
-
-        if (libraryId != null) {
-            libraryClause = "AND b.library.id = :libraryId";
-        } else if (accessibleLibraryIds != null) {
-            libraryClause = "AND b.library.id IN :libraryIds";
-        }
-
-        // Build the optional WHERE suffix once — each clause already starts with "AND"
-        String scopeClause = buildScopeClause(libraryClause, shelfClause, magicBookClause);
+        // Build the scope shared by all facet queries
+        Condition scope = buildFilterScope(accessibleLibraryIds, libraryId, shelfId, magicBookIds);
 
         // Authors with book count (top 200 by count)
-        String authorQuery = "SELECT a.name, COUNT(DISTINCT b.id) FROM BookEntity b"
-                + " JOIN b.metadata m JOIN m.authors a"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + scopeClause
-                + " GROUP BY a.name ORDER BY COUNT(DISTINCT b.id) DESC";
-        var authorQ = entityManager.createQuery(authorQuery, Tuple.class);
-        setFilterQueryParams(authorQ, accessibleLibraryIds, libraryId, shelfId, magicBookIds);
-        authorQ.setMaxResults(200);
-
-        List<AppFilterOptions.AuthorOption> authors = authorQ.getResultList().stream()
-                .map(t -> AppFilterOptions.AuthorOption.builder()
-                        .name(t.get(0, String.class))
-                        .count(t.get(1, Long.class))
+        List<AppFilterOptions.AuthorOption> authors = jooqAppBookRepository.findAuthorFacets(scope, 200).stream()
+                .map(f -> AppFilterOptions.AuthorOption.builder()
+                        .name(f.getName())
+                        .count(f.getCount())
                         .build())
                 .toList();
 
         // Languages with book count
-        String langQuery = "SELECT m.language, COUNT(DISTINCT b.id) FROM BookEntity b"
-                + " JOIN b.metadata m"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + " AND m.language IS NOT NULL AND m.language <> ''"
-                + scopeClause
-                + " GROUP BY m.language ORDER BY COUNT(DISTINCT b.id) DESC";
-        var langQ = entityManager.createQuery(langQuery, Tuple.class);
-        setFilterQueryParams(langQ, accessibleLibraryIds, libraryId, shelfId, magicBookIds);
-
-        List<AppFilterOptions.LanguageOption> languages = langQ.getResultList().stream()
-                .map(t -> AppFilterOptions.LanguageOption.builder()
-                        .code(t.get(0, String.class))
-                        .label(Locale.forLanguageTag(t.get(0, String.class)).getDisplayLanguage(Locale.ENGLISH))
-                        .count(t.get(1, Long.class))
+        List<AppFilterOptions.LanguageOption> languages = jooqAppBookRepository.findLanguageFacets(scope).stream()
+                .map(f -> AppFilterOptions.LanguageOption.builder()
+                        .code(f.getCode())
+                        .label(Locale.forLanguageTag(f.getCode()).getDisplayLanguage(Locale.ENGLISH))
+                        .count(f.getCount())
                         .build())
                 .toList();
 
         // Distinct file types present in scoped books
-        String fileTypeQuery = "SELECT DISTINCT bf.bookType FROM BookEntity b"
-                + " JOIN b.bookFiles bf"
-                + " WHERE (b.deleted IS NULL OR b.deleted = false)"
-                + " AND b.bookFiles IS NOT EMPTY"
-                + " AND bf.isBookFormat = true"
-                + scopeClause;
-        var ftQ = entityManager.createQuery(fileTypeQuery, BookFileType.class);
-        setFilterQueryParams(ftQ, accessibleLibraryIds, libraryId, shelfId, magicBookIds);
-
-        List<String> fileTypes = ftQ.getResultList().stream()
-                .map(Enum::name)
+        List<String> fileTypes = jooqAppBookRepository.findFileTypes(scope).stream()
                 .sorted()
                 .toList();
-
-        // Read statuses — return all meaningful values
-        List<String> readStatuses = getReadStatusOptions();
 
         return AppFilterOptions.builder()
                 .authors(authors)
                 .languages(languages)
                 .fileTypes(fileTypes)
-                .readStatuses(readStatuses)
+                .readStatuses(getReadStatusOptions())
                 .build();
     }
 
-    private String buildScopeClause(String libraryClause, String shelfClause, String magicBookClause) {
-        var sb = new StringBuilder();
-        if (!libraryClause.isEmpty()) sb.append(" ").append(libraryClause);
-        if (!shelfClause.isEmpty()) sb.append(" ").append(shelfClause);
-        if (!magicBookClause.isEmpty()) sb.append(" ").append(magicBookClause);
-        return sb.toString();
-    }
+    private Condition buildFilterScope(Set<Long> accessibleLibraryIds, Long libraryId, Long shelfId, Set<Long> magicBookIds) {
+        Condition scope = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile());
 
-    private void setFilterQueryParams(jakarta.persistence.Query query, Set<Long> accessibleLibraryIds, Long libraryId, Long shelfId, Set<Long> magicBookIds) {
-        if (libraryId != null) {
-            query.setParameter("libraryId", libraryId);
-        } else if (accessibleLibraryIds != null) {
-            query.setParameter("libraryIds", accessibleLibraryIds);
-        }
-        if (shelfId != null && magicBookIds == null) {
-            query.setParameter("shelfId", shelfId);
-        }
         if (magicBookIds != null) {
-            query.setParameter("magicBookIds", magicBookIds);
+            scope = scope.and(AppBookConditions.withBookIds(magicBookIds));
+        } else if (shelfId != null) {
+            scope = scope.and(AppBookConditions.inShelf(shelfId));
         }
+
+        if (libraryId != null) {
+            scope = scope.and(AppBookConditions.inLibrary(libraryId));
+        } else if (accessibleLibraryIds != null) {
+            scope = scope.and(AppBookConditions.inLibraries(accessibleLibraryIds));
+        }
+
+        return scope;
     }
 
     private Set<Long> resolveMagicShelfBookIds(Long magicShelfId, Long userId) {
@@ -495,7 +412,7 @@ public class AppBookService {
 
     @Transactional
     public void updateReadStatus(Long bookId, ReadStatus status) {
-        UserBookProgressEntity progress = validateAccessAndGetProgress(bookId);
+        UserBookProgressRow progress = validateAccessAndGetProgress(bookId);
 
         progress.setReadStatus(status);
         progress.setReadStatusModifiedTime(Instant.now());
@@ -509,13 +426,13 @@ public class AppBookService {
 
     @Transactional
     public void updatePersonalRating(Long bookId, Integer rating) {
-        UserBookProgressEntity progress = validateAccessAndGetProgress(bookId);
+        UserBookProgressRow progress = validateAccessAndGetProgress(bookId);
 
         progress.setPersonalRating(rating);
         userBookProgressRepository.save(progress);
     }
 
-    private UserBookProgressEntity validateAccessAndGetProgress(Long bookId) {
+    private UserBookProgressRow validateAccessAndGetProgress(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         Long userId = user.getId();
         Set<Long> accessibleLibraryIds = getAccessibleLibraryIds(user);
@@ -536,11 +453,11 @@ public class AppBookService {
         }
     }
 
-    private UserBookProgressEntity createNewProgress(Long userId, BookEntity book) {
-        return UserBookProgressEntity.builder()
-                .user(BookLoreUserEntity.builder().id(userId).build())
-                .book(book)
-                .build();
+    private UserBookProgressRow createNewProgress(Long userId, BookEntity book) {
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setUserId(userId);
+        progress.setBookId(book.getId());
+        return progress;
     }
 
     private Set<Long> getAccessibleLibraryIds(BookLoreUser user) {
@@ -555,18 +472,18 @@ public class AppBookService {
                 .collect(Collectors.toSet());
     }
 
-    private Map<Long, UserBookProgressEntity> getProgressMap(Long userId, Set<Long> bookIds) {
+    private Map<Long, UserBookProgressRow> getProgressMap(Long userId, Set<Long> bookIds) {
         if (bookIds.isEmpty()) {
             return Collections.emptyMap();
         }
         return userBookProgressRepository.findByUserIdAndBookIdIn(userId, bookIds).stream()
                 .collect(Collectors.toMap(
-                        p -> p.getBook().getId(),
+                        p -> p.getBookId(),
                         Function.identity()
                 ));
     }
 
-    private Specification<BookEntity> buildSpecification(
+    private Condition buildCondition(
             Set<Long> accessibleLibraryIds,
             Long libraryId,
             Long shelfId,
@@ -579,20 +496,19 @@ public class AppBookService {
             String authors,
             String language) {
 
-        List<Specification<BookEntity>> specs = new ArrayList<>();
-        specs.add(AppBookSpecification.notDeleted());
-        specs.add(AppBookSpecification.hasDigitalFile());
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile());
 
         if (accessibleLibraryIds != null) {
             if (libraryId != null && accessibleLibraryIds.contains(libraryId)) {
-                specs.add(AppBookSpecification.inLibrary(libraryId));
+                condition = condition.and(AppBookConditions.inLibrary(libraryId));
             } else if (libraryId != null) {
                 throw ApiError.FORBIDDEN.createException("Access denied to library " + libraryId);
             } else {
-                specs.add(AppBookSpecification.inLibraries(accessibleLibraryIds));
+                condition = condition.and(AppBookConditions.inLibraries(accessibleLibraryIds));
             }
         } else if (libraryId != null) {
-            specs.add(AppBookSpecification.inLibrary(libraryId));
+            condition = condition.and(AppBookConditions.inLibrary(libraryId));
         }
 
         if (shelfId != null) {
@@ -601,38 +517,38 @@ public class AppBookService {
             if (!shelf.isPublic() && !shelf.getUser().getId().equals(userId)) {
                 throw ApiError.FORBIDDEN.createException("Access denied to shelf " + shelfId);
             }
-            specs.add(AppBookSpecification.inShelf(shelfId));
+            condition = condition.and(AppBookConditions.inShelf(shelfId));
         }
 
         if (status != null) {
-            specs.add(AppBookSpecification.withReadStatus(status, userId));
+            condition = condition.and(AppBookConditions.withReadStatus(status.name(), userId));
         }
 
         if (search != null && !search.trim().isEmpty()) {
-            specs.add(AppBookSpecification.searchText(search));
+            condition = condition.and(AppBookConditions.searchText(search));
         }
 
         if (fileType != null) {
-            specs.add(AppBookSpecification.withFileType(fileType));
+            condition = condition.and(AppBookConditions.withFileType(fileType.name()));
         }
 
         if (minRating != null) {
-            specs.add(AppBookSpecification.withMinRating(minRating, userId));
+            condition = condition.and(AppBookConditions.withMinRating(minRating, userId));
         }
 
         if (maxRating != null) {
-            specs.add(AppBookSpecification.withMaxRating(maxRating, userId));
+            condition = condition.and(AppBookConditions.withMaxRating(maxRating, userId));
         }
 
         if (authors != null && !authors.trim().isEmpty()) {
-            specs.add(AppBookSpecification.withAuthor(authors.trim()));
+            condition = condition.and(AppBookConditions.withAuthor(authors.trim()));
         }
 
         if (language != null && !language.trim().isEmpty()) {
-            specs.add(AppBookSpecification.withLanguage(language.trim()));
+            condition = condition.and(AppBookConditions.withLanguage(language.trim()));
         }
 
-        return AppBookSpecification.combine(specs.toArray(new Specification[0]));
+        return condition;
     }
 
     private Sort buildSort(String sortBy, String sortDir) {
@@ -662,58 +578,52 @@ public class AppBookService {
         return limit != null && limit > 0 ? Math.min(limit, MAX_PAGE_SIZE) : defaultValue;
     }
 
-    private Specification<BookEntity> buildBaseSpecification(Set<Long> accessibleLibraryIds, Long libraryId) {
-        List<Specification<BookEntity>> specs = new ArrayList<>();
-        specs.add(AppBookSpecification.notDeleted());
-        specs.add(AppBookSpecification.hasDigitalFile());
+    private Condition buildBaseCondition(Set<Long> accessibleLibraryIds, Long libraryId) {
+        Condition condition = AppBookConditions.notDeleted()
+                .and(AppBookConditions.hasDigitalFile());
 
         if (accessibleLibraryIds != null) {
             if (libraryId != null && !accessibleLibraryIds.contains(libraryId)) {
                 throw ApiError.FORBIDDEN.createException("Access denied to library " + libraryId);
             }
-            specs.add(libraryId != null
-                    ? AppBookSpecification.inLibrary(libraryId)
-                    : AppBookSpecification.inLibraries(accessibleLibraryIds));
+            condition = condition.and(libraryId != null
+                    ? AppBookConditions.inLibrary(libraryId)
+                    : AppBookConditions.inLibraries(accessibleLibraryIds));
         } else if (libraryId != null) {
-            specs.add(AppBookSpecification.inLibrary(libraryId));
+            condition = condition.and(AppBookConditions.inLibrary(libraryId));
         }
 
-        return AppBookSpecification.combine(specs.toArray(new Specification[0]));
+        return condition;
     }
 
     private AppPageResponse<AppBookSummary> buildPageResponse(
-            Page<BookEntity> bookPage,
+            Page<Long> idPage,
             Long userId,
             int pageNum,
             int pageSize) {
 
-        List<BookEntity> enriched = enrichBooksForSummary(bookPage.getContent());
-        Map<Long, UserBookProgressEntity> progressMap = getProgressMapForBooks(userId, enriched);
-
-        List<AppBookSummary> summaries = enriched.stream()
-                .map(book -> mobileBookMapper.toSummary(book, progressMap.get(book.getId())))
-                .collect(Collectors.toList());
-
-        return AppPageResponse.of(summaries, pageNum, pageSize, bookPage.getTotalElements());
-    }
-
-    private List<BookEntity> enrichBooksForSummary(List<BookEntity> books) {
-        if (books.isEmpty()) return books;
-        Set<Long> ids = books.stream().map(BookEntity::getId).collect(Collectors.toSet());
-        Map<Long, BookEntity> enrichedMap = bookRepository.findAllForSummaryByIds(ids)
-                .stream().collect(Collectors.toMap(BookEntity::getId, b -> b));
-        return books.stream()
-                .map(b -> enrichedMap.getOrDefault(b.getId(), b))
-                .collect(Collectors.toList());
-    }
-
-    private Map<Long, UserBookProgressEntity> getProgressMapForBooks(Long userId, List<BookEntity> books) {
-        if (books.isEmpty()) {
-            return Collections.emptyMap();
+        List<Long> ids = idPage.getContent();
+        if (ids.isEmpty()) {
+            return AppPageResponse.of(Collections.emptyList(), pageNum, pageSize, idPage.getTotalElements());
         }
-        Set<Long> bookIds = books.stream()
-                .map(BookEntity::getId)
-                .collect(Collectors.toSet());
-        return getProgressMap(userId, bookIds);
+
+        List<AppBookSummary> summaries = assembleSummaries(ids, userId);
+        return AppPageResponse.of(summaries, pageNum, pageSize, idPage.getTotalElements());
+    }
+
+    /**
+     * Loads {@link AppBookSummary} rows for the given book IDs via the jOOQ read
+     * model and returns them in the same order as {@code orderedIds}.
+     */
+    private List<AppBookSummary> assembleSummaries(List<Long> orderedIds, Long userId) {
+        if (orderedIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, AppBookSummary> byId = jooqAppBookSummaryRepository.findSummariesByIds(orderedIds, userId).stream()
+                .collect(Collectors.toMap(AppBookSummary::getId, s -> s));
+        return orderedIds.stream()
+                .filter(byId::containsKey)
+                .map(byId::get)
+                .collect(Collectors.toList());
     }
 }
