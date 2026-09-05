@@ -331,7 +331,7 @@ class BookDropServiceTest {
             bookDropService.discardSelectedFiles(true, excludedIds, null);
 
             verify(bookdropFileRepository).findAll();
-            verify(bookdropFileRepository).deleteAllById(List.of(1L));
+            verify(bookdropFileRepository).deleteAllByIdInBatch(List.of(1L));
             verify(bookdropNotificationService).sendBookdropFileSummaryNotification();
             verify(bookdropMonitoringService).pauseMonitoring();
             verify(bookdropMonitoringService).resumeMonitoring();
@@ -356,7 +356,7 @@ class BookDropServiceTest {
             bookDropService.discardSelectedFiles(false, null, selectedIds);
 
             verify(bookdropFileRepository).findAllById(selectedIds);
-            verify(bookdropFileRepository).deleteAllById(List.of(1L));
+            verify(bookdropFileRepository).deleteAllByIdInBatch(List.of(1L));
             verify(bookdropNotificationService).sendBookdropFileSummaryNotification();
         }
     }
@@ -405,7 +405,7 @@ class BookDropServiceTest {
 
             BookdropFinalizeResult result = bookDropService.finalizeImport(request);
 
-            verify(bookdropFileRepository).deleteById(2L);
+            verify(bookdropFileRepository).deleteAllByIdInBatch(List.of(2L));
             verify(bookdropNotificationService).sendBookdropFileSummaryNotification();
             assertNotNull(result);
             assertEquals(1, result.getTotalFiles());
@@ -480,7 +480,7 @@ class BookDropServiceTest {
         
         when(bookRepository.save(any())).thenAnswer(i -> i.getArguments()[0]);
 
-        doNothing().when(bookdropFileRepository).deleteById(any());
+        doNothing().when(bookdropFileRepository).deleteAllByIdInBatch(any());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();
         doNothing().when(notificationService).sendMessage(any(), any());
         lenient().doNothing().when(metadataRefreshService).updateBookMetadata(any());
@@ -596,7 +596,7 @@ class BookDropServiceTest {
         bookEntity.setId(1L);
         when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
 
-        doNothing().when(bookdropFileRepository).deleteById(any());
+        doNothing().when(bookdropFileRepository).deleteAllByIdInBatch(any());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();
         doNothing().when(notificationService).sendMessage(any(), any());
 

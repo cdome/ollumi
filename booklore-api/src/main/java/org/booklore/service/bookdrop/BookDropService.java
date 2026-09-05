@@ -130,7 +130,7 @@ public class BookDropService {
             deleteFilesAndCovers(filesToDelete, deletedFiles, deletedCovers);
             deleteEmptyDirectories(bookdropPath, deletedDirs);
 
-            bookdropFileRepository.deleteAllById(filesToDelete.stream().map(BookdropFileEntity::getId).toList());
+            bookdropFileRepository.deleteAllByIdInBatch(filesToDelete.stream().map(BookdropFileEntity::getId).toList());
             log.info("Deleted {} bookdrop DB entries", filesToDelete.size());
 
             bookdropNotificationService.sendBookdropFileSummaryNotification();
@@ -396,7 +396,7 @@ public class BookDropService {
         log.debug("Preparing to move file id={}, name={}, source={}, target={}, library={}, path={}", bookdropFile.getId(), bookdropFile.getFileName(), source, target, library.getName(), path.getPath());
 
         if (!Files.exists(source)) {
-            bookdropFileRepository.deleteById(bookdropFile.getId());
+            bookdropFileRepository.deleteAllByIdInBatch(List.of(bookdropFile.getId()));
             log.warn("Source file [id={}] not found at '{}'. Deleting entry from DB.", bookdropFile.getId(), source);
             bookdropNotificationService.sendBookdropFileSummaryNotification();
             return failureResult(targetFile.getName(), "Source file does not exist in bookdrop folder");
@@ -498,7 +498,7 @@ public class BookDropService {
     }
 
     private void cleanupBookdropData(BookdropFileEntity bookdropFile) {
-        bookdropFileRepository.deleteById(bookdropFile.getId());
+        bookdropFileRepository.deleteAllByIdInBatch(List.of(bookdropFile.getId()));
         bookdropNotificationService.sendBookdropFileSummaryNotification();
 
         Path cachedCoverPath = Paths.get(appProperties.getPathConfig(), "bookdrop_temp", bookdropFile.getId() + ".jpg");
