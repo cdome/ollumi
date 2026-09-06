@@ -41,7 +41,6 @@ class BookMetadataUpdaterTest {
 
     @Mock private AppProperties appProperties;
     @Mock private AuthorRepository authorRepository;
-    @Mock private CategoryRepository categoryRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private TagRepository tagRepository;
     @Mock private BookRepository bookRepository;
@@ -71,7 +70,6 @@ class BookMetadataUpdaterTest {
                 .bookId(1L)
                 .title("Original Title")
                 .authors(new ArrayList<>())
-                .categories(new HashSet<>())
                 .tags(new HashSet<>())
                 .build();
 
@@ -429,11 +427,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void setBookMetadata_categoriesReplaceAll_noMerge_replacesExisting() {
-        CategoryEntity existing = CategoryEntity.builder().id(1L).name("Old Cat").build();
-        metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
-
-        CategoryEntity newCat = CategoryEntity.builder().id(2L).name("New Cat").build();
-        when(categoryRepository.findByName("New Cat")).thenReturn(Optional.of(newCat));
+        when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Old Cat"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of("New Cat")).build();
         MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -448,17 +442,13 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getCategories()).containsExactly(newCat);
+            verify(relationsRepository).setCategoriesForBook(1L, Set.of("New Cat"));
         }
     }
 
     @Test
     void setBookMetadata_categoriesReplaceAll_merge_keepsExistingAndAddsNew() {
-        CategoryEntity existing = CategoryEntity.builder().id(1L).name("Old Cat").build();
-        metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
-
-        CategoryEntity newCat = CategoryEntity.builder().id(2L).name("New Cat").build();
-        when(categoryRepository.findByName("New Cat")).thenReturn(Optional.of(newCat));
+        when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Old Cat"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of("New Cat")).build();
         MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -473,7 +463,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getCategories()).contains(existing, newCat);
+            verify(relationsRepository).setCategoriesForBook(1L, Set.of("Old Cat", "New Cat"));
         }
     }
 
@@ -660,8 +650,6 @@ class BookMetadataUpdaterTest {
     @Test
     void setBookMetadata_categoriesLocked_notUpdated() {
         metadataEntity.setCategoriesLocked(true);
-        CategoryEntity existing = CategoryEntity.builder().id(1L).name("Locked").build();
-        metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of("New Cat")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -671,7 +659,8 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getCategories()).containsExactly(existing);
+            verify(relationsRepository, never()).setCategoriesForBook(anyLong(), any());
+            verify(relationsRepository, never()).clearCategoriesForBook(anyLong());
         }
     }
 
@@ -712,8 +701,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void setBookMetadata_categoriesReplaceMissing_skipsWhenPresent() {
-        CategoryEntity existing = CategoryEntity.builder().id(1L).name("Existing").build();
-        metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
+        when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Existing"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of("New Cat")).build();
         MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -727,7 +715,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getCategories()).containsExactly(existing);
+            verify(relationsRepository, never()).setCategoriesForBook(anyLong(), any());
         }
     }
 
@@ -1384,11 +1372,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void categories_replaceWhenProvided_replacesExisting() {
-            CategoryEntity existing = CategoryEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
-
-            CategoryEntity newCat = CategoryEntity.builder().id(2L).name("New").build();
-            when(categoryRepository.findByName("New")).thenReturn(Optional.of(newCat));
+            when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of("New")).build();
             MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -1401,7 +1385,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getCategories()).containsExactly(newCat);
+                verify(relationsRepository).setCategoriesForBook(1L, Set.of("New"));
             }
         }
 
@@ -1467,11 +1451,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void categories_nullReplaceMode_replacesExisting() {
-            CategoryEntity existing = CategoryEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
-
-            CategoryEntity newCat = CategoryEntity.builder().id(2L).name("New").build();
-            when(categoryRepository.findByName("New")).thenReturn(Optional.of(newCat));
+            when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of("New")).build();
             MetadataUpdateContext context = buildContext(newMeta, null);
@@ -1479,7 +1459,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getCategories()).containsExactly(newCat);
+                verify(relationsRepository).setCategoriesForBook(1L, Set.of("New"));
             }
         }
 
@@ -1560,8 +1540,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void clearCategories_clearsSet() {
-            CategoryEntity existing = CategoryEntity.builder().id(1L).name("Cat").build();
-            metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Cat"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").build();
             MetadataClearFlags clearFlags = new MetadataClearFlags();
@@ -1576,14 +1555,13 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getCategories()).isEmpty();
+                verify(relationsRepository).clearCategoriesForBook(1L);
             }
         }
 
         @Test
         void emptyCategories_replaceAll_clearsExisting() {
-            CategoryEntity existing = CategoryEntity.builder().id(1L).name("Cat").build();
-            metadataEntity.setCategories(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findCategoryNamesByBookId(1L)).thenReturn(Set.of("Cat"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").categories(Set.of()).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1591,7 +1569,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getCategories()).isEmpty();
+                verify(relationsRepository).clearCategoriesForBook(1L);
             }
         }
 

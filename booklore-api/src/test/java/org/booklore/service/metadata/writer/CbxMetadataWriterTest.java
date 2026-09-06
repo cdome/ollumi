@@ -111,16 +111,8 @@ class CbxMetadataWriterTest {
         authors.add(aliceAuthor);
         authors.add(bobAuthor);
         meta.setAuthors(authors);
-        Set<CategoryEntity> cats = new HashSet<>();
-        CategoryEntity actionCat = new CategoryEntity();
-        actionCat.setId(1L);
-        actionCat.setName("action");
-        CategoryEntity adventureCat = new CategoryEntity();
-        adventureCat.setId(2L);
-        adventureCat.setName("adventure");
-        cats.add(actionCat);
-        cats.add(adventureCat);
-        meta.setCategories(cats);
+        Mockito.when(relationsRepository.findCategoryNamesByBookId(Mockito.anyLong()))
+                .thenReturn(Set.of("action", "adventure"));
 
         // Execute
         writer.saveMetadataToFile(cbz, meta, null, new MetadataClearFlags());

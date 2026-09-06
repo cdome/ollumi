@@ -27,7 +27,6 @@ public interface BookMetadataRepository extends JpaRepository<BookMetadataEntity
 
     List<BookMetadataEntity> findAllByAuthorsContaining(AuthorEntity author);
 
-    List<BookMetadataEntity> findAllByCategoriesContaining(CategoryEntity category);
 
 
     List<BookMetadataEntity> findAllByTagsContaining(TagEntity tag);

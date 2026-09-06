@@ -124,7 +124,7 @@ class Rar5FallbackIntegrationTest {
         meta.setTitle("Test RAR5 Comic");
         book.setMetadata(meta);
 
-        CbxConversionService conversionService = new CbxConversionService();
+        CbxConversionService conversionService = new CbxConversionService(org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class));
         File epub = conversionService.convertCbxToEpub(cbrCopy.toFile(), tempDir.toFile(), book, 85);
 
         assertThat(epub).exists();

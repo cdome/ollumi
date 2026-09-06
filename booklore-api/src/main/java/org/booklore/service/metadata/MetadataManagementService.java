@@ -30,7 +30,6 @@ public class MetadataManagementService {
 
     private final AppProperties appProperties;
     private final AuthorRepository authorRepository;
-    private final CategoryRepository categoryRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final TagRepository tagRepository;
     private final BookMetadataRepository bookMetadataRepository;
@@ -131,40 +130,27 @@ public class MetadataManagementService {
     }
 
     private void consolidateCategories(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
-        List<CategoryEntity> targetCategories = targetValues.stream()
-                .map(name -> categoryRepository.findByNameIgnoreCase(name)
-                        .map(existing -> {
-                            existing.setName(name);
-                            return categoryRepository.save(existing);
-                        })
-                        .orElseGet(() -> {
-                            CategoryEntity category = new CategoryEntity();
-                            category.setName(name);
-                            return categoryRepository.save(category);
-                        }))
-                .toList();
+        targetValues.forEach(relationsRepository::renameOrCreateCategory);
 
-        List<CategoryEntity> categoriesToMerge = valuesToMerge.stream()
-                .map(categoryRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (CategoryEntity oldCategory : categoriesToMerge) {
-            List<BookMetadataEntity> booksWithOldCategory = bookMetadataRepository.findAllByCategoriesContaining(oldCategory);
-
-            for (BookMetadataEntity metadata : booksWithOldCategory) {
-                metadata.getCategories().remove(oldCategory);
-                metadata.getCategories().addAll(targetCategories);
+        for (String oldCategoryName : valuesToMerge) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByCategoryNameIgnoreCase(oldCategoryName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithOldCategory);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                Set<String> finalCategories = new HashSet<>(relationsRepository.findCategoryNamesByBookId(bookId));
+                finalCategories.remove(oldCategoryName);
+                finalCategories.addAll(targetValues);
+                relationsRepository.setCategoriesForBook(bookId, finalCategories);
+            }
+
+            List<BookMetadataEntity> booksWithOldCategory = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithOldCategory, moveFile);
-            categoryRepository.delete(oldCategory);
+            relationsRepository.deleteCategoryByName(oldCategoryName);
         }
 
-        log.info("Consolidated {} categories into {}: {}", categoriesToMerge.size(), targetValues, valuesToMerge);
+        log.info("Consolidated {} categories into {}: {}", valuesToMerge.size(), targetValues, valuesToMerge);
     }
 
     private void consolidateMoods(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
@@ -329,26 +315,24 @@ public class MetadataManagementService {
     }
 
     private void deleteCategories(List<String> valuesToDelete, boolean moveFile) {
-        List<CategoryEntity> categoriesToDelete = valuesToDelete.stream()
-                .map(categoryRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (CategoryEntity category : categoriesToDelete) {
-            List<BookMetadataEntity> booksWithCategory = bookMetadataRepository.findAllByCategoriesContaining(category);
-
-            for (BookMetadataEntity metadata : booksWithCategory) {
-                metadata.getCategories().remove(category);
+        for (String categoryName : valuesToDelete) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByCategoryNameIgnoreCase(categoryName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithCategory);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                Set<String> finalCategories = new HashSet<>(relationsRepository.findCategoryNamesByBookId(bookId));
+                finalCategories.remove(categoryName);
+                relationsRepository.setCategoriesForBook(bookId, finalCategories);
+            }
+
+            List<BookMetadataEntity> booksWithCategory = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithCategory, moveFile);
-            categoryRepository.delete(category);
+            relationsRepository.deleteCategoryByName(categoryName);
         }
 
-        log.info("Deleted {} categories: {}", categoriesToDelete.size(), valuesToDelete);
+        log.info("Deleted {} categories: {}", valuesToDelete.size(), valuesToDelete);
     }
 
     private void deleteMoods(List<String> valuesToDelete, boolean moveFile) {

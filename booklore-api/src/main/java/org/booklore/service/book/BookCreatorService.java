@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BookCreatorService {
 
     private final AuthorRepository authorRepository;
-    private final CategoryRepository categoryRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final TagRepository tagRepository;
     private final BookRepository bookRepository;
@@ -38,7 +37,6 @@ public class BookCreatorService {
     private final Map<Long, ComicMetadata> pendingComicMetadata = new ConcurrentHashMap<>();
 
     public BookCreatorService(AuthorRepository authorRepository,
-                              CategoryRepository categoryRepository,
                               JooqBookMetadataRelationsRepository relationsRepository,
                               TagRepository tagRepository,
                               BookRepository bookRepository,
@@ -49,7 +47,6 @@ public class BookCreatorService {
                               ComicLocationRepository comicLocationRepository,
                               ComicCreatorRepository comicCreatorRepository) {
         this.authorRepository = authorRepository;
-        this.categoryRepository = categoryRepository;
         this.relationsRepository = relationsRepository;
         this.tagRepository = tagRepository;
         this.bookRepository = bookRepository;
@@ -130,14 +127,8 @@ public class BookCreatorService {
 
     public void addCategoriesToBook(Set<String> categories, BookEntity bookEntity) {
         if (categories == null || categories.isEmpty()) return;
-        if (bookEntity.getMetadata().getCategories() == null) {
-            bookEntity.getMetadata().setCategories(new HashSet<>());
-        }
-        categories.stream()
-                .map(cat -> truncate(cat, 255))
-                .map(truncated -> categoryRepository.findByName(truncated)
-                        .orElseGet(() -> categoryRepository.save(CategoryEntity.builder().name(truncated).build())))
-                .forEach(catEntity -> bookEntity.getMetadata().getCategories().add(catEntity));
+        Set<String> truncated = categories.stream().map(cat -> truncate(cat, 255)).collect(Collectors.toSet());
+        relationsRepository.setCategoriesForBook(bookEntity.getId(), truncated);
     }
 
     public void addAuthorsToBook(Collection<String> authors, BookEntity bookEntity) {

@@ -276,7 +276,8 @@ public class CbxMetadataWriter implements MetadataWriter {
         });
 
         // Genre - categories
-        helper.copyCategories(clearFlags != null && clearFlags.isCategories(), set -> {
+        java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+        helper.copyCategories(clearFlags != null && clearFlags.isCategories(), currentCategoryNames, set -> {
             info.setGenre(joinStrings(set));
         });
         

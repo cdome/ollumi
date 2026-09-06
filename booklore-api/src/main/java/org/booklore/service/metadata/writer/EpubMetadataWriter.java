@@ -116,7 +116,8 @@ public class EpubMetadataWriter implements MetadataWriter {
                 hasChanges[0] = true;
             });
 
-            helper.copyCategories(clear != null && clear.isCategories(), categories -> {
+            java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+            helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, categories -> {
                 removeElementsByTagNameNS(metadataElement, DC_NS, "subject");
                 if (categories != null) {
                     for (String cat : categories.stream().map(String::trim).distinct().toList()) {

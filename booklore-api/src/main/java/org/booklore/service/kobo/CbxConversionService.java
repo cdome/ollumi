@@ -2,7 +2,6 @@ package org.booklore.service.kobo;
 
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.TagEntity;
 import org.booklore.util.ArchiveUtils;
 import org.booklore.util.FileService;
@@ -75,8 +74,10 @@ public class CbxConversionService {
     private static final String EXTRACTED_IMAGES_SUBDIR = "cbx_extracted_images";
 
     private final Configuration freemarkerConfig;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
-    public CbxConversionService() {
+    public CbxConversionService(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository) {
+        this.relationsRepository = relationsRepository;
         this.freemarkerConfig = initializeFreemarkerConfiguration();
     }
 
@@ -631,10 +632,9 @@ public class CbxConversionService {
                         .toList());
             }
 
-            if (metadata.getCategories() != null && !metadata.getCategories().isEmpty()) {
-                model.put("categories", metadata.getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .toList());
+            java.util.Set<String> categoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+            if (!categoryNames.isEmpty()) {
+                model.put("categories", categoryNames.stream().toList());
             }
 
             if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {

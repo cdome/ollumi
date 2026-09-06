@@ -6,7 +6,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
@@ -14,7 +13,7 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookMetadataRepository;
-import org.booklore.repository.CategoryRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.junit.jupiter.api.Test;
@@ -53,7 +52,7 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
     private BookMetadataRepository bookMetadataRepository;
 
     @Autowired
-    private CategoryRepository categoryRepository;
+    private JooqBookMetadataRelationsRepository relationsRepository;
 
     @Autowired
     private AuthorRepository authorRepository;
@@ -596,8 +595,7 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = data.createBook(library, title);
         BookMetadataEntity metadata = book.getMetadata();
-        CategoryEntity category = categoryRepository.save(CategoryEntity.builder().name(categoryName + " " + UUID.randomUUID()).build());
-        metadata.setCategories(new HashSet<>(Set.of(category)));
+        relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
         metadata.setPageCount(300);
         bookMetadataRepository.save(metadata);
         return book;
@@ -607,9 +605,8 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = data.createBook(library, title);
         BookMetadataEntity metadata = book.getMetadata();
-        CategoryEntity category = categoryRepository.save(CategoryEntity.builder().name(categoryName + " " + UUID.randomUUID()).build());
         AuthorEntity author = authorRepository.save(AuthorEntity.builder().name(authorName).build());
-        metadata.setCategories(new HashSet<>(Set.of(category)));
+        relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
         metadata.setAuthors(new ArrayList<>(List.of(author)));
         metadata.setPageCount(300);
         bookMetadataRepository.save(metadata);

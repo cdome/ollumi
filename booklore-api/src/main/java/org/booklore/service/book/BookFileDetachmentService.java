@@ -110,6 +110,10 @@ public class BookFileDetachmentService {
             if (!sourceMoods.isEmpty()) {
                 relationsRepository.setMoodsForBook(newBook.getId(), sourceMoods);
             }
+            Set<String> sourceCategories = relationsRepository.findCategoryNamesByBookId(sourceBook.getId());
+            if (!sourceCategories.isEmpty()) {
+                relationsRepository.setCategoriesForBook(newBook.getId(), sourceCategories);
+            }
         }
 
         try {
@@ -173,9 +177,6 @@ public class BookFileDetachmentService {
 
         if (source.getAuthors() != null) {
             copy.setAuthors(new ArrayList<>(source.getAuthors()));
-        }
-        if (source.getCategories() != null) {
-            copy.setCategories(new HashSet<>(source.getCategories()));
         }
         if (source.getTags() != null) {
             copy.setTags(new HashSet<>(source.getTags()));

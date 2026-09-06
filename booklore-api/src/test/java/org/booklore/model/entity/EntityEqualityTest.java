@@ -45,14 +45,6 @@ class EntityEqualityTest {
         assertTrue(set.contains(a3));
     }
 
-    @Test
-    void categoryEntity_shouldBeEqual_whenIdsAreSame() {
-        CategoryEntity c1 = CategoryEntity.builder().id(1L).name("Fiction").build();
-        CategoryEntity c2 = CategoryEntity.builder().id(1L).name("Non-Fiction").build();
-
-        assertEquals(c1, c2);
-        assertEquals(c1.hashCode(), c2.hashCode());
-    }
 
 
     @Test

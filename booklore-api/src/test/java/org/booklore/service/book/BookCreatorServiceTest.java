@@ -3,7 +3,6 @@ package org.booklore.service.book;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.TagEntity;
 import org.booklore.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +27,6 @@ import static org.mockito.Mockito.*;
 class BookCreatorServiceTest {
 
     @Mock private AuthorRepository authorRepository;
-    @Mock private CategoryRepository categoryRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private TagRepository tagRepository;
     @Mock private BookRepository bookRepository;
@@ -94,27 +92,23 @@ class BookCreatorServiceTest {
     void addCategoriesToBook_nullCategories_doesNothing() {
         bookCreatorService.addCategoriesToBook(null, bookEntity);
 
-        assertNull(bookEntity.getMetadata().getCategories());
-        verifyNoInteractions(categoryRepository);
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addCategoriesToBook_emptyCategories_doesNothing() {
         bookCreatorService.addCategoriesToBook(Set.of(), bookEntity);
 
-        assertNull(bookEntity.getMetadata().getCategories());
-        verifyNoInteractions(categoryRepository);
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addCategoriesToBook_validCategories_addsToBook() {
-        CategoryEntity category = CategoryEntity.builder().name("Fiction").build();
-        when(categoryRepository.findByName("Fiction")).thenReturn(Optional.of(category));
+        bookEntity.setId(1L);
 
         bookCreatorService.addCategoriesToBook(Set.of("Fiction"), bookEntity);
 
-        assertNotNull(bookEntity.getMetadata().getCategories());
-        assertEquals(1, bookEntity.getMetadata().getCategories().size());
+        verify(relationsRepository).setCategoriesForBook(1L, Set.of("Fiction"));
     }
 
     @Test

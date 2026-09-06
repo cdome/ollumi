@@ -6,7 +6,6 @@ import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.BookRepository;
-import org.booklore.repository.CategoryRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
@@ -34,7 +33,6 @@ public class TestDataFactory {
     private final BookMetadataRepository bookMetadataRepository;
     private final ShelfRepository shelfRepository;
     private final AuthorRepository authorRepository;
-    private final CategoryRepository categoryRepository;
     private final JooqOpdsUserV2Repository opdsUserRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -45,7 +43,6 @@ public class TestDataFactory {
                            BookMetadataRepository bookMetadataRepository,
                            ShelfRepository shelfRepository,
                            AuthorRepository authorRepository,
-                           CategoryRepository categoryRepository,
                            JooqOpdsUserV2Repository opdsUserRepository,
                            UserRepository userRepository,
                            PasswordEncoder passwordEncoder) {
@@ -55,7 +52,6 @@ public class TestDataFactory {
         this.bookMetadataRepository = bookMetadataRepository;
         this.shelfRepository = shelfRepository;
         this.authorRepository = authorRepository;
-        this.categoryRepository = categoryRepository;
         this.opdsUserRepository = opdsUserRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;

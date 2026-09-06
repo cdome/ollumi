@@ -376,14 +376,9 @@ public class BookMetadataEntity {
     @OrderColumn(name = "sort_order")
     private List<AuthorEntity> authors;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "book_metadata_category_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "category_id")
-    )
-    @Fetch(FetchMode.SUBSELECT)
-    private Set<CategoryEntity> categories;
+    /** See moodNames: same @Transient same-request scratch cache, not persisted. */
+    @Transient
+    private Set<String> categoryNames;
 
     /**
      * Mood names for this book, read/written via JooqBookMetadataRelationsRepository (moods is no

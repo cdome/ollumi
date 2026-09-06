@@ -35,7 +35,6 @@ class MetadataManagementServiceTest {
 
     @Mock private AppProperties appProperties;
     @Mock private AuthorRepository authorRepository;
-    @Mock private CategoryRepository categoryRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private TagRepository tagRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
@@ -100,21 +99,18 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateCategories_mergesAndDeletesOld() {
-        CategoryEntity oldCat = CategoryEntity.builder().id(1L).name("Old Cat").build();
-        CategoryEntity targetCat = CategoryEntity.builder().id(2L).name("Target Cat").build();
+        long bookId = 15L;
+        when(relationsRepository.findBookIdsByCategoryNameIgnoreCase("Old Cat")).thenReturn(List.of(bookId));
+        when(relationsRepository.findCategoryNamesByBookId(bookId)).thenReturn(Set.of("Old Cat"));
 
-        when(categoryRepository.findByNameIgnoreCase("Target Cat")).thenReturn(Optional.of(targetCat));
-        when(categoryRepository.save(targetCat)).thenReturn(targetCat);
-        when(categoryRepository.findByNameIgnoreCase("Old Cat")).thenReturn(Optional.of(oldCat));
-
-        Set<CategoryEntity> categories = new HashSet<>(List.of(oldCat));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().categories(categories).build();
-        when(bookMetadataRepository.findAllByCategoriesContaining(oldCat)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.categories, List.of("Target Cat"), List.of("Old Cat"));
 
-        assertThat(metadata.getCategories()).contains(targetCat);
-        verify(categoryRepository).delete(oldCat);
+        verify(relationsRepository).renameOrCreateCategory("Target Cat");
+        verify(relationsRepository).setCategoriesForBook(bookId, Set.of("Target Cat"));
+        verify(relationsRepository).deleteCategoryByName("Old Cat");
     }
 
     @Test
@@ -334,17 +330,17 @@ class MetadataManagementServiceTest {
 
     @Test
     void deleteCategories_removesFromBooksAndDeletesEntity() {
-        CategoryEntity category = CategoryEntity.builder().id(1L).name("Cat1").build();
-        when(categoryRepository.findByNameIgnoreCase("Cat1")).thenReturn(Optional.of(category));
+        long bookId = 17L;
+        when(relationsRepository.findBookIdsByCategoryNameIgnoreCase("Cat1")).thenReturn(List.of(bookId));
+        when(relationsRepository.findCategoryNamesByBookId(bookId)).thenReturn(Set.of("Cat1"));
 
-        Set<CategoryEntity> categories = new HashSet<>(List.of(category));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().categories(categories).build();
-        when(bookMetadataRepository.findAllByCategoriesContaining(category)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.deleteMetadata(MergeMetadataType.categories, List.of("Cat1"));
 
-        assertThat(metadata.getCategories()).isEmpty();
-        verify(categoryRepository).delete(category);
+        verify(relationsRepository).setCategoriesForBook(bookId, Set.of());
+        verify(relationsRepository).deleteCategoryByName("Cat1");
     }
 
     @Test

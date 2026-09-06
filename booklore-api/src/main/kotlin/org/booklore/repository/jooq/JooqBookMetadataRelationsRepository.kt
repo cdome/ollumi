@@ -148,4 +148,59 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
         dsl.deleteFrom(MOOD).where(MOOD.NAME.eq(name)).execute()
 
     fun countAllMoods(): Long = dsl.fetchCount(MOOD).toLong()
+
+    // ========================================================================
+    // Writes — replace a book's category junction rows (masters are shared, upserted by name).
+    // Replaces the JPA cascade of BookMetadataEntity.categories. Callers compute the final desired
+    // set (merge/replace/clear semantics) and call setCategoriesForBook.
+    // ========================================================================
+
+    fun clearCategoriesForBook(bookId: Long) {
+        dsl.deleteFrom(bcm).where(bcm.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setCategoriesForBook(bookId: Long, categoryNames: Collection<String>) {
+        dsl.deleteFrom(bcm).where(bcm.BOOK_ID.eq(bookId)).execute()
+        categoryNames.asSequence()
+            .filter { it.isNotBlank() }
+            .map { upsertCategoryId(it) }
+            .distinct()
+            .forEach { categoryId ->
+                dsl.insertInto(bcm).set(bcm.BOOK_ID, bookId).set(bcm.CATEGORY_ID, categoryId).execute()
+            }
+    }
+
+    /** Find-or-create the category master row by name (name is UNIQUE), returning its id. */
+    private fun upsertCategoryId(name: String): Long {
+        val existing = dsl.select(CATEGORY.ID).from(CATEGORY).where(CATEGORY.NAME.eq(name)).fetchOne(CATEGORY.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(CATEGORY).set(CATEGORY.NAME, name).returning(CATEGORY.ID).fetchOne()!!.id!!
+    }
+
+    // ========================================================================
+    // Category master-row maintenance (consolidate/delete admin flows in MetadataManagementService).
+    // ========================================================================
+
+    /** Book ids whose category junction references [name] (case-insensitive, matching JPA findByNameIgnoreCase). */
+    fun findBookIdsByCategoryNameIgnoreCase(name: String): List<Long> =
+        dsl.select(bcm.BOOK_ID)
+            .from(bcm).join(CATEGORY).on(CATEGORY.ID.eq(bcm.CATEGORY_ID))
+            .where(CATEGORY.NAME.equalIgnoreCase(name))
+            .fetch(bcm.BOOK_ID)
+
+    /** Ensures a category master row exists with exactly this casing of [name] (rename or insert). */
+    fun renameOrCreateCategory(name: String) {
+        val existingId = dsl.select(CATEGORY.ID).from(CATEGORY).where(CATEGORY.NAME.equalIgnoreCase(name)).fetchOne(CATEGORY.ID)
+        if (existingId != null) {
+            dsl.update(CATEGORY).set(CATEGORY.NAME, name).where(CATEGORY.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(CATEGORY).set(CATEGORY.NAME, name).execute()
+        }
+    }
+
+    /** Deletes the category master row by exact name. Call only once no book references it any more. */
+    fun deleteCategoryByName(name: String): Int =
+        dsl.deleteFrom(CATEGORY).where(CATEGORY.NAME.eq(name)).execute()
+
+    fun countAllCategories(): Long = dsl.fetchCount(CATEGORY).toLong()
 }

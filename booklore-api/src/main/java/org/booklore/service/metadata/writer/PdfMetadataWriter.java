@@ -133,11 +133,12 @@ public class PdfMetadataWriter implements MetadataWriter {
     private void applyMetadataToDocument(PDDocument pdf, BookMetadataEntity entity, MetadataClearFlags clear) {
         PDDocumentInformation info = pdf.getDocumentInformation();
         MetadataCopyHelper helper = new MetadataCopyHelper(entity);
+        java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(entity.getBookId());
 
         // Build categories-only keywords for PDF legacy compatibility (Info Dictionary)
         // Moods and tags are stored separately in XMP booklore namespace, so they should NOT be in Info Dict keywords
         StringBuilder keywordsBuilder = new StringBuilder();
-        helper.copyCategories(clear != null && clear.isCategories(), cats -> {
+        helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, cats -> {
             if (cats != null && !cats.isEmpty()) {
                 keywordsBuilder.append(String.join("; ", cats));
             }
@@ -199,7 +200,7 @@ public class PdfMetadataWriter implements MetadataWriter {
             });
 
             // Add categories as dc:subject
-            helper.copyCategories(clear != null && clear.isCategories(), cats -> {
+            helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, cats -> {
                 if (cats != null && !cats.isEmpty()) {
                     cats.forEach(dc::addSubject);
                 }

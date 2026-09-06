@@ -26,6 +26,7 @@ public class KomgaMapper {
 
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final String UNKNOWN_SERIES = "Unknown Series";
 
@@ -163,11 +164,7 @@ public class KomgaMapper {
         List<String> tags = new ArrayList<>();
         
         if (firstMetadata != null) {
-            if (firstMetadata.getCategories() != null) {
-                genres = firstMetadata.getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .collect(Collectors.toList());
-            }
+            genres = new ArrayList<>(relationsRepository.findCategoryNamesByBookId(firstMetadata.getBookId()));
             if (firstMetadata.getTags() != null) {
                 tags = firstMetadata.getTags().stream()
                         .map(TagEntity::getName)

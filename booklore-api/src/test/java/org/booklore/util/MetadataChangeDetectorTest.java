@@ -4,7 +4,6 @@ import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.TagEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,10 +87,7 @@ public class MetadataChangeDetectorTest {
                         AuthorEntity.builder().id(1L).name("Author One").build(),
                         AuthorEntity.builder().id(2L).name("Author Two").build()
                 ))
-                .categories(Set.of(
-                        CategoryEntity.builder().id(1L).name("Fiction").build(),
-                        CategoryEntity.builder().id(2L).name("Mystery").build()
-                ))
+                .categoryNames(Set.of("Fiction", "Mystery"))
                 .moodNames(Set.of("Dark", "Suspenseful"))
                 .tags(Set.of(
                         TagEntity.builder().id(1L).name("Thriller").build(),
@@ -313,7 +309,7 @@ public class MetadataChangeDetectorTest {
                 .publisher("Original Publisher")
                 .authors(null) // null authors, this is what we're testing
                 .authorsLocked(false)
-                .categories(Set.of(CategoryEntity.builder().id(1L).name("Fiction").build()))
+                .categoryNames(Set.of("Fiction"))
                 .categoriesLocked(false)
                 .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
@@ -361,7 +357,7 @@ public class MetadataChangeDetectorTest {
                 .title("Test Title")
                 .authors(List.of()) // empty set, what we're testing
                 .authorsLocked(false)
-                .categories(Set.of(CategoryEntity.builder().id(1L).name("Fiction").build()))
+                .categoryNames(Set.of("Fiction"))
                 .categoriesLocked(false)
                 .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
@@ -670,7 +666,7 @@ public class MetadataChangeDetectorTest {
                 .title("Test")
                 .authors(List.of())
                 .authorsLocked(false)
-                .categories(Set.of())
+                .categoryNames(Set.of())
                 .categoriesLocked(false)
                 .moodNames(Set.of())
                 .moodsLocked(false)

@@ -37,6 +37,7 @@ public class AudiobookMetadataWriter implements MetadataWriter {
     }
 
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Override
     public void saveMetadataToFile(File audioFile, BookMetadataEntity metadata, String thumbnailUrl, MetadataClearFlags clear) {
@@ -97,7 +98,8 @@ public class AudiobookMetadataWriter implements MetadataWriter {
                 setTagField(tag, FieldKey.YEAR, year, hasChanges);
             });
 
-            helper.copyCategories(clear != null && clear.isCategories(), categories -> {
+            java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+            helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, categories -> {
                 String genre = categories != null && !categories.isEmpty()
                         ? String.join("; ", categories)
                         : null;

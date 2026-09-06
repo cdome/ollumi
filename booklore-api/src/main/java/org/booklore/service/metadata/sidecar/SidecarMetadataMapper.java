@@ -39,7 +39,7 @@ public class SidecarMetadataMapper {
                 .isbn13(entity.getIsbn13())
                 .language(entity.getLanguage())
                 .pageCount(entity.getPageCount())
-                .categories(extractCategoryNames(entity.getCategories()))
+                .categories(relationsRepository.findCategoryNamesByBookId(entity.getBookId()))
                 .moods(relationsRepository.findMoodNamesByBookId(entity.getBookId()))
                 .tags(extractTagNames(entity.getTags()))
                 .series(buildSeries(entity))
@@ -156,13 +156,6 @@ public class SidecarMetadataMapper {
         return entities.stream()
                 .map(AuthorEntity::getName)
                 .toList();
-    }
-
-    private Set<String> extractCategoryNames(Set<CategoryEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(CategoryEntity::getName)
-                .collect(Collectors.toSet());
     }
 
     private Set<String> extractTagNames(Set<TagEntity> entities) {

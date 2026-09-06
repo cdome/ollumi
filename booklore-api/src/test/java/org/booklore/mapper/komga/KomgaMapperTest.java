@@ -31,6 +31,9 @@ class KomgaMapperTest {
     @Mock
     private AppSettingService appSettingService;
 
+    @Mock
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+
     @InjectMocks
     private KomgaMapper mapper;
     
@@ -55,6 +58,7 @@ class KomgaMapperTest {
         library.setId(1L);
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
+                .bookId(100L)
                 .title("Test Book")
                 .seriesName("Test Series")
                 .pageCount(null)  // Explicitly null
@@ -123,6 +127,7 @@ class KomgaMapperTest {
         library.setId(1L);
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
+                .bookId(100L)
                 .title("Test Book")
                 .seriesName("Test Series")
                 .pageCount(250)
@@ -179,6 +184,7 @@ class KomgaMapperTest {
         
         // Book with metadata but empty fields
         BookMetadataEntity metadata = BookMetadataEntity.builder()
+                .bookId(100L)
                 .title("Test Book")
                 .seriesName("Test Series")
                 .description(null)
@@ -225,6 +231,7 @@ class KomgaMapperTest {
         
         // Book with metadata but empty fields
         BookMetadataEntity metadata = BookMetadataEntity.builder()
+                .bookId(100L)
                 .title("Test Book")
                 .seriesName("Test Series")
                 .description(null)

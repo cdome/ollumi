@@ -99,6 +99,9 @@ class KoboEntitlementServiceTest {
     @Mock
     private KoboSettingsService koboSettingsService;
 
+    @Mock
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+
     @InjectMocks
     private KoboEntitlementService koboEntitlementService;
 

@@ -45,13 +45,6 @@ public interface BookMapper {
                 .toList();
     }
 
-    default Set<String> mapCategories(Set<CategoryEntity> categories) {
-        if (categories == null) return null;
-        return categories.stream()
-                .map(CategoryEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
     default Set<String> mapTags(Set<TagEntity> tags) {
         if (tags == null) return null;
         return tags.stream()

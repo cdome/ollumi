@@ -46,7 +46,6 @@ public class TelemetryService {
     private final AuthorRepository authorRepository;
     private final ShelfRepository shelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
-    private final CategoryRepository categoryRepository;
     private final TagRepository tagRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final UserRepository userRepository;
@@ -104,7 +103,7 @@ public class TelemetryService {
                 .totalBookNotes(bookNoteRepository.count())
                 .totalShelves((int) shelfRepository.count())
                 .totalMagicShelves((int) magicShelfRepository.count())
-                .totalCategories((int) categoryRepository.count())
+                .totalCategories((int) relationsRepository.countAllCategories())
                 .totalTags((int) tagRepository.count())
                 .totalMoods((int) relationsRepository.countAllMoods())
                 .totalKoreaderUsers((int) koreaderUserRepository.count())

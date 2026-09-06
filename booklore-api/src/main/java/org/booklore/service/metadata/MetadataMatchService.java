@@ -17,6 +17,7 @@ public class MetadataMatchService {
 
     private final AppSettingService appSettingsService;
     private final BookQueryService bookQueryService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     public void recalculateAllMatchScores() {
         List<BookEntity> allBooks = bookQueryService.getAllFullBookEntities();
@@ -56,7 +57,7 @@ public class MetadataMatchService {
         if (isPresent(metadata.getIsbn10(), metadata.getIsbn10Locked())) score += weights.getIsbn10();
         if (isPresent(metadata.getLanguage(), metadata.getLanguageLocked())) score += weights.getLanguage();
         if ((metadata.getPageCount() != null && metadata.getPageCount() > 0) || Boolean.TRUE.equals(metadata.getPageCountLocked())) score += weights.getPageCount();
-        if (hasContent(metadata.getCategories(), metadata.getCategoriesLocked())) score += weights.getCategories();
+        if (hasContent(relationsRepository.findCategoryNamesByBookId(metadata.getBookId()), metadata.getCategoriesLocked())) score += weights.getCategories();
         if (isPositive(metadata.getAmazonRating(), metadata.getAmazonRatingLocked())) score += weights.getAmazonRating();
         if (isPositive(metadata.getAmazonReviewCount(), metadata.getAmazonReviewCountLocked())) score += weights.getAmazonReviewCount();
         if (isPositive(metadata.getGoodreadsRating(), metadata.getGoodreadsRatingLocked())) score += weights.getGoodreadsRating();

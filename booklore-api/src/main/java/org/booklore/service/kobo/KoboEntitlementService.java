@@ -43,6 +43,7 @@ public class KoboEntitlementService {
     private final AppSettingService appSettingService;
     private final KoboCompatibilityService koboCompatibilityService;
     private final JooqUserBookProgressRepository progressRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqKoboReadingStateRepository readingStateRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
@@ -292,9 +293,7 @@ public class KoboEntitlementService {
                 .map(list -> list.stream().map(AuthorEntity::getName).toList())
                 .orElse(Collections.emptyList());
 
-        List<String> categories = Optional.ofNullable(metadata.getCategories())
-                .map(list -> list.stream().map(CategoryEntity::getName).toList())
-                .orElse(Collections.emptyList());
+        List<String> categories = new ArrayList<>(relationsRepository.findCategoryNamesByBookId(metadata.getBookId()));
 
         KoboBookMetadata.Series series = null;
         if (metadata.getSeriesName() != null && !metadata.getSeriesName().isBlank()) {

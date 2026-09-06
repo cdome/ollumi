@@ -5,7 +5,6 @@ import org.booklore.model.dto.settings.MetadataMatchWeights;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +35,9 @@ class MetadataMatchServiceTest {
     @Mock
     private BookQueryService bookQueryService;
 
+    @Mock
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+
     @InjectMocks
     private MetadataMatchService service;
 
@@ -53,6 +55,11 @@ class MetadataMatchServiceTest {
     }
 
     private BookEntity bookWith(BookMetadataEntity metadata) {
+        // calculateMatchScore now reads categories via jOOQ keyed by bookId; give every fixture one
+        // unless the test already set a specific id.
+        if (metadata.getBookId() == null) {
+            metadata.setBookId(1L);
+        }
         BookEntity book = BookEntity.builder().metadata(metadata).build();
         return book;
     }
@@ -167,6 +174,7 @@ class MetadataMatchServiceTest {
         @Test
         void scoresAllFieldsFullyPopulated() {
             stubWeights(defaultWeights);
+            when(relationsRepository.findCategoryNamesByBookId(anyLong())).thenReturn(Set.of("Fiction"));
 
             BookMetadataEntity metadata = BookMetadataEntity.builder()
                     .title("Title")
@@ -182,7 +190,6 @@ class MetadataMatchServiceTest {
                     .isbn10("1234567890")
                     .language("en")
                     .pageCount(300)
-                    .categories(Set.of(CategoryEntity.builder().name("Fiction").build()))
                     .amazonRating(4.5)
                     .amazonReviewCount(100)
                     .goodreadsRating(4.2)

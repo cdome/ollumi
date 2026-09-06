@@ -175,16 +175,13 @@ public class MetadataCopyHelper {
         }
     }
 
-    public void copyCategories(boolean clear, Consumer<Set<String>> consumer) {
+    /** Same reasoning as copyMoods: categories is no longer Hibernate-managed, caller resolves via jOOQ. */
+    public void copyCategories(boolean clear, Set<String> currentCategoryNames, Consumer<Set<String>> consumer) {
         if (!isLocked(metadata.getCategoriesLocked())) {
             if (clear) {
                 consumer.accept(Set.of());
-            } else if (metadata.getCategories() != null) {
-                Set<String> cats = metadata.getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(cats);
+            } else if (currentCategoryNames != null) {
+                consumer.accept(currentCategoryNames);
             }
         }
     }

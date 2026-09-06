@@ -45,7 +45,6 @@ import java.util.stream.Collectors;
 public class BookMetadataUpdater {
 
     private final AuthorRepository authorRepository;
-    private final CategoryRepository categoryRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final TagRepository tagRepository;
     private final BookRepository bookRepository;
@@ -83,9 +82,10 @@ public class BookMetadataUpdater {
 
         MetadataClearFlags clearFlags = wrapper.getClearFlags();
         BookMetadataEntity metadata = bookEntity.getMetadata();
-        // MetadataChangeDetector's moods field reads BookMetadataEntity::getMoodNames (a transient
-        // scratch cache, not a Hibernate collection) - populate it once here via jOOQ.
+        // MetadataChangeDetector's moods/categories fields read the transient scratch caches
+        // (not Hibernate collections) - populate them once here via jOOQ.
         metadata.setMoodNames(relationsRepository.findMoodNamesByBookId(bookId));
+        metadata.setCategoryNames(relationsRepository.findCategoryNamesByBookId(bookId));
 
         boolean thumbnailRequiresUpdate = StringUtils.hasText(newMetadata.getThumbnailUrl());
         boolean hasMetadataChanges = MetadataChangeDetector.isDifferent(newMetadata, metadata, clearFlags);
@@ -294,39 +294,49 @@ public class BookMetadataUpdater {
         }
     }
 
+    /** Same jOOQ-write pattern as updateMoodsIfNeeded; see its doc comment. */
     private void updateCategoriesIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getCategoriesLocked())) return;
 
-        e.setCategories(Optional.ofNullable(e.getCategories()).orElseGet(HashSet::new));
+        Set<String> existingCategories = Optional.ofNullable(e.getCategoryNames()).orElse(Collections.emptySet());
 
         if (clear.isCategories()) {
-            e.getCategories().clear();
+            relationsRepository.clearCategoriesForBook(e.getBookId());
+            e.setCategoryNames(Collections.emptySet());
             return;
         }
 
         Set<String> categoryNames = Optional.ofNullable(m.getCategories()).orElse(Collections.emptySet());
         if (categoryNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) e.getCategories().clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearCategoriesForBook(e.getBookId());
+                e.setCategoryNames(Collections.emptySet());
+            }
             return;
         }
 
-        Set<CategoryEntity> newCategories = categoryNames.stream()
+        Set<String> newCategories = categoryNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> categoryRepository.findByName(name)
-                        .orElseGet(() -> categoryRepository.save(CategoryEntity.builder().name(name).build())))
                 .collect(Collectors.toSet());
 
         if (newCategories.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getCategories().clear();
-            e.getCategories().addAll(newCategories);
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && e.getCategories().isEmpty()) {
-            e.getCategories().addAll(newCategories);
-        } else if (replaceMode == null) {
-            if (!merge) e.getCategories().clear();
-            e.getCategories().addAll(newCategories);
+        Set<String> finalCategories;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                finalCategories = new HashSet<>(existingCategories);
+                finalCategories.addAll(newCategories);
+            } else {
+                finalCategories = newCategories;
+            }
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingCategories.isEmpty()) {
+            finalCategories = newCategories;
+        } else {
+            return;
         }
+
+        relationsRepository.setCategoriesForBook(e.getBookId(), finalCategories);
+        e.setCategoryNames(finalCategories);
     }
 
     /**
