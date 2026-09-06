@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 public class SidecarMetadataMapper {
 
     private final JooqBookMetadataRelationsRepository relationsRepository;
+    private final org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
 
     public SidecarMetadata toSidecarMetadata(BookMetadataEntity entity, String coverFileName) {
         if (entity == null) {
@@ -216,12 +217,9 @@ public class SidecarMetadataMapper {
                 .readingDirection(entity.getReadingDirection())
                 .webLink(entity.getWebLink())
                 .notes(entity.getNotes())
-                .characters(entity.getCharacters() != null ?
-                        entity.getCharacters().stream().map(ComicCharacterEntity::getName).collect(Collectors.toSet()) : null)
-                .teams(entity.getTeams() != null ?
-                        entity.getTeams().stream().map(ComicTeamEntity::getName).collect(Collectors.toSet()) : null)
-                .locations(entity.getLocations() != null ?
-                        entity.getLocations().stream().map(ComicLocationEntity::getName).collect(Collectors.toSet()) : null)
+                .characters(comicRelationsRepository.findCharacterNamesByBookId(entity.getBookId()))
+                .teams(comicRelationsRepository.findTeamNamesByBookId(entity.getBookId()))
+                .locations(comicRelationsRepository.findLocationNamesByBookId(entity.getBookId()))
                 .build();
     }
 }

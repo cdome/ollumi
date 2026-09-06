@@ -28,10 +28,7 @@ class BookCreatorServiceTest {
     @Mock private BookRepository bookRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
     @Mock private ComicMetadataRepository comicMetadataRepository;
-    @Mock private ComicCharacterRepository comicCharacterRepository;
-    @Mock private ComicTeamRepository comicTeamRepository;
-    @Mock private ComicLocationRepository comicLocationRepository;
-    @Mock private ComicCreatorRepository comicCreatorRepository;
+    @Mock private org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
 
     @InjectMocks
     private BookCreatorService bookCreatorService;

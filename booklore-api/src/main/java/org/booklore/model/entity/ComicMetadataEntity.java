@@ -4,10 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
-import org.hibernate.annotations.Fetch;
-import org.hibernate.annotations.FetchMode;
 
-import java.util.HashSet;
 import java.util.Set;
 
 @Entity
@@ -74,38 +71,37 @@ public class ComicMetadataEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
-    // Many-to-many relationships
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "comic_metadata_character_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "character_id"))
-    @Fetch(FetchMode.SUBSELECT)
-    @Builder.Default
-    private Set<ComicCharacterEntity> characters = new HashSet<>();
+    // characters/teams/locations/creatorMappings are no longer Hibernate-managed collections;
+    // these @Transient scratch fields exist purely so MetadataChangeDetector's generic
+    // FieldDescriptor lambdas and BookMetadataUpdater's diffing keep an entity-getter shape,
+    // same pattern as BookMetadataEntity's authorNames/categoryNames/moodNames/tagNames.
+    // Populated via JooqComicMetadataRepository at the point of use, not automatically.
+    @Transient
+    private Set<String> characterNames;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "comic_metadata_team_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "team_id"))
-    @Fetch(FetchMode.SUBSELECT)
-    @Builder.Default
-    private Set<ComicTeamEntity> teams = new HashSet<>();
+    @Transient
+    private Set<String> teamNames;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "comic_metadata_location_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "location_id"))
-    @Fetch(FetchMode.SUBSELECT)
-    @Builder.Default
-    private Set<ComicLocationEntity> locations = new HashSet<>();
+    @Transient
+    private Set<String> locationNames;
 
-    @OneToMany(mappedBy = "comicMetadata", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
-    @Fetch(FetchMode.SUBSELECT)
-    @Builder.Default
-    private Set<ComicCreatorMappingEntity> creatorMappings = new HashSet<>();
+    @Transient
+    private Set<String> pencillerNames;
+
+    @Transient
+    private Set<String> inkerNames;
+
+    @Transient
+    private Set<String> coloristNames;
+
+    @Transient
+    private Set<String> lettererNames;
+
+    @Transient
+    private Set<String> coverArtistNames;
+
+    @Transient
+    private Set<String> editorNames;
 
     // Locked fields
     @Column(name = "issue_number_locked")

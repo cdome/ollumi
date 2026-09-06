@@ -5,6 +5,7 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +50,8 @@ class CbxComicInfoComplianceTest {
 
         relationsRepository = Mockito.mock(JooqBookMetadataRelationsRepository.class);
         Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of());
-        writer = new CbxMetadataWriter(appSettingService, relationsRepository);
+        JooqComicMetadataRepository comicRelationsRepository = Mockito.mock(JooqComicMetadataRepository.class);
+        writer = new CbxMetadataWriter(appSettingService, relationsRepository, comicRelationsRepository);
         tempDir = Files.createTempDirectory("compliance_test_");
     }
 

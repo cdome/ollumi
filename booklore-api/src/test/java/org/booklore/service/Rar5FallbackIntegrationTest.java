@@ -163,7 +163,8 @@ class Rar5FallbackIntegrationTest {
 
         var mockRelationsRepository = org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class);
         when(mockRelationsRepository.findMoodNamesByBookId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Set.of());
-        CbxMetadataWriter writer = new CbxMetadataWriter(mockSettings, mockRelationsRepository);
+        var mockComicRelationsRepository = org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqComicMetadataRepository.class);
+        CbxMetadataWriter writer = new CbxMetadataWriter(mockSettings, mockRelationsRepository, mockComicRelationsRepository);
 
         BookMetadataEntity metadata = new BookMetadataEntity();
         metadata.setBookId(1L);

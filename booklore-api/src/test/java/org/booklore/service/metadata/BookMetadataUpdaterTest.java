@@ -43,10 +43,7 @@ class BookMetadataUpdaterTest {
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private BookRepository bookRepository;
     @Mock private ComicMetadataRepository comicMetadataRepository;
-    @Mock private ComicCharacterRepository comicCharacterRepository;
-    @Mock private ComicTeamRepository comicTeamRepository;
-    @Mock private ComicLocationRepository comicLocationRepository;
-    @Mock private ComicCreatorRepository comicCreatorRepository;
+    @Mock private org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
     @Mock private FileService fileService;
     @Mock private MetadataMatchService metadataMatchService;
     @Mock private AppSettingService appSettingService;
@@ -919,12 +916,13 @@ class BookMetadataUpdaterTest {
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
 
             ComicMetadataEntity saved = ComicMetadataEntity.builder().bookId(1L).issueNumber("5").build();
+            when(comicMetadataRepository.saveAndFlush(any(ComicMetadataEntity.class))).thenReturn(saved);
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(saved);
 
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                verify(comicMetadataRepository).save(any(ComicMetadataEntity.class));
+                verify(comicMetadataRepository).saveAndFlush(any(ComicMetadataEntity.class));
             }
         }
 
@@ -937,6 +935,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
+                verify(comicMetadataRepository, never()).saveAndFlush(any());
                 verify(comicMetadataRepository, never()).save(any());
             }
         }
@@ -948,12 +947,13 @@ class BookMetadataUpdaterTest {
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
 
             ComicMetadataEntity saved = ComicMetadataEntity.builder().bookId(1L).build();
+            when(comicMetadataRepository.saveAndFlush(any(ComicMetadataEntity.class))).thenReturn(saved);
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(saved);
 
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                verify(comicMetadataRepository).save(any(ComicMetadataEntity.class));
+                verify(comicMetadataRepository).saveAndFlush(any(ComicMetadataEntity.class));
             }
         }
 
@@ -1025,12 +1025,9 @@ class BookMetadataUpdaterTest {
         @Test
         void updatesCharacters_replaceAll() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
-            ComicCharacterEntity oldChar = ComicCharacterEntity.builder().id(1L).name("Batman").build();
-            existing.getCharacters().add(oldChar);
             metadataEntity.setComicMetadata(existing);
 
-            ComicCharacterEntity newChar = ComicCharacterEntity.builder().id(2L).name("Superman").build();
-            when(comicCharacterRepository.findByName("Superman")).thenReturn(Optional.of(newChar));
+            when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of("Superman")).build();
@@ -1041,17 +1038,17 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCharacters()).containsExactly(newChar);
+                verify(comicRelationsRepository).setCharactersForBook(1L, Set.of("Superman"));
+                assertThat(existing.getCharacterNames()).containsExactly("Superman");
             }
         }
 
         @Test
         void updatesCharacters_replaceMissing_skipsWhenPresent() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
-            ComicCharacterEntity oldChar = ComicCharacterEntity.builder().id(1L).name("Batman").build();
-            existing.getCharacters().add(oldChar);
             metadataEntity.setComicMetadata(existing);
 
+            when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of("Superman")).build();
@@ -1062,7 +1059,8 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCharacters()).containsExactly(oldChar);
+                verify(comicRelationsRepository, never()).setCharactersForBook(eq(1L), any());
+                assertThat(existing.getCharacterNames()).containsExactly("Batman");
             }
         }
 
@@ -1071,8 +1069,6 @@ class BookMetadataUpdaterTest {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
 
-            ComicTeamEntity team = ComicTeamEntity.builder().id(1L).name("Avengers").build();
-            when(comicTeamRepository.findByName("Avengers")).thenReturn(Optional.of(team));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().teams(Set.of("Avengers")).build();
@@ -1083,7 +1079,8 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getTeams()).containsExactly(team);
+                verify(comicRelationsRepository).setTeamsForBook(1L, Set.of("Avengers"));
+                assertThat(existing.getTeamNames()).containsExactly("Avengers");
             }
         }
 
@@ -1092,8 +1089,6 @@ class BookMetadataUpdaterTest {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
 
-            ComicLocationEntity loc = ComicLocationEntity.builder().id(1L).name("Gotham").build();
-            when(comicLocationRepository.findByName("Gotham")).thenReturn(Optional.of(loc));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().locations(Set.of("Gotham")).build();
@@ -1104,7 +1099,8 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getLocations()).containsExactly(loc);
+                verify(comicRelationsRepository).setLocationsForBook(1L, Set.of("Gotham"));
+                assertThat(existing.getLocationNames()).containsExactly("Gotham");
             }
         }
 
@@ -1113,8 +1109,6 @@ class BookMetadataUpdaterTest {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
 
-            ComicCreatorEntity creator = ComicCreatorEntity.builder().id(1L).name("Jim Lee").build();
-            when(comicCreatorRepository.findByName("Jim Lee")).thenReturn(Optional.of(creator));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().pencillers(Set.of("Jim Lee")).build();
@@ -1125,8 +1119,8 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCreatorMappings()).hasSize(1);
-                assertThat(existing.getCreatorMappings().iterator().next().getRole()).isEqualTo(ComicCreatorRole.PENCILLER);
+                verify(comicRelationsRepository).setCreatorsForBookRole(1L, ComicCreatorRole.PENCILLER, Set.of("Jim Lee"));
+                assertThat(existing.getPencillerNames()).containsExactly("Jim Lee");
             }
         }
 
@@ -1145,16 +1139,16 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCreatorMappings()).isEmpty();
+                verify(comicRelationsRepository, never()).setCreatorsForBookRole(eq(1L), eq(ComicCreatorRole.PENCILLER), any());
             }
         }
 
         @Test
         void emptyCharacters_replaceAll_clearsExisting() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
-            existing.getCharacters().add(ComicCharacterEntity.builder().id(1L).name("Batman").build());
             metadataEntity.setComicMetadata(existing);
 
+            when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of()).build();
@@ -1165,16 +1159,17 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCharacters()).isEmpty();
+                verify(comicRelationsRepository).clearCharactersForBook(1L);
+                assertThat(existing.getCharacterNames()).isEmpty();
             }
         }
 
         @Test
         void charactersLocked_notUpdated() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).charactersLocked(true).build();
-            existing.getCharacters().add(ComicCharacterEntity.builder().id(1L).name("Batman").build());
             metadataEntity.setComicMetadata(existing);
 
+            when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of("Superman")).build();
@@ -1185,7 +1180,7 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCharacters()).extracting("name").containsExactly("Batman");
+                assertThat(existing.getCharacterNames()).containsExactly("Batman");
             }
         }
 
@@ -1204,22 +1199,19 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                verify(comicCharacterRepository).deleteOrphaned();
-                verify(comicTeamRepository).deleteOrphaned();
-                verify(comicLocationRepository).deleteOrphaned();
-                verify(comicCreatorRepository).deleteOrphaned();
+                verify(comicRelationsRepository).deleteOrphanedCharacters();
+                verify(comicRelationsRepository).deleteOrphanedTeams();
+                verify(comicRelationsRepository).deleteOrphanedLocations();
+                verify(comicRelationsRepository).deleteOrphanedCreators();
             }
         }
 
         @Test
         void emptyCreators_replaceAll_removesExistingForRole() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
-            ComicCreatorEntity creator = ComicCreatorEntity.builder().id(1L).name("Artist").build();
-            ComicCreatorMappingEntity mapping = ComicCreatorMappingEntity.builder()
-                    .comicMetadata(existing).creator(creator).role(ComicCreatorRole.PENCILLER).build();
-            existing.getCreatorMappings().add(mapping);
             metadataEntity.setComicMetadata(existing);
 
+            when(comicRelationsRepository.findCreatorNamesByBookIdAndRole(1L, ComicCreatorRole.PENCILLER)).thenReturn(Set.of("Artist"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().pencillers(Set.of()).build();
@@ -1230,17 +1222,17 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getCreatorMappings()).isEmpty();
+                verify(comicRelationsRepository).clearCreatorsForBookRole(1L, ComicCreatorRole.PENCILLER);
+                assertThat(existing.getPencillerNames()).isEmpty();
             }
         }
 
         @Test
         void teams_replaceMissing_skipsWhenPresent() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
-            ComicTeamEntity oldTeam = ComicTeamEntity.builder().id(1L).name("X-Men").build();
-            existing.getTeams().add(oldTeam);
             metadataEntity.setComicMetadata(existing);
 
+            when(comicRelationsRepository.findTeamNamesByBookId(1L)).thenReturn(Set.of("X-Men"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().teams(Set.of("Avengers")).build();
@@ -1251,17 +1243,17 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getTeams()).containsExactly(oldTeam);
+                verify(comicRelationsRepository, never()).setTeamsForBook(eq(1L), any());
+                assertThat(existing.getTeamNames()).containsExactly("X-Men");
             }
         }
 
         @Test
         void locations_replaceMissing_skipsWhenPresent() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
-            ComicLocationEntity oldLoc = ComicLocationEntity.builder().id(1L).name("Gotham").build();
-            existing.getLocations().add(oldLoc);
             metadataEntity.setComicMetadata(existing);
 
+            when(comicRelationsRepository.findLocationNamesByBookId(1L)).thenReturn(Set.of("Gotham"));
             when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().locations(Set.of("Metropolis")).build();
@@ -1272,7 +1264,8 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                assertThat(existing.getLocations()).containsExactly(oldLoc);
+                verify(comicRelationsRepository, never()).setLocationsForBook(eq(1L), any());
+                assertThat(existing.getLocationNames()).containsExactly("Gotham");
             }
         }
     }

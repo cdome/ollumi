@@ -49,7 +49,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
 
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
-        "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE (b.deleted IS NULL OR b.deleted = false)")
@@ -57,7 +56,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
 
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
-        "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.id IN :bookIds AND (b.deleted IS NULL OR b.deleted = false)")
@@ -65,7 +63,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
 
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
-        "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.id IN :bookIds AND (b.deleted IS NULL OR b.deleted = false)")
@@ -73,7 +70,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
 
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
-        "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.library.id = :libraryId AND (b.deleted IS NULL OR b.deleted = false)")
@@ -95,7 +91,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
 
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
-        "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT DISTINCT b FROM BookEntity b JOIN b.shelves s WHERE s.id = :shelfId AND (b.deleted IS NULL OR b.deleted = false)")
