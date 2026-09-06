@@ -31,7 +31,6 @@ public class MetadataManagementService {
     private final AppProperties appProperties;
     private final AuthorRepository authorRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    private final TagRepository tagRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final AppSettingService appSettingService;
     private final MetadataWriterFactory metadataWriterFactory;
@@ -178,41 +177,27 @@ public class MetadataManagementService {
     }
 
     private void consolidateTags(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
-        List<TagEntity> targetTags = targetValues.stream()
-                .map(name -> tagRepository.findByNameIgnoreCase(name)
-                        .map(existing -> {
-                            existing.setName(name);
-                            return tagRepository.save(existing);
-                        })
-                        .orElseGet(() -> {
-                            TagEntity tag = new TagEntity();
-                            tag.setName(name);
-                            return tagRepository.save(tag);
-                        }))
-                .toList();
+        targetValues.forEach(relationsRepository::renameOrCreateTag);
 
-        List<TagEntity> tagsToMerge = valuesToMerge.stream()
-                .map(tagRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (TagEntity oldTag : tagsToMerge) {
-            List<BookMetadataEntity> booksWithOldTag = bookMetadataRepository.findAllByTagsContaining(oldTag);
-
-            for (BookMetadataEntity metadata : booksWithOldTag) {
-                metadata.getTags().remove(oldTag);
-                metadata.getTags().addAll(targetTags);
+        for (String oldTagName : valuesToMerge) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByTagNameIgnoreCase(oldTagName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithOldTag);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                Set<String> finalTags = new HashSet<>(relationsRepository.findTagNamesByBookId(bookId));
+                finalTags.remove(oldTagName);
+                finalTags.addAll(targetValues);
+                relationsRepository.setTagsForBook(bookId, finalTags);
+            }
 
+            List<BookMetadataEntity> booksWithOldTag = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithOldTag, moveFile);
-            tagRepository.delete(oldTag);
+            relationsRepository.deleteTagByName(oldTagName);
         }
 
-        log.info("Consolidated {} tags into {}: {}", tagsToMerge.size(), targetValues, valuesToMerge);
+        log.info("Consolidated {} tags into {}: {}", valuesToMerge.size(), targetValues, valuesToMerge);
     }
 
     private void consolidateSeries(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
@@ -357,26 +342,24 @@ public class MetadataManagementService {
     }
 
     private void deleteTags(List<String> valuesToDelete, boolean moveFile) {
-        List<TagEntity> tagsToDelete = valuesToDelete.stream()
-                .map(tagRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (TagEntity tag : tagsToDelete) {
-            List<BookMetadataEntity> booksWithTag = bookMetadataRepository.findAllByTagsContaining(tag);
-
-            for (BookMetadataEntity metadata : booksWithTag) {
-                metadata.getTags().remove(tag);
+        for (String tagName : valuesToDelete) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByTagNameIgnoreCase(tagName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithTag);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                Set<String> finalTags = new HashSet<>(relationsRepository.findTagNamesByBookId(bookId));
+                finalTags.remove(tagName);
+                relationsRepository.setTagsForBook(bookId, finalTags);
+            }
+
+            List<BookMetadataEntity> booksWithTag = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithTag, moveFile);
-            tagRepository.delete(tag);
+            relationsRepository.deleteTagByName(tagName);
         }
 
-        log.info("Deleted {} tags: {}", tagsToDelete.size(), valuesToDelete);
+        log.info("Deleted {} tags: {}", valuesToDelete.size(), valuesToDelete);
     }
 
     private void deleteSeries(List<String> valuesToDelete, boolean moveFile) {

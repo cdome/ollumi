@@ -13,10 +13,4 @@ public class TestEntityFactory {
                 .build();
     }
 
-    public static TagEntity createTag(String name) {
-        return TagEntity.builder()
-                .id(idCounter.getAndIncrement())
-                .name(name)
-                .build();
-    }
 }

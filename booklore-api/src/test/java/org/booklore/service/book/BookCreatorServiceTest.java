@@ -3,7 +3,6 @@ package org.booklore.service.book;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +27,6 @@ class BookCreatorServiceTest {
 
     @Mock private AuthorRepository authorRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    @Mock private TagRepository tagRepository;
     @Mock private BookRepository bookRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
     @Mock private ComicMetadataRepository comicMetadataRepository;
@@ -138,27 +136,23 @@ class BookCreatorServiceTest {
     void addTagsToBook_nullTags_doesNothing() {
         bookCreatorService.addTagsToBook(null, bookEntity);
 
-        assertNull(bookEntity.getMetadata().getTags());
-        verifyNoInteractions(tagRepository);
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addTagsToBook_emptyTags_doesNothing() {
         bookCreatorService.addTagsToBook(Set.of(), bookEntity);
 
-        assertNull(bookEntity.getMetadata().getTags());
-        verifyNoInteractions(tagRepository);
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addTagsToBook_validTags_addsToBook() {
-        TagEntity tag = TagEntity.builder().name("favorite").build();
-        when(tagRepository.findByName("favorite")).thenReturn(Optional.of(tag));
+        bookEntity.setId(1L);
 
         bookCreatorService.addTagsToBook(Set.of("favorite"), bookEntity);
 
-        assertNotNull(bookEntity.getMetadata().getTags());
-        assertEquals(1, bookEntity.getMetadata().getTags().size());
+        verify(relationsRepository).setTagsForBook(1L, Set.of("favorite"));
     }
 
     @Test

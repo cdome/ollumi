@@ -24,7 +24,6 @@ public class BookCreatorService {
 
     private final AuthorRepository authorRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
-    private final TagRepository tagRepository;
     private final BookRepository bookRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final ComicMetadataRepository comicMetadataRepository;
@@ -38,7 +37,6 @@ public class BookCreatorService {
 
     public BookCreatorService(AuthorRepository authorRepository,
                               JooqBookMetadataRelationsRepository relationsRepository,
-                              TagRepository tagRepository,
                               BookRepository bookRepository,
                               BookMetadataRepository bookMetadataRepository,
                               ComicMetadataRepository comicMetadataRepository,
@@ -48,7 +46,6 @@ public class BookCreatorService {
                               ComicCreatorRepository comicCreatorRepository) {
         this.authorRepository = authorRepository;
         this.relationsRepository = relationsRepository;
-        this.tagRepository = tagRepository;
         this.bookRepository = bookRepository;
         this.bookMetadataRepository = bookMetadataRepository;
         this.comicMetadataRepository = comicMetadataRepository;
@@ -152,14 +149,8 @@ public class BookCreatorService {
 
     public void addTagsToBook(Set<String> tags, BookEntity bookEntity) {
         if (tags == null || tags.isEmpty()) return;
-        if (bookEntity.getMetadata().getTags() == null) {
-            bookEntity.getMetadata().setTags(new HashSet<>());
-        }
-        tags.stream()
-                .map(tag -> truncate(tag, 255))
-                .map(truncated -> tagRepository.findByName(truncated)
-                        .orElseGet(() -> tagRepository.save(TagEntity.builder().name(truncated).build())))
-                .forEach(tagEntity -> bookEntity.getMetadata().getTags().add(tagEntity));
+        Set<String> truncated = tags.stream().map(tag -> truncate(tag, 255)).collect(Collectors.toSet());
+        relationsRepository.setTagsForBook(bookEntity.getId(), truncated);
     }
 
     private String truncate(String input, int maxLength) {

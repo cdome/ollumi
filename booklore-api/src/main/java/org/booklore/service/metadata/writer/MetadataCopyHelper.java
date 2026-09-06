@@ -201,16 +201,13 @@ public class MetadataCopyHelper {
         }
     }
 
-    public void copyTags(boolean clear, Consumer<Set<String>> consumer) {
+    /** Same reasoning as copyMoods/copyCategories: caller resolves current names via jOOQ. */
+    public void copyTags(boolean clear, Set<String> currentTagNames, Consumer<Set<String>> consumer) {
         if (!isLocked(metadata.getTagsLocked())) {
             if (clear) {
                 consumer.accept(Set.of());
-            } else if (metadata.getTags() != null) {
-                Set<String> tags = metadata.getTags().stream()
-                        .map(TagEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(tags);
+            } else if (currentTagNames != null) {
+                consumer.accept(currentTagNames);
             }
         }
     }

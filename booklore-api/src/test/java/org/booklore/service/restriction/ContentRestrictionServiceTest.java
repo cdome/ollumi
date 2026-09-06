@@ -5,7 +5,6 @@ import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ContentRestriction;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
 import org.booklore.repository.UserRepository;
@@ -136,7 +135,6 @@ class ContentRestrictionServiceTest {
         if (d.hasMetadata()) {
             BookMetadataEntity m = BookMetadataEntity.builder()
                     .bookId(d.id())
-                    .tags(d.tags().stream().map(n -> TagEntity.builder().name(n).build()).collect(Collectors.toSet()))
                     .contentRating(d.contentRating())
                     .ageRating(d.ageRating())
                     .build();

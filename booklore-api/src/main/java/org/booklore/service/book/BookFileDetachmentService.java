@@ -114,6 +114,10 @@ public class BookFileDetachmentService {
             if (!sourceCategories.isEmpty()) {
                 relationsRepository.setCategoriesForBook(newBook.getId(), sourceCategories);
             }
+            Set<String> sourceTags = relationsRepository.findTagNamesByBookId(sourceBook.getId());
+            if (!sourceTags.isEmpty()) {
+                relationsRepository.setTagsForBook(newBook.getId(), sourceTags);
+            }
         }
 
         try {
@@ -177,9 +181,6 @@ public class BookFileDetachmentService {
 
         if (source.getAuthors() != null) {
             copy.setAuthors(new ArrayList<>(source.getAuthors()));
-        }
-        if (source.getTags() != null) {
-            copy.setTags(new HashSet<>(source.getTags()));
         }
 
         return copy;

@@ -42,7 +42,6 @@ class BookMetadataUpdaterTest {
     @Mock private AppProperties appProperties;
     @Mock private AuthorRepository authorRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    @Mock private TagRepository tagRepository;
     @Mock private BookRepository bookRepository;
     @Mock private ComicMetadataRepository comicMetadataRepository;
     @Mock private ComicCharacterRepository comicCharacterRepository;
@@ -70,7 +69,6 @@ class BookMetadataUpdaterTest {
                 .bookId(1L)
                 .title("Original Title")
                 .authors(new ArrayList<>())
-                .tags(new HashSet<>())
                 .build();
 
         bookEntity = BookEntity.builder()
@@ -490,11 +488,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void setBookMetadata_tagsReplaceAll_merge_keepsExisting() {
-        TagEntity existing = TagEntity.builder().id(1L).name("Old Tag").build();
-        metadataEntity.setTags(new HashSet<>(Set.of(existing)));
-
-        TagEntity newTag = TagEntity.builder().id(2L).name("New Tag").build();
-        when(tagRepository.findByName("New Tag")).thenReturn(Optional.of(newTag));
+        when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of("Old Tag"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of("New Tag")).build();
         MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -509,7 +503,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getTags()).contains(existing, newTag);
+            verify(relationsRepository).setTagsForBook(1L, Set.of("Old Tag", "New Tag"));
         }
     }
 
@@ -684,8 +678,6 @@ class BookMetadataUpdaterTest {
     @Test
     void setBookMetadata_tagsLocked_notUpdated() {
         metadataEntity.setTagsLocked(true);
-        TagEntity existing = TagEntity.builder().id(1L).name("Locked").build();
-        metadataEntity.setTags(new HashSet<>(Set.of(existing)));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of("New Tag")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -695,7 +687,8 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getTags()).containsExactly(existing);
+            verify(relationsRepository, never()).setTagsForBook(anyLong(), any());
+            verify(relationsRepository, never()).clearTagsForBook(anyLong());
         }
     }
 
@@ -1341,9 +1334,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void tags_replaceMissing_addsWhenEmpty() {
-            metadataEntity.setTags(new HashSet<>());
-            TagEntity newTag = TagEntity.builder().id(1L).name("SciFi").build();
-            when(tagRepository.findByName("SciFi")).thenReturn(Optional.of(newTag));
+            when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of());
 
             BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of("SciFi")).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1351,14 +1342,13 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getTags()).containsExactly(newTag);
+                verify(relationsRepository).setTagsForBook(1L, Set.of("SciFi"));
             }
         }
 
         @Test
         void tags_replaceMissing_skipsWhenPresent() {
-            TagEntity existing = TagEntity.builder().id(1L).name("Fantasy").build();
-            metadataEntity.setTags(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of("Fantasy"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of("SciFi")).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1366,7 +1356,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getTags()).containsExactly(existing);
+                verify(relationsRepository, never()).setTagsForBook(anyLong(), any());
             }
         }
 
@@ -1410,11 +1400,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void tags_replaceWhenProvided_noMerge_replacesExisting() {
-            TagEntity existing = TagEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setTags(new HashSet<>(Set.of(existing)));
-
-            TagEntity newTag = TagEntity.builder().id(2L).name("New").build();
-            when(tagRepository.findByName("New")).thenReturn(Optional.of(newTag));
+            when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of("New")).build();
             MetadataUpdateContext context = MetadataUpdateContext.builder()
@@ -1427,7 +1413,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getTags()).containsExactly(newTag);
+                verify(relationsRepository).setTagsForBook(1L, Set.of("New"));
             }
         }
 
@@ -1479,11 +1465,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void tags_nullReplaceMode_replacesExisting() {
-            TagEntity existing = TagEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setTags(new HashSet<>(Set.of(existing)));
-
-            TagEntity newTag = TagEntity.builder().id(2L).name("New").build();
-            when(tagRepository.findByName("New")).thenReturn(Optional.of(newTag));
+            when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of("New")).build();
             MetadataUpdateContext context = buildContext(newMeta, null);
@@ -1491,7 +1473,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getTags()).containsExactly(newTag);
+                verify(relationsRepository).setTagsForBook(1L, Set.of("New"));
             }
         }
 
@@ -1518,8 +1500,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void clearTags_clearsSet() {
-            TagEntity existing = TagEntity.builder().id(1L).name("Tag").build();
-            metadataEntity.setTags(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of("Tag"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").build();
             MetadataClearFlags clearFlags = new MetadataClearFlags();
@@ -1534,7 +1515,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getTags()).isEmpty();
+                verify(relationsRepository).clearTagsForBook(1L);
             }
         }
 
@@ -1589,8 +1570,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void emptyTags_replaceAll_clearsExisting() {
-            TagEntity existing = TagEntity.builder().id(1L).name("Tag").build();
-            metadataEntity.setTags(new HashSet<>(Set.of(existing)));
+            when(relationsRepository.findTagNamesByBookId(1L)).thenReturn(Set.of("Tag"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").tags(Set.of()).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1598,7 +1578,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getTags()).isEmpty();
+                verify(relationsRepository).clearTagsForBook(1L);
             }
         }
     }

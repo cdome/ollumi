@@ -259,7 +259,7 @@ public class MetadataChangeDetector {
                     BookMetadata::getMoodsLocked, BookMetadataEntity::getMoodsLocked,
                     MetadataClearFlags::isMoods, false),
             new CollectionFieldDescriptor("tags",
-                    BookMetadata::getTags, BookMetadataEntity::getTags,
+                    BookMetadata::getTags, BookMetadataEntity::getTagNames,
                     BookMetadata::getTagsLocked, BookMetadataEntity::getTagsLocked,
                     MetadataClearFlags::isTags, false)
     );
@@ -402,7 +402,6 @@ public class MetadataChangeDetector {
         return entities.stream()
                 .map(e -> switch (e) {
                     case AuthorEntity author -> author.getName();
-                    case TagEntity tag -> tag.getName();
                     default -> e.toString();
                 })
                 .toList();
@@ -415,7 +414,6 @@ public class MetadataChangeDetector {
         return entities.stream()
                 .map(e -> switch (e) {
                     case AuthorEntity author -> author.getName();
-                    case TagEntity tag -> tag.getName();
                     default -> e.toString();
                 })
                 .collect(Collectors.toSet());

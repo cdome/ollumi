@@ -282,8 +282,9 @@ public class CbxMetadataWriter implements MetadataWriter {
         });
         
         // Tags - separate from Genre per Anansi v2.1
-        if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
-            info.setTags(joinStrings(metadata.getTags().stream().map(TagEntity::getName).collect(Collectors.toSet())));
+        Set<String> currentTagNames1 = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+        if (!currentTagNames1.isEmpty()) {
+            info.setTags(joinStrings(currentTagNames1));
         }
 
         // CommunityRating - normalized to 0-5 scale
@@ -325,9 +326,7 @@ public class CbxMetadataWriter implements MetadataWriter {
         }
 
         appendBookLoreTag(notesBuilder, "Moods", joinStrings(relationsRepository.findMoodNamesByBookId(metadata.getBookId())));
-        if (metadata.getTags() != null) {
-            appendBookLoreTag(notesBuilder, "Tags", joinStrings(metadata.getTags().stream().map(TagEntity::getName).collect(Collectors.toSet())));
-        }
+        appendBookLoreTag(notesBuilder, "Tags", joinStrings(relationsRepository.findTagNamesByBookId(metadata.getBookId())));
         appendBookLoreTag(notesBuilder, "Subtitle", metadata.getSubtitle());
         
         if (metadata.getIsbn13() != null && !metadata.getIsbn13().isBlank()) {

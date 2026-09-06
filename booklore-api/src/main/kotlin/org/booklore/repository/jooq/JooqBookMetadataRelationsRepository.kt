@@ -203,4 +203,54 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
         dsl.deleteFrom(CATEGORY).where(CATEGORY.NAME.eq(name)).execute()
 
     fun countAllCategories(): Long = dsl.fetchCount(CATEGORY).toLong()
+
+    // ========================================================================
+    // Writes — replace a book's tag junction rows (masters are shared, upserted by name).
+    // ========================================================================
+
+    fun clearTagsForBook(bookId: Long) {
+        dsl.deleteFrom(btm).where(btm.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setTagsForBook(bookId: Long, tagNames: Collection<String>) {
+        dsl.deleteFrom(btm).where(btm.BOOK_ID.eq(bookId)).execute()
+        tagNames.asSequence()
+            .filter { it.isNotBlank() }
+            .map { upsertTagId(it) }
+            .distinct()
+            .forEach { tagId ->
+                dsl.insertInto(btm).set(btm.BOOK_ID, bookId).set(btm.TAG_ID, tagId).execute()
+            }
+    }
+
+    /** Find-or-create the tag master row by name (name is UNIQUE), returning its id. */
+    private fun upsertTagId(name: String): Long {
+        val existing = dsl.select(TAG.ID).from(TAG).where(TAG.NAME.eq(name)).fetchOne(TAG.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(TAG).set(TAG.NAME, name).returning(TAG.ID).fetchOne()!!.id!!
+    }
+
+    // ========================================================================
+    // Tag master-row maintenance (consolidate/delete admin flows in MetadataManagementService).
+    // ========================================================================
+
+    fun findBookIdsByTagNameIgnoreCase(name: String): List<Long> =
+        dsl.select(btm.BOOK_ID)
+            .from(btm).join(TAG).on(TAG.ID.eq(btm.TAG_ID))
+            .where(TAG.NAME.equalIgnoreCase(name))
+            .fetch(btm.BOOK_ID)
+
+    fun renameOrCreateTag(name: String) {
+        val existingId = dsl.select(TAG.ID).from(TAG).where(TAG.NAME.equalIgnoreCase(name)).fetchOne(TAG.ID)
+        if (existingId != null) {
+            dsl.update(TAG).set(TAG.NAME, name).where(TAG.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(TAG).set(TAG.NAME, name).execute()
+        }
+    }
+
+    fun deleteTagByName(name: String): Int =
+        dsl.deleteFrom(TAG).where(TAG.NAME.eq(name)).execute()
+
+    fun countAllTags(): Long = dsl.fetchCount(TAG).toLong()
 }

@@ -36,7 +36,6 @@ class MetadataManagementServiceTest {
     @Mock private AppProperties appProperties;
     @Mock private AuthorRepository authorRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    @Mock private TagRepository tagRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
     @Mock private AppSettingService appSettingService;
     @Mock private MetadataWriterFactory metadataWriterFactory;
@@ -131,21 +130,18 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateTags_mergesAndDeletesOld() {
-        TagEntity oldTag = TagEntity.builder().id(1L).name("Old Tag").build();
-        TagEntity targetTag = TagEntity.builder().id(2L).name("Target Tag").build();
+        long bookId = 25L;
+        when(relationsRepository.findBookIdsByTagNameIgnoreCase("Old Tag")).thenReturn(List.of(bookId));
+        when(relationsRepository.findTagNamesByBookId(bookId)).thenReturn(Set.of("Old Tag"));
 
-        when(tagRepository.findByNameIgnoreCase("Target Tag")).thenReturn(Optional.of(targetTag));
-        when(tagRepository.save(targetTag)).thenReturn(targetTag);
-        when(tagRepository.findByNameIgnoreCase("Old Tag")).thenReturn(Optional.of(oldTag));
-
-        Set<TagEntity> tags = new HashSet<>(List.of(oldTag));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().tags(tags).build();
-        when(bookMetadataRepository.findAllByTagsContaining(oldTag)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.tags, List.of("Target Tag"), List.of("Old Tag"));
 
-        assertThat(metadata.getTags()).contains(targetTag);
-        verify(tagRepository).delete(oldTag);
+        verify(relationsRepository).renameOrCreateTag("Target Tag");
+        verify(relationsRepository).setTagsForBook(bookId, Set.of("Target Tag"));
+        verify(relationsRepository).deleteTagByName("Old Tag");
     }
 
     @Test
@@ -360,17 +356,17 @@ class MetadataManagementServiceTest {
 
     @Test
     void deleteTags_removesFromBooksAndDeletesEntity() {
-        TagEntity tag = TagEntity.builder().id(1L).name("Tag1").build();
-        when(tagRepository.findByNameIgnoreCase("Tag1")).thenReturn(Optional.of(tag));
+        long bookId = 27L;
+        when(relationsRepository.findBookIdsByTagNameIgnoreCase("Tag1")).thenReturn(List.of(bookId));
+        when(relationsRepository.findTagNamesByBookId(bookId)).thenReturn(Set.of("Tag1"));
 
-        Set<TagEntity> tags = new HashSet<>(List.of(tag));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().tags(tags).build();
-        when(bookMetadataRepository.findAllByTagsContaining(tag)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.deleteMetadata(MergeMetadataType.tags, List.of("Tag1"));
 
-        assertThat(metadata.getTags()).isEmpty();
-        verify(tagRepository).delete(tag);
+        verify(relationsRepository).setTagsForBook(bookId, Set.of());
+        verify(relationsRepository).deleteTagByName("Tag1");
     }
 
     @Test

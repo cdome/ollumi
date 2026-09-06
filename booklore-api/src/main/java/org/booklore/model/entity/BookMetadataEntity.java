@@ -390,14 +390,9 @@ public class BookMetadataEntity {
     @Transient
     private Set<String> moodNames;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "book_metadata_tag_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "tag_id")
-    )
-    @Fetch(FetchMode.SUBSELECT)
-    private Set<TagEntity> tags;
+    /** See moodNames/categoryNames: same @Transient same-request scratch cache, not persisted. */
+    @Transient
+    private Set<String> tagNames;
 
     @OneToMany(mappedBy = "bookMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Fetch(FetchMode.SUBSELECT)

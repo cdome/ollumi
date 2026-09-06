@@ -4,7 +4,6 @@ import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.junit.jupiter.api.AfterEach;
@@ -83,11 +82,7 @@ class CbxComicInfoComplianceTest {
         metadata.setPageCount(170);
         metadata.setDescription("<p><i>On his own and out of options, Hughie resorts to extreme measures...</i></p>");
         
-        Set<TagEntity> tags = new HashSet<>();
-        TagEntity t1 = new TagEntity(); t1.setName("Superhero");
-        tags.add(t1);
-        metadata.setTags(tags);
-        
+        Mockito.when(relationsRepository.findTagNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Superhero"));
         Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Dark"));
         
         metadata.setHardcoverBookId("547027");

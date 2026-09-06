@@ -9,7 +9,6 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -291,13 +290,8 @@ class PdfMetadataWriterTest {
 
         BookMetadataEntity meta = createBasicMetadata();
         
-        Set<TagEntity> tags = new HashSet<>();
-        TagEntity tag1 = new TagEntity(); tag1.setName("Python");
-        TagEntity tag2 = new TagEntity(); tag2.setName("Programming");
-        tags.add(tag1);
-        tags.add(tag2);
-        meta.setTags(tags);
-        
+        Mockito.when(relationsRepository.findTagNamesByBookId(Mockito.anyLong()))
+                .thenReturn(Set.of("Python", "Programming"));
         Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Educational", "Technical"));
 
         writer.saveMetadataToFile(pdf, meta, null, null);

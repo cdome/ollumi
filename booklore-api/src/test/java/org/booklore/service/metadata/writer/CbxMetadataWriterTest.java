@@ -175,16 +175,8 @@ class CbxMetadataWriterTest {
         meta.setGoodreadsId("12345");
         meta.setAsin("B00TEST123");
         
-        Set<TagEntity> tags = new HashSet<>();
-        TagEntity tag1 = new TagEntity();
-        tag1.setId(1L);
-        tag1.setName("Fantasy");
-        TagEntity tag2 = new TagEntity();
-        tag2.setId(2L);
-        tag2.setName("Epic");
-        tags.add(tag1);
-        tags.add(tag2);
-        meta.setTags(tags);
+        Mockito.when(relationsRepository.findTagNamesByBookId(Mockito.anyLong()))
+                .thenReturn(Set.of("Fantasy", "Epic"));
 
         Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Dark"));
 

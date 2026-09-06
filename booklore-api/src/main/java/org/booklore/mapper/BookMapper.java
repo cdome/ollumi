@@ -45,13 +45,6 @@ public interface BookMapper {
                 .toList();
     }
 
-    default Set<String> mapTags(Set<TagEntity> tags) {
-        if (tags == null) return null;
-        return tags.stream()
-                .map(TagEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
     @Named("mapLibraryPathIdOnly")
     default LibraryPath mapLibraryPathIdOnly(LibraryPathEntity entity) {
         if (entity == null) return null;

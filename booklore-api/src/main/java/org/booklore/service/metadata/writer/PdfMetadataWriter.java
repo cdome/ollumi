@@ -374,7 +374,8 @@ public class PdfMetadataWriter implements MetadataWriter {
         helper.copyRanobedbRating(clear != null && clear.isRanobedbRating(), rating -> appendBookloreRating(doc, bookloreDescription, "ranobedbRating", rating));
 
         // Tags (as RDF Bag)
-        helper.copyTags(clear != null && clear.isTags(), tags -> {
+        Set<String> currentTagNames = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+        helper.copyTags(clear != null && clear.isTags(), currentTagNames, tags -> {
             if (tags != null && !tags.isEmpty()) {
                 appendBookloreBag(doc, bookloreDescription, "tags", tags);
             }

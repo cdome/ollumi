@@ -127,12 +127,7 @@ public class KomgaMapper {
                     .collect(Collectors.toList());
         }
         
-        List<String> tags = new ArrayList<>();
-        if (metadata.getTags() != null) {
-            tags = metadata.getTags().stream()
-                    .map(TagEntity::getName)
-                    .collect(Collectors.toList());
-        }
+        List<String> tags = new ArrayList<>(relationsRepository.findTagNamesByBookId(metadata.getBookId()));
         
         return KomgaBookMetadataDto.builder()
                 .title(nullIfEmptyInCleanMode(metadata.getTitle(), ""))
@@ -165,11 +160,7 @@ public class KomgaMapper {
         
         if (firstMetadata != null) {
             genres = new ArrayList<>(relationsRepository.findCategoryNamesByBookId(firstMetadata.getBookId()));
-            if (firstMetadata.getTags() != null) {
-                tags = firstMetadata.getTags().stream()
-                        .map(TagEntity::getName)
-                        .collect(Collectors.toList());
-            }
+            tags = new ArrayList<>(relationsRepository.findTagNamesByBookId(firstMetadata.getBookId()));
         }
         String language = firstMetadata != null ? firstMetadata.getLanguage() : null;
         String description = firstMetadata != null ? firstMetadata.getDescription() : null;
@@ -215,9 +206,7 @@ public class KomgaMapper {
                     metadata.getAuthors().forEach(author -> authorNames.add(author.getName()));
                 }
                 
-                if (metadata.getTags() != null) {
-                    metadata.getTags().forEach(tag -> allTags.add(tag.getName()));
-                }
+                allTags.addAll(relationsRepository.findTagNamesByBookId(metadata.getBookId()));
                 
                 if (releaseDate == null && metadata.getPublishedDate() != null) {
                     releaseDate = metadata.getPublishedDate().format(DATE_FORMATTER);

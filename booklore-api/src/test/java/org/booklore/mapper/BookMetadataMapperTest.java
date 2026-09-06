@@ -19,9 +19,6 @@ public class BookMetadataMapperTest {
     private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Mock
-    private TagMapper tagMapper;
-    
-    @Mock
     private ComicMetadataMapper comicMetadataMapper;
 
     private BookMetadataMapperImpl bookMetadataMapper;
@@ -31,7 +28,6 @@ public class BookMetadataMapperTest {
         bookMetadataMapper = new BookMetadataMapperImpl();
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "authorMapper", authorMapper);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "relationsRepository", relationsRepository);
-        org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "tagMapper", tagMapper);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "comicMetadataMapper", comicMetadataMapper);
     }
 
@@ -44,7 +40,6 @@ public class BookMetadataMapperTest {
         entity.setHardcoverRating(4.5);
         entity.setGoodreadsId("gr-id");
         entity.setAuthors(new java.util.ArrayList<>());
-        entity.setTags(new java.util.HashSet<>());
 
         BookMetadata dto = bookMetadataMapper.toBookMetadata(entity);
 

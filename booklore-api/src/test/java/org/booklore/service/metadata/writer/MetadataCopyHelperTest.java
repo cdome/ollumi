@@ -1,7 +1,6 @@
 package org.booklore.service.metadata.writer;
 
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.TagEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -80,19 +79,15 @@ class MetadataCopyHelperTest {
 
     @Nested
     class TagsTests {
+        // Same reasoning as MoodsTests: filtering blank/null names moved to the writers.
         @Test
         void copyTags_whenNotLocked_callsConsumer() {
-            TagEntity tag1 = new TagEntity();
-            tag1.setName("Fantasy");
-            TagEntity tag2 = new TagEntity();
-            tag2.setName("Epic");
-            metadata.setTags(Set.of(tag1, tag2));
             metadata.setTagsLocked(false);
 
             MetadataCopyHelper helper = new MetadataCopyHelper(metadata);
             AtomicReference<Set<String>> result = new AtomicReference<>();
 
-            helper.copyTags(false, result::set);
+            helper.copyTags(false, Set.of("Fantasy", "Epic"), result::set);
 
             assertNotNull(result.get());
             assertEquals(2, result.get().size());
@@ -102,15 +97,12 @@ class MetadataCopyHelperTest {
 
         @Test
         void copyTags_whenLocked_doesNotCallConsumer() {
-            TagEntity tag = new TagEntity();
-            tag.setName("Fantasy");
-            metadata.setTags(Set.of(tag));
             metadata.setTagsLocked(true);
 
             MetadataCopyHelper helper = new MetadataCopyHelper(metadata);
             AtomicReference<Set<String>> result = new AtomicReference<>();
 
-            helper.copyTags(false, result::set);
+            helper.copyTags(false, Set.of("Fantasy"), result::set);
 
             assertNull(result.get());
         }

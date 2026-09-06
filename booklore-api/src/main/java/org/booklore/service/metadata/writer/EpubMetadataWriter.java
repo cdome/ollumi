@@ -965,9 +965,10 @@ public class EpubMetadataWriter implements MetadataWriter {
             metadataElement.appendChild(createBookloreMetaElement(doc, "moods", moodsJson, epub3));
         }
         
-        if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
-            String tagsJson = "[" + String.join(", ", metadata.getTags().stream()
-                .map(tag -> "\"" + tag.getName().replace("\"", "\\\"") + "\"")
+        java.util.Set<String> tagNames = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+        if (!tagNames.isEmpty()) {
+            String tagsJson = "[" + String.join(", ", tagNames.stream()
+                .map(tag -> "\"" + tag.replace("\"", "\\\"") + "\"")
                 .toList()) + "]";
             metadataElement.appendChild(createBookloreMetaElement(doc, "tags", tagsJson, epub3));
         }

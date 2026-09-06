@@ -41,7 +41,7 @@ public class SidecarMetadataMapper {
                 .pageCount(entity.getPageCount())
                 .categories(relationsRepository.findCategoryNamesByBookId(entity.getBookId()))
                 .moods(relationsRepository.findMoodNamesByBookId(entity.getBookId()))
-                .tags(extractTagNames(entity.getTags()))
+                .tags(relationsRepository.findTagNamesByBookId(entity.getBookId()))
                 .series(buildSeries(entity))
                 .identifiers(buildIdentifiers(entity))
                 .ratings(buildRatings(entity))
@@ -156,13 +156,6 @@ public class SidecarMetadataMapper {
         return entities.stream()
                 .map(AuthorEntity::getName)
                 .toList();
-    }
-
-    private Set<String> extractTagNames(Set<TagEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(TagEntity::getName)
-                .collect(Collectors.toSet());
     }
 
     private SidecarSeries buildSeries(BookMetadataEntity entity) {

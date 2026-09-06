@@ -4,7 +4,6 @@ import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.TagEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -89,10 +88,7 @@ public class MetadataChangeDetectorTest {
                 ))
                 .categoryNames(Set.of("Fiction", "Mystery"))
                 .moodNames(Set.of("Dark", "Suspenseful"))
-                .tags(Set.of(
-                        TagEntity.builder().id(1L).name("Thriller").build(),
-                        TagEntity.builder().id(2L).name("Bestseller").build()
-                ))
+                .tagNames(Set.of("Thriller", "Bestseller"))
                 .build();
 
         newMeta = BookMetadata.builder()
@@ -313,7 +309,7 @@ public class MetadataChangeDetectorTest {
                 .categoriesLocked(false)
                 .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
-                .tags(Set.of(TagEntity.builder().id(1L).name("Thriller").build()))
+                .tagNames(Set.of("Thriller"))
                 .tagsLocked(false)
                 .titleLocked(false)
                 .subtitleLocked(false)
@@ -361,7 +357,7 @@ public class MetadataChangeDetectorTest {
                 .categoriesLocked(false)
                 .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
-                .tags(Set.of(TagEntity.builder().id(1L).name("Tag").build()))
+                .tagNames(Set.of("Tag"))
                 .tagsLocked(false)
                 .titleLocked(false)
                 .subtitleLocked(false)
@@ -670,7 +666,7 @@ public class MetadataChangeDetectorTest {
                 .categoriesLocked(false)
                 .moodNames(Set.of())
                 .moodsLocked(false)
-                .tags(Set.of())
+                .tagNames(Set.of())
                 .tagsLocked(false)
                 .titleLocked(false)
                 .subtitleLocked(false)

@@ -46,7 +46,6 @@ public class BookMetadataUpdater {
 
     private final AuthorRepository authorRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    private final TagRepository tagRepository;
     private final BookRepository bookRepository;
     private final ComicMetadataRepository comicMetadataRepository;
     private final ComicCharacterRepository comicCharacterRepository;
@@ -82,10 +81,11 @@ public class BookMetadataUpdater {
 
         MetadataClearFlags clearFlags = wrapper.getClearFlags();
         BookMetadataEntity metadata = bookEntity.getMetadata();
-        // MetadataChangeDetector's moods/categories fields read the transient scratch caches
+        // MetadataChangeDetector's moods/categories/tags fields read the transient scratch caches
         // (not Hibernate collections) - populate them once here via jOOQ.
         metadata.setMoodNames(relationsRepository.findMoodNamesByBookId(bookId));
         metadata.setCategoryNames(relationsRepository.findCategoryNamesByBookId(bookId));
+        metadata.setTagNames(relationsRepository.findTagNamesByBookId(bookId));
 
         boolean thumbnailRequiresUpdate = StringUtils.hasText(newMetadata.getThumbnailUrl());
         boolean hasMetadataChanges = MetadataChangeDetector.isDifferent(newMetadata, metadata, clearFlags);
@@ -389,39 +389,49 @@ public class BookMetadataUpdater {
         e.setMoodNames(finalMoods);
     }
 
+    /** Same jOOQ-write pattern as updateMoodsIfNeeded; see its doc comment. */
     private void updateTagsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getTagsLocked())) return;
 
-        e.setTags(Optional.ofNullable(e.getTags()).orElseGet(HashSet::new));
+        Set<String> existingTags = Optional.ofNullable(e.getTagNames()).orElse(Collections.emptySet());
 
         if (clear.isTags()) {
-            e.getTags().clear();
+            relationsRepository.clearTagsForBook(e.getBookId());
+            e.setTagNames(Collections.emptySet());
             return;
         }
 
         Set<String> tagNames = Optional.ofNullable(m.getTags()).orElse(Collections.emptySet());
         if (tagNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) e.getTags().clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearTagsForBook(e.getBookId());
+                e.setTagNames(Collections.emptySet());
+            }
             return;
         }
 
-        Set<TagEntity> newTags = tagNames.stream()
+        Set<String> newTags = tagNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> tagRepository.findByName(name)
-                        .orElseGet(() -> tagRepository.save(TagEntity.builder().name(name).build())))
                 .collect(Collectors.toSet());
 
         if (newTags.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getTags().clear();
-            e.getTags().addAll(newTags);
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && e.getTags().isEmpty()) {
-            e.getTags().addAll(newTags);
-        } else if (replaceMode == null) {
-            if (!merge) e.getTags().clear();
-            e.getTags().addAll(newTags);
+        Set<String> finalTags;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                finalTags = new HashSet<>(existingTags);
+                finalTags.addAll(newTags);
+            } else {
+                finalTags = newTags;
+            }
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingTags.isEmpty()) {
+            finalTags = newTags;
+        } else {
+            return;
         }
+
+        relationsRepository.setTagsForBook(e.getBookId(), finalTags);
+        e.setTagNames(finalTags);
     }
 
     private void updateAudiobookMetadataIfNeeded(BookEntity bookEntity, BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, MetadataReplaceMode replaceMode) {

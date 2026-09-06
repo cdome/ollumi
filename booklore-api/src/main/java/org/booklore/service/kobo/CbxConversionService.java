@@ -2,7 +2,6 @@ package org.booklore.service.kobo;
 
 import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.util.ArchiveUtils;
 import org.booklore.util.FileService;
 import org.booklore.util.UnrarHelper;
@@ -637,10 +636,9 @@ public class CbxConversionService {
                 model.put("categories", categoryNames.stream().toList());
             }
 
-            if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
-                model.put("tags", metadata.getTags().stream()
-                        .map(TagEntity::getName)
-                        .toList());
+            java.util.Set<String> tagNames = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+            if (!tagNames.isEmpty()) {
+                model.put("tags", tagNames.stream().toList());
             }
 
             model.put("identifier", "urn:uuid:" + UUID.randomUUID());

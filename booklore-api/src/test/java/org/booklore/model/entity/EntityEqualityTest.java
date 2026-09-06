@@ -47,14 +47,6 @@ class EntityEqualityTest {
 
 
 
-    @Test
-    void tagEntity_shouldBeEqual_whenIdsAreSame() {
-        TagEntity t1 = TagEntity.builder().id(1L).name("Adventure").build();
-        TagEntity t2 = TagEntity.builder().id(1L).name("Mystery").build();
-
-        assertEquals(t1, t2);
-        assertEquals(t1.hashCode(), t2.hashCode());
-    }
 
     @Test
     void unsavedEntities_withNullIds_shouldNotBeEqual() {

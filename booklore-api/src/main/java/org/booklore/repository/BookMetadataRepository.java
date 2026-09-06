@@ -29,7 +29,6 @@ public interface BookMetadataRepository extends JpaRepository<BookMetadataEntity
 
 
 
-    List<BookMetadataEntity> findAllByTagsContaining(TagEntity tag);
 
     List<BookMetadataEntity> findAllBySeriesNameIgnoreCase(String seriesName);
 
