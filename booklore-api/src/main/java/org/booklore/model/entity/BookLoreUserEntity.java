@@ -3,11 +3,8 @@ package org.booklore.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -55,11 +52,6 @@ public class BookLoreUserEntity {
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private UserPermissionsEntity permissions;
-
-    @BatchSize(size = 20)
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<ShelfEntity> shelves = new HashSet<>();
 
     @PrePersist
     public void prePersist() {

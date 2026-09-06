@@ -44,6 +44,8 @@ class BookUpdateServiceTest {
     @Mock
     private JooqShelfRepository jooqShelfRepository;
     @Mock
+    private ShelfRepository shelfRepository;
+    @Mock
     private BookMapper bookMapper;
     @Mock
     private UserRepository userRepository;
@@ -71,6 +73,7 @@ class BookUpdateServiceTest {
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,
                 jooqShelfRepository,
+                shelfRepository,
                 bookMapper,
                 userRepository,
                 jooqUserBookProgressRepository,
@@ -267,11 +270,12 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
+        userEntity.setId(1L);
         ShelfEntity shelf1 = new ShelfEntity();
         shelf1.setId(10L);
         ShelfEntity shelf2 = new ShelfEntity();
         shelf2.setId(20L);
-        userEntity.setShelves(new HashSet<>(Arrays.asList(shelf1, shelf2)));
+        when(shelfRepository.findByUserId(1L)).thenReturn(List.of(shelf1, shelf2));
         when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
 
         Set<Long> bookIds = new HashSet<>(Arrays.asList(1L, 2L));
@@ -320,9 +324,10 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
+        userEntity.setId(1L);
         ShelfEntity shelf1 = new ShelfEntity();
         shelf1.setId(10L);
-        userEntity.setShelves(new HashSet<>(Collections.singletonList(shelf1)));
+        when(shelfRepository.findByUserId(1L)).thenReturn(List.of(shelf1));
         when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
 
         Set<Long> bookIds = new HashSet<>(Collections.singletonList(1L));

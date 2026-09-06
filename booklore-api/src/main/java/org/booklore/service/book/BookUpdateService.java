@@ -42,6 +42,7 @@ public class BookUpdateService {
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     private final JooqShelfRepository jooqShelfRepository;
+    private final ShelfRepository shelfRepository;
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
@@ -203,7 +204,7 @@ public class BookUpdateService {
     }
 
     private void validateShelfOwnership(BookLoreUserEntity user, Set<Long> shelfIdsToAssign, Set<Long> shelfIdsToUnassign) {
-        Set<Long> userShelfIds = user.getShelves().stream()
+        Set<Long> userShelfIds = shelfRepository.findByUserId(user.getId()).stream()
                 .map(ShelfEntity::getId)
                 .collect(Collectors.toSet());
 
