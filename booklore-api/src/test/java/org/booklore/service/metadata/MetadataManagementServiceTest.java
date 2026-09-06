@@ -34,7 +34,6 @@ import static org.mockito.Mockito.*;
 class MetadataManagementServiceTest {
 
     @Mock private AppProperties appProperties;
-    @Mock private AuthorRepository authorRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
     @Mock private AppSettingService appSettingService;
@@ -59,41 +58,21 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateAuthors_mergesOldIntoTargetAndDeletesOld() {
-        AuthorEntity oldAuthor = AuthorEntity.builder().id(1L).name("Old Author").build();
-        AuthorEntity targetAuthor = AuthorEntity.builder().id(2L).name("Target Author").build();
+        long bookId = 15L;
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("Old Author")).thenReturn(List.of(bookId));
+        when(relationsRepository.findAuthorNamesByBookId(bookId))
+                .thenReturn(List.of("Old Author"), List.of("Target Author"));
 
-        when(authorRepository.findByNameIgnoreCase("Target Author")).thenReturn(Optional.of(targetAuthor));
-        when(authorRepository.save(targetAuthor)).thenReturn(targetAuthor);
-        when(authorRepository.findByNameIgnoreCase("Old Author")).thenReturn(Optional.of(oldAuthor));
-
-        List<AuthorEntity> authors = new ArrayList<>(List.of(oldAuthor));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().authors(authors).build();
-        when(bookMetadataRepository.findAllByAuthorsContaining(oldAuthor)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target Author"), List.of("Old Author"));
 
-        assertThat(metadata.getAuthors()).contains(targetAuthor);
-        assertThat(metadata.getAuthors()).doesNotContain(oldAuthor);
-        verify(authorRepository).delete(oldAuthor);
-        verify(bookMetadataRepository).saveAll(anyList());
-    }
-
-    @Test
-    void consolidateAuthors_createsNewAuthorWhenTargetDoesNotExist() {
-        AuthorEntity oldAuthor = AuthorEntity.builder().id(1L).name("Old").build();
-        AuthorEntity newAuthor = AuthorEntity.builder().id(3L).name("New Author").build();
-
-        when(authorRepository.findByNameIgnoreCase("New Author")).thenReturn(Optional.empty());
-        when(authorRepository.save(any(AuthorEntity.class))).thenReturn(newAuthor);
-        when(authorRepository.findByNameIgnoreCase("Old")).thenReturn(Optional.of(oldAuthor));
-
-        List<AuthorEntity> authors = new ArrayList<>(List.of(oldAuthor));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().authors(authors).build();
-        when(bookMetadataRepository.findAllByAuthorsContaining(oldAuthor)).thenReturn(List.of(metadata));
-
-        service.consolidateMetadata(MergeMetadataType.authors, List.of("New Author"), List.of("Old"));
-
-        verify(authorRepository).delete(oldAuthor);
+        verify(relationsRepository).renameOrCreateAuthor("Target Author");
+        verify(relationsRepository).setAuthorsForBook(bookId, List.of("Target Author"));
+        verify(relationsRepository).deleteAuthorByName("Old Author");
+        assertThat(metadata.getAuthorNames()).isEqualTo(List.of("Target Author"));
+        verify(bookMetadataRepository).saveAll(List.of(metadata));
     }
 
     @Test
@@ -199,12 +178,10 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateAuthors_writesMetadataToFileWhenWriterPresent() throws Exception {
-        AuthorEntity oldAuthor = AuthorEntity.builder().id(1L).name("Old").build();
-        AuthorEntity targetAuthor = AuthorEntity.builder().id(2L).name("Target").build();
-
-        when(authorRepository.findByNameIgnoreCase("Target")).thenReturn(Optional.of(targetAuthor));
-        when(authorRepository.save(targetAuthor)).thenReturn(targetAuthor);
-        when(authorRepository.findByNameIgnoreCase("Old")).thenReturn(Optional.of(oldAuthor));
+        long bookId = 1L;
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("Old")).thenReturn(List.of(bookId));
+        when(relationsRepository.findAuthorNamesByBookId(bookId))
+                .thenReturn(List.of("Old"), List.of("Target"));
 
         java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test-metadata-");
         java.nio.file.Path subDir = tempDir.resolve("sub");
@@ -221,17 +198,17 @@ class MetadataManagementServiceTest {
         LibraryPathEntity libraryPath = new LibraryPathEntity();
         libraryPath.setPath(tempDir.toString());
         BookEntity book = BookEntity.builder()
-                .id(1L)
+                .id(bookId)
                 .bookFiles(new ArrayList<>(List.of(bookFile)))
                 .libraryPath(libraryPath)
                 .build();
         BookMetadataEntity metadata = BookMetadataEntity.builder()
-                .authors(new ArrayList<>(List.of(oldAuthor)))
+                .bookId(bookId)
                 .book(book)
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllByAuthorsContaining(oldAuthor)).thenReturn(List.of(metadata));
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         MetadataWriter writer = mock(MetadataWriter.class);
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.of(writer));
@@ -260,12 +237,10 @@ class MetadataManagementServiceTest {
                         .build()
         );
 
-        AuthorEntity oldAuthor = AuthorEntity.builder().id(1L).name("Old").build();
-        AuthorEntity targetAuthor = AuthorEntity.builder().id(2L).name("Target").build();
-
-        when(authorRepository.findByNameIgnoreCase("Target")).thenReturn(Optional.of(targetAuthor));
-        when(authorRepository.save(targetAuthor)).thenReturn(targetAuthor);
-        when(authorRepository.findByNameIgnoreCase("Old")).thenReturn(Optional.of(oldAuthor));
+        long bookId = 1L;
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("Old")).thenReturn(List.of(bookId));
+        when(relationsRepository.findAuthorNamesByBookId(bookId))
+                .thenReturn(List.of("Old"), List.of("Target"));
 
         java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test-metadata-move-");
         java.nio.file.Path subDir = tempDir.resolve("sub");
@@ -282,17 +257,17 @@ class MetadataManagementServiceTest {
         LibraryPathEntity libraryPath = new LibraryPathEntity();
         libraryPath.setPath(tempDir.toString());
         BookEntity book = BookEntity.builder()
-                .id(1L)
+                .id(bookId)
                 .bookFiles(new ArrayList<>(List.of(bookFile)))
                 .libraryPath(libraryPath)
                 .build();
         BookMetadataEntity metadata = BookMetadataEntity.builder()
-                .authors(new ArrayList<>(List.of(oldAuthor)))
+                .bookId(bookId)
                 .book(book)
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllByAuthorsContaining(oldAuthor)).thenReturn(List.of(metadata));
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.empty());
         when(fileMoveService.moveSingleFile(book)).thenReturn(
                 FileMoveResult.builder().moved(true).newFileName("new.epub").newFileSubPath("new/sub").build()
@@ -311,17 +286,17 @@ class MetadataManagementServiceTest {
 
     @Test
     void deleteAuthors_removesFromBooksAndDeletesEntity() {
-        AuthorEntity author = AuthorEntity.builder().id(1L).name("Author1").build();
-        when(authorRepository.findByName("Author1")).thenReturn(Optional.of(author));
+        long bookId = 1L;
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("Author1")).thenReturn(List.of(bookId));
+        when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of("Author1"));
 
-        List<AuthorEntity> authors = new ArrayList<>(List.of(author));
-        BookMetadataEntity metadata = BookMetadataEntity.builder().authors(authors).build();
-        when(bookMetadataRepository.findAllByAuthorsContaining(author)).thenReturn(List.of(metadata));
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.deleteMetadata(MergeMetadataType.authors, List.of("Author1"));
 
-        assertThat(metadata.getAuthors()).isEmpty();
-        verify(authorRepository).delete(author);
+        verify(relationsRepository).setAuthorsForBook(bookId, List.of());
+        verify(relationsRepository).deleteAuthorByName("Author1");
     }
 
     @Test
@@ -425,15 +400,13 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateAuthors_skipsNonExistentMergeValues() {
-        AuthorEntity targetAuthor = AuthorEntity.builder().id(2L).name("Target").build();
-        when(authorRepository.findByNameIgnoreCase("Target")).thenReturn(Optional.of(targetAuthor));
-        when(authorRepository.save(targetAuthor)).thenReturn(targetAuthor);
-        when(authorRepository.findByNameIgnoreCase("NonExistent")).thenReturn(Optional.empty());
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("NonExistent")).thenReturn(List.of());
 
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target"), List.of("NonExistent"));
 
-        verify(bookMetadataRepository, never()).findAllByAuthorsContaining(any());
-        verify(authorRepository, never()).delete(any());
+        verify(relationsRepository).renameOrCreateAuthor("Target");
+        verify(bookMetadataRepository, never()).findAllById(anyList());
+        verify(relationsRepository, never()).deleteAuthorByName(any());
     }
 
     @Test
@@ -496,12 +469,10 @@ class MetadataManagementServiceTest {
                         .build()
         );
 
-        AuthorEntity oldAuthor = AuthorEntity.builder().id(1L).name("Old").build();
-        AuthorEntity targetAuthor = AuthorEntity.builder().id(2L).name("Target").build();
-
-        when(authorRepository.findByNameIgnoreCase("Target")).thenReturn(Optional.of(targetAuthor));
-        when(authorRepository.save(targetAuthor)).thenReturn(targetAuthor);
-        when(authorRepository.findByNameIgnoreCase("Old")).thenReturn(Optional.of(oldAuthor));
+        long bookId = 1L;
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("Old")).thenReturn(List.of(bookId));
+        when(relationsRepository.findAuthorNamesByBookId(bookId))
+                .thenReturn(List.of("Old"), List.of("Target"));
 
         java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test-metadata-nomove-");
         java.nio.file.Path subDir = tempDir.resolve("sub");
@@ -518,17 +489,17 @@ class MetadataManagementServiceTest {
         LibraryPathEntity libraryPath = new LibraryPathEntity();
         libraryPath.setPath(tempDir.toString());
         BookEntity book = BookEntity.builder()
-                .id(1L)
+                .id(bookId)
                 .bookFiles(new ArrayList<>(List.of(bookFile)))
                 .libraryPath(libraryPath)
                 .build();
         BookMetadataEntity metadata = BookMetadataEntity.builder()
-                .authors(new ArrayList<>(List.of(oldAuthor)))
+                .bookId(bookId)
                 .book(book)
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllByAuthorsContaining(oldAuthor)).thenReturn(List.of(metadata));
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.empty());
         when(fileMoveService.moveSingleFile(book)).thenReturn(
                 FileMoveResult.builder().moved(false).build()
@@ -548,12 +519,10 @@ class MetadataManagementServiceTest {
     void consolidateAuthors_networkStorage_skipsFileWrite() {
         when(appProperties.isLocalStorage()).thenReturn(false);
 
-        AuthorEntity oldAuthor = AuthorEntity.builder().id(1L).name("Old").build();
-        AuthorEntity targetAuthor = AuthorEntity.builder().id(2L).name("Target").build();
-
-        when(authorRepository.findByNameIgnoreCase("Target")).thenReturn(Optional.of(targetAuthor));
-        when(authorRepository.save(targetAuthor)).thenReturn(targetAuthor);
-        when(authorRepository.findByNameIgnoreCase("Old")).thenReturn(Optional.of(oldAuthor));
+        long bookId = 1L;
+        when(relationsRepository.findBookIdsByAuthorNameIgnoreCase("Old")).thenReturn(List.of(bookId));
+        when(relationsRepository.findAuthorNamesByBookId(bookId))
+                .thenReturn(List.of("Old"), List.of("Target"));
 
         BookFileEntity bookFile = BookFileEntity.builder()
                 .fileName("test.epub")
@@ -564,21 +533,21 @@ class MetadataManagementServiceTest {
         LibraryPathEntity libraryPath = new LibraryPathEntity();
         libraryPath.setPath("/fake/path");
         BookEntity book = BookEntity.builder()
-                .id(1L)
+                .id(bookId)
                 .bookFiles(new ArrayList<>(List.of(bookFile)))
                 .libraryPath(libraryPath)
                 .build();
         BookMetadataEntity metadata = BookMetadataEntity.builder()
-                .authors(new ArrayList<>(List.of(oldAuthor)))
+                .bookId(bookId)
                 .book(book)
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllByAuthorsContaining(oldAuthor)).thenReturn(List.of(metadata));
+        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target"), List.of("Old"));
 
         verify(metadataWriterFactory, never()).getWriter(any());
-        verify(authorRepository).delete(oldAuthor);
+        verify(relationsRepository).deleteAuthorByName("Old");
     }
 }

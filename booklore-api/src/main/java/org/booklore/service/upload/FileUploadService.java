@@ -17,6 +17,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
@@ -52,6 +53,7 @@ public class FileUploadService {
 
     private final LibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookRepository bookRepository;
     private final BookAdditionalFileRepository additionalFileRepository;
     private final AppSettingService appSettingService;
@@ -127,6 +129,11 @@ public class FileUploadService {
                     book.setLibraryPath(libraryPath);
                 }
 
+                // authors is no longer a Hibernate-managed collection; PathPatternResolver's entity-based
+                // overloads read BookMetadataEntity.authorNames (a @Transient scratch field).
+                if (book.getMetadata() != null) {
+                    book.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(book.getId()));
+                }
                 String pattern = fileMovingHelper.getFileNamingPattern(book.getLibrary());
                 String resolvedRelativePath = PathPatternResolver.resolvePattern(book.getMetadata(), pattern, sanitizedFileName);
                 finalFileName = Paths.get(resolvedRelativePath).getFileName().toString();
@@ -138,6 +145,9 @@ public class FileUploadService {
                 effectiveBookType = BookFileType.fromExtension(extension)
                         .orElseThrow(() -> ApiError.INVALID_FILE_FORMAT.createException("Unsupported book file extension: " + extension));
             } else if (isBook) {
+                if (book.getMetadata() != null) {
+                    book.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(book.getId()));
+                }
                 String pattern = fileMovingHelper.getFileNamingPattern(book.getLibrary());
                 String resolvedRelativePath = PathPatternResolver.resolvePattern(book.getMetadata(), pattern, sanitizedFileName);
                 finalFileName = Paths.get(resolvedRelativePath).getFileName().toString();

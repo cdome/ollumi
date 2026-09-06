@@ -13,9 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class BookMetadataMapperTest {
 
     @Mock
-    private AuthorMapper authorMapper;
-    
-    @Mock
     private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Mock
@@ -26,7 +23,6 @@ public class BookMetadataMapperTest {
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
         bookMetadataMapper = new BookMetadataMapperImpl();
-        org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "authorMapper", authorMapper);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "relationsRepository", relationsRepository);
         org.springframework.test.util.ReflectionTestUtils.setField(bookMetadataMapper, "comicMetadataMapper", comicMetadataMapper);
     }
@@ -39,7 +35,6 @@ public class BookMetadataMapperTest {
         entity.setHardcoverId("hc-id");
         entity.setHardcoverRating(4.5);
         entity.setGoodreadsId("gr-id");
-        entity.setAuthors(new java.util.ArrayList<>());
 
         BookMetadata dto = bookMetadataMapper.toBookMetadata(entity);
 

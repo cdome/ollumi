@@ -266,7 +266,8 @@ public class CbxMetadataWriter implements MetadataWriter {
         helper.copyPageCount(clearFlags != null && clearFlags.isPageCount(), info::setPageCount);
         helper.copyLanguage(clearFlags != null && clearFlags.isLanguage(), info::setLanguageISO);
         
-        helper.copyAuthors(clearFlags != null && clearFlags.isAuthors(), set -> {
+        java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+        helper.copyAuthors(clearFlags != null && clearFlags.isAuthors(), currentAuthorNames, set -> {
             info.setWriter(joinStrings(set));
             info.setPenciller(null);
             info.setInker(null);
@@ -752,7 +753,7 @@ public class CbxMetadataWriter implements MetadataWriter {
         return null;
     }
 
-    private String joinStrings(Set<String> values) {
+    private String joinStrings(java.util.Collection<String> values) {
         return (values == null || values.isEmpty()) ? null : String.join(", ", values);
     }
 

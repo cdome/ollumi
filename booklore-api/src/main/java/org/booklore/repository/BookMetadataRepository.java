@@ -25,7 +25,6 @@ public interface BookMetadataRepository extends JpaRepository<BookMetadataEntity
     @Query("UPDATE BookMetadataEntity m SET m.audiobookCoverUpdatedOn = :timestamp WHERE m.bookId = :bookId")
     void updateAudiobookCoverTimestamp(@Param("bookId") Long bookId, @Param("timestamp") Instant timestamp);
 
-    List<BookMetadataEntity> findAllByAuthorsContaining(AuthorEntity author);
 
 
 

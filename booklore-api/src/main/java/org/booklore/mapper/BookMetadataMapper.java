@@ -6,7 +6,7 @@ import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.mapstruct.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
-@Mapper(componentModel = "spring", uses = {AuthorMapper.class, ComicMetadataMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(componentModel = "spring", uses = {ComicMetadataMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class BookMetadataMapper {
 
     @Autowired
@@ -42,6 +42,12 @@ public abstract class BookMetadataMapper {
     @AfterMapping
     protected void mapTags(BookMetadataEntity bookMetadataEntity, @MappingTarget BookMetadata bookMetadata) {
         bookMetadata.setTags(relationsRepository.findTagNamesByBookId(bookMetadataEntity.getBookId()));
+    }
+
+    /** Same reasoning as mapMoods: authors is no longer a Hibernate-managed collection. */
+    @AfterMapping
+    protected void mapAuthors(BookMetadataEntity bookMetadataEntity, @MappingTarget BookMetadata bookMetadata) {
+        bookMetadata.setAuthors(relationsRepository.findAuthorNamesByBookId(bookMetadataEntity.getBookId()));
     }
 
     @Named("withRelations")

@@ -289,9 +289,7 @@ public class KoboEntitlementService {
                 .imprint(metadata.getPublisher())
                 .build();
 
-        List<String> authors = Optional.ofNullable(metadata.getAuthors())
-                .map(list -> list.stream().map(AuthorEntity::getName).toList())
-                .orElse(Collections.emptyList());
+        List<String> authors = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
 
         List<String> categories = new ArrayList<>(relationsRepository.findCategoryNamesByBookId(metadata.getBookId()));
 

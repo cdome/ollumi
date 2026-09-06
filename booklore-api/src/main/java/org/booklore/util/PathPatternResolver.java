@@ -1,7 +1,6 @@
 package org.booklore.util;
 
 import org.booklore.model.dto.BookMetadata;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
@@ -532,14 +531,11 @@ public class PathPatternResolver {
             return metadata.getSubtitle();
         }
 
+        // authors is no longer a Hibernate-managed collection; the caller must populate
+        // metadata.setAuthorNames(...) via jOOQ before invoking resolvePattern with an entity.
         @Override
         public List<String> getAuthors() {
-            return metadata.getAuthors() != null
-                    ? metadata.getAuthors()
-                    .stream()
-                    .map(AuthorEntity::getName)
-                    .toList()
-                    : Collections.emptyList();
+            return metadata.getAuthorNames() != null ? metadata.getAuthorNames() : Collections.emptyList();
         }
 
         @Override

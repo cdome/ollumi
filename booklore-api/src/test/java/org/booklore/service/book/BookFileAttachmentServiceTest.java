@@ -37,6 +37,7 @@ class BookFileAttachmentServiceTest {
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
     @Mock private MonitoringRegistrationService monitoringRegistrationService;

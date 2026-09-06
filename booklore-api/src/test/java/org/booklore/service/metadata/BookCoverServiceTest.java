@@ -42,6 +42,7 @@ class BookCoverServiceTest {
 
     @Mock private AppProperties appProperties;
     @Mock private BookRepository bookRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private NotificationService notificationService;
     @Mock private AppSettingService appSettingService;
@@ -58,6 +59,7 @@ class BookCoverServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(appProperties.isLocalStorage()).thenReturn(true);
+        lenient().when(relationsRepository.findAuthorNamesByBookId(anyLong())).thenReturn(List.of());
     }
 
     private BookEntity buildBook(long id, boolean coverLocked) {
@@ -369,8 +371,7 @@ class BookCoverServiceTest {
         @Test
         void generatesCoverWithTitleAndAuthor() {
             BookEntity book = buildBook(1L, false);
-            AuthorEntity author = AuthorEntity.builder().name("Jane Doe").build();
-            book.getMetadata().setAuthors(List.of(author));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Jane Doe"));
             book.setBookFiles(new ArrayList<>());
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateCover("Test Book", "Jane Doe")).thenReturn(new byte[]{1, 2, 3});
@@ -607,8 +608,7 @@ class BookCoverServiceTest {
         @Test
         void successfullyGeneratesCustomAudiobookCover() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            AuthorEntity author = AuthorEntity.builder().name("Author Name").build();
-            book.getMetadata().setAuthors(List.of(author));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Author Name"));
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateSquareCover("Test Audiobook", "Author Name")).thenReturn(new byte[]{1, 2});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
@@ -641,7 +641,7 @@ class BookCoverServiceTest {
         @Test
         void handlesNullAuthors() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            book.getMetadata().setAuthors(null);
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateSquareCover("Test Audiobook", null)).thenReturn(new byte[]{1});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
@@ -1039,7 +1039,7 @@ class BookCoverServiceTest {
         @Test
         void returnsNullForEmptyAuthors() {
             BookEntity book = buildBook(1L, false);
-            book.getMetadata().setAuthors(new ArrayList<>());
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateCover("Test Book", null)).thenReturn(new byte[]{1});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
@@ -1052,10 +1052,7 @@ class BookCoverServiceTest {
         @Test
         void joinsMultipleAuthorNames() {
             BookEntity book = buildBook(1L, false);
-            List<AuthorEntity> authors = new ArrayList<>();
-            authors.add(AuthorEntity.builder().name("Alice").build());
-            authors.add(AuthorEntity.builder().name("Bob").build());
-            book.getMetadata().setAuthors(authors);
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Alice", "Bob"));
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
             when(coverImageGenerator.generateCover(eq("Test Book"), argThat(s -> s.contains("Alice") && s.contains("Bob"))))
                     .thenReturn(new byte[]{1});

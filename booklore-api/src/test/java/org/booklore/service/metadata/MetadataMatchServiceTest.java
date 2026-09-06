@@ -2,7 +2,6 @@ package org.booklore.service.metadata;
 
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataMatchWeights;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.service.appsettings.AppSettingService;
@@ -157,11 +156,12 @@ class MetadataMatchServiceTest {
         @Test
         void scoresMultipleFieldsProportionally() {
             stubWeights(defaultWeights);
+            when(relationsRepository.findAuthorNamesByBookId(anyLong())).thenReturn(List.of("Author"));
 
             BookMetadataEntity metadata = BookMetadataEntity.builder()
                     .title("Title")
                     .description("Desc")
-                    .authors(List.of(AuthorEntity.builder().name("Author").build()))
+                    .authorNames(List.of("Author"))
                     .build();
             BookEntity book = bookWith(metadata);
 
@@ -175,12 +175,13 @@ class MetadataMatchServiceTest {
         void scoresAllFieldsFullyPopulated() {
             stubWeights(defaultWeights);
             when(relationsRepository.findCategoryNamesByBookId(anyLong())).thenReturn(Set.of("Fiction"));
+            when(relationsRepository.findAuthorNamesByBookId(anyLong())).thenReturn(List.of("Author"));
 
             BookMetadataEntity metadata = BookMetadataEntity.builder()
                     .title("Title")
                     .subtitle("Subtitle")
                     .description("Description")
-                    .authors(List.of(AuthorEntity.builder().name("Author").build()))
+                    .authorNames(List.of("Author"))
                     .publisher("Publisher")
                     .publishedDate(LocalDate.now())
                     .seriesName("Series")
@@ -269,7 +270,7 @@ class MetadataMatchServiceTest {
                     .build();
             stubWeights(weights);
 
-            BookEntity book = bookWith(BookMetadataEntity.builder().authors(new ArrayList<>()).build());
+            BookEntity book = bookWith(BookMetadataEntity.builder().authorNames(new ArrayList<>()).build());
             assertThat(service.calculateMatchScore(book)).isEqualTo(0f);
         }
     }
@@ -375,7 +376,7 @@ class MetadataMatchServiceTest {
             stubWeights(weights);
 
             BookEntity book = bookWith(BookMetadataEntity.builder()
-                    .authors(new ArrayList<>())
+                    .authorNames(new ArrayList<>())
                     .authorsLocked(true)
                     .build());
 

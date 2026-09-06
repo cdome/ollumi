@@ -7,6 +7,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqAnnotationRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -33,7 +35,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
     private BookRepository bookRepository;
 
     @Autowired
-    private AuthorRepository authorRepository;
+    private JooqBookMetadataRelationsRepository relationsRepository;
 
     @Autowired
     private JooqAnnotationRepository annotationRepository;
@@ -86,7 +88,6 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
                 .title(title)
                 .language("en")
                 .build();
-        metadata.setAuthors(new ArrayList<>());
         metadata.updateSearchText();
         book.setMetadata(metadata);
 
@@ -503,9 +504,8 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Author Book " + UUID.randomUUID());
-        AuthorEntity author = data.createAuthor("App Author " + UUID.randomUUID());
-        book.getMetadata().getAuthors().add(author);
-        bookRepository.save(book);
+        AuthorRow author = data.createAuthor("App Author " + UUID.randomUUID());
+        relationsRepository.setAuthorsForBook(book.getId(), List.of(author.getName()));
 
         ResponseEntity<AppPageResponse<AppAuthorSummary>> response = rest.exchange(
                 baseUrl() + "/api/v1/app/authors",
@@ -525,9 +525,8 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Author Detail Book " + UUID.randomUUID());
-        AuthorEntity author = data.createAuthor("App Author Detail " + UUID.randomUUID());
-        book.getMetadata().getAuthors().add(author);
-        bookRepository.save(book);
+        AuthorRow author = data.createAuthor("App Author Detail " + UUID.randomUUID());
+        relationsRepository.setAuthorsForBook(book.getId(), List.of(author.getName()));
 
         ResponseEntity<AppAuthorDetail> response = rest.exchange(
                 baseUrl() + "/api/v1/app/authors/" + author.getId(),
@@ -711,9 +710,8 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Filter Book " + UUID.randomUUID());
-        AuthorEntity author = data.createAuthor("Filter Author " + UUID.randomUUID());
-        book.getMetadata().getAuthors().add(author);
-        bookRepository.save(book);
+        AuthorRow author = data.createAuthor("Filter Author " + UUID.randomUUID());
+        relationsRepository.setAuthorsForBook(book.getId(), List.of(author.getName()));
 
         ResponseEntity<AppFilterOptions> response = rest.exchange(
                 baseUrl() + "/api/v1/app/filter-options?libraryId=" + library.getId(),

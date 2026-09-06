@@ -118,6 +118,12 @@ public class BookFileDetachmentService {
             if (!sourceTags.isEmpty()) {
                 relationsRepository.setTagsForBook(newBook.getId(), sourceTags);
             }
+            List<String> sourceAuthors = relationsRepository.findAuthorNamesByBookId(sourceBook.getId());
+            if (!sourceAuthors.isEmpty()) {
+                relationsRepository.setAuthorsForBook(newBook.getId(), sourceAuthors);
+                newMetadata.setAuthorNames(sourceAuthors);
+                newMetadata.updateSearchText();
+            }
         }
 
         try {
@@ -178,10 +184,6 @@ public class BookFileDetachmentService {
         copy.setAbridged(source.getAbridged());
         copy.setAgeRating(source.getAgeRating());
         copy.setContentRating(source.getContentRating());
-
-        if (source.getAuthors() != null) {
-            copy.setAuthors(new ArrayList<>(source.getAuthors()));
-        }
 
         return copy;
     }

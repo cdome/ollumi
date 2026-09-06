@@ -253,4 +253,63 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
         dsl.deleteFrom(TAG).where(TAG.NAME.eq(name)).execute()
 
     fun countAllTags(): Long = dsl.fetchCount(TAG).toLong()
+
+    // ========================================================================
+    // Writes — replace a book's author junction rows. Unlike mood/category/tag, authors are ORDERED
+    // (a List, not a Set) with a persisted sort_order, so every call rewrites sort_order 0..n-1 for the
+    // given order, not just an unordered upsert. Replaces the JPA cascade of BookMetadataEntity.authors.
+    // ========================================================================
+
+    fun clearAuthorsForBook(bookId: Long) {
+        dsl.deleteFrom(bam).where(bam.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setAuthorsForBook(bookId: Long, authorNames: List<String>) {
+        dsl.deleteFrom(bam).where(bam.BOOK_ID.eq(bookId)).execute()
+        var sortOrder = 0
+        val seen = HashSet<Long>()
+        for (name in authorNames) {
+            if (name.isBlank()) continue
+            val authorId = upsertAuthorId(name)
+            if (!seen.add(authorId)) continue
+            dsl.insertInto(bam).set(bam.BOOK_ID, bookId).set(bam.AUTHOR_ID, authorId).set(bam.SORT_ORDER, sortOrder).execute()
+            sortOrder++
+        }
+    }
+
+    /** Find-or-create the author master row by name (name is UNIQUE), returning its id. */
+    private fun upsertAuthorId(name: String): Long {
+        val existing = dsl.select(AUTHOR.ID).from(AUTHOR).where(AUTHOR.NAME.eq(name)).fetchOne(AUTHOR.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(AUTHOR).set(AUTHOR.NAME, name).returning(AUTHOR.ID).fetchOne()!!.id!!
+    }
+
+    // ========================================================================
+    // Author master-row maintenance (consolidate/delete admin flows in MetadataManagementService, and
+    // the inverse lookup AuthorMetadataService.deleteAuthors needs now that the mappedBy collection on
+    // AuthorEntity is gone).
+    // ========================================================================
+
+    fun findBookIdsByAuthorNameIgnoreCase(name: String): List<Long> =
+        dsl.select(bam.BOOK_ID)
+            .from(bam).join(AUTHOR).on(AUTHOR.ID.eq(bam.AUTHOR_ID))
+            .where(AUTHOR.NAME.equalIgnoreCase(name))
+            .fetch(bam.BOOK_ID)
+
+    fun findBookIdsByAuthorId(authorId: Long): List<Long> =
+        dsl.select(bam.BOOK_ID).from(bam).where(bam.AUTHOR_ID.eq(authorId)).fetch(bam.BOOK_ID)
+
+    fun renameOrCreateAuthor(name: String) {
+        val existingId = dsl.select(AUTHOR.ID).from(AUTHOR).where(AUTHOR.NAME.equalIgnoreCase(name)).fetchOne(AUTHOR.ID)
+        if (existingId != null) {
+            dsl.update(AUTHOR).set(AUTHOR.NAME, name).where(AUTHOR.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(AUTHOR).set(AUTHOR.NAME, name).execute()
+        }
+    }
+
+    fun deleteAuthorByName(name: String): Int =
+        dsl.deleteFrom(AUTHOR).where(AUTHOR.NAME.eq(name)).execute()
+
+    fun countAllAuthors(): Long = dsl.fetchCount(AUTHOR).toLong()
 }

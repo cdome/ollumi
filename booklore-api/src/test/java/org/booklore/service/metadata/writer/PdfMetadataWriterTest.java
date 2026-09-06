@@ -7,7 +7,6 @@ import org.apache.pdfbox.pdmodel.common.PDMetadata;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
@@ -91,11 +90,8 @@ class PdfMetadataWriterTest {
         meta.setLanguage("en");
         meta.setPageCount(754);
         
-        List<AuthorEntity> authors = new ArrayList<>();
-        AuthorEntity author = new AuthorEntity();
-        author.setName("Jason C McDonald");
-        authors.add(author);
-        meta.setAuthors(authors);
+        Mockito.when(relationsRepository.findAuthorNamesByBookId(Mockito.anyLong()))
+                .thenReturn(List.of("Jason C McDonald"));
 
         writer.saveMetadataToFile(pdf, meta, null, null);
 

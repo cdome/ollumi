@@ -134,6 +134,7 @@ public class PdfMetadataWriter implements MetadataWriter {
         PDDocumentInformation info = pdf.getDocumentInformation();
         MetadataCopyHelper helper = new MetadataCopyHelper(entity);
         java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(entity.getBookId());
+        java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(entity.getBookId());
 
         // Build categories-only keywords for PDF legacy compatibility (Info Dictionary)
         // Moods and tags are stored separately in XMP booklore namespace, so they should NOT be in Info Dict keywords
@@ -146,7 +147,7 @@ public class PdfMetadataWriter implements MetadataWriter {
 
         helper.copyTitle(clear != null && clear.isTitle(), title -> info.setTitle(title != null ? title : ""));
         helper.copyPublisher(clear != null && clear.isPublisher(), pub -> info.setProducer(pub != null ? pub : ""));
-        helper.copyAuthors(clear != null && clear.isAuthors(), authors -> info.setAuthor(authors != null ? String.join(", ", authors) : ""));
+        helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, authors -> info.setAuthor(authors != null ? String.join(", ", authors) : ""));
         helper.copyPublishedDate(clear != null && clear.isPublishedDate(), date -> {
             Calendar cal = Calendar.getInstance();
             cal.setTimeInMillis((date != null ? date : ZonedDateTime.now().toLocalDate())
@@ -190,7 +191,7 @@ public class PdfMetadataWriter implements MetadataWriter {
             });
 
             // Clean author names (normalize whitespace)
-            helper.copyAuthors(clear != null && clear.isAuthors(), authors -> {
+            helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, authors -> {
                 if (authors != null && !authors.isEmpty()) {
                     authors.stream()
                         .map(name -> name.replaceAll("\\s+", " ").trim())

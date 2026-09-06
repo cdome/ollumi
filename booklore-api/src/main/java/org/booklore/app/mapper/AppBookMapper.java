@@ -26,16 +26,6 @@ public interface AppBookMapper {
     // mapCategories, which existed only to support toDetail's categories mapping and referenced the
     // now-removed BookMetadataEntity.categories Hibernate collection via CategoryEntity.
 
-    @Named("mapAuthors")
-    default List<String> mapAuthors(List<AuthorEntity> authors) {
-        if (authors == null || authors.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return authors.stream()
-                .map(AuthorEntity::getName)
-                .toList();
-    }
-
     @Named("mapThumbnailUrl")
     default String mapThumbnailUrl(BookEntity book) {
         if (book == null || book.getId() == null) {

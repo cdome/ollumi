@@ -29,7 +29,6 @@ import java.util.Set;
 public class MetadataManagementService {
 
     private final AppProperties appProperties;
-    private final AuthorRepository authorRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final AppSettingService appSettingService;
@@ -91,41 +90,35 @@ public class MetadataManagementService {
     }
 
     private void consolidateAuthors(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
-        List<AuthorEntity> targetAuthors = targetValues.stream()
-                .map(name -> authorRepository.findByNameIgnoreCase(name)
-                        .map(existing -> {
-                            existing.setName(name);
-                            return authorRepository.save(existing);
-                        })
-                        .orElseGet(() -> {
-                            AuthorEntity author = new AuthorEntity();
-                            author.setName(name);
-                            return authorRepository.save(author);
-                        }))
-                .toList();
+        targetValues.forEach(relationsRepository::renameOrCreateAuthor);
 
-        List<AuthorEntity> authorsToMerge = valuesToMerge.stream()
-                .map(authorRepository::findByNameIgnoreCase)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (AuthorEntity oldAuthor : authorsToMerge) {
-            List<BookMetadataEntity> booksWithOldAuthor = bookMetadataRepository.findAllByAuthorsContaining(oldAuthor);
-
-            for (BookMetadataEntity metadata : booksWithOldAuthor) {
-                metadata.getAuthors().remove(oldAuthor);
-                metadata.getAuthors().addAll(targetAuthors);
-                metadata.updateSearchText();
+        for (String oldAuthorName : valuesToMerge) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByAuthorNameIgnoreCase(oldAuthorName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
+            for (Long bookId : affectedBookIds) {
+                List<String> finalAuthors = new java.util.ArrayList<>(relationsRepository.findAuthorNamesByBookId(bookId));
+                finalAuthors.remove(oldAuthorName);
+                for (String targetName : targetValues) {
+                    if (!finalAuthors.contains(targetName)) finalAuthors.add(targetName);
+                }
+                relationsRepository.setAuthorsForBook(bookId, finalAuthors);
+            }
+
+            List<BookMetadataEntity> booksWithOldAuthor = bookMetadataRepository.findAllById(affectedBookIds);
+            for (BookMetadataEntity metadata : booksWithOldAuthor) {
+                metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
+                metadata.updateSearchText();
+            }
             bookMetadataRepository.saveAll(booksWithOldAuthor);
             bookMetadataRepository.flush();
             writeMetadataToFile(booksWithOldAuthor, moveFile);
-            authorRepository.delete(oldAuthor);
+            relationsRepository.deleteAuthorByName(oldAuthorName);
         }
 
-        log.info("Consolidated {} authors into {}: {}", authorsToMerge.size(), targetValues, valuesToMerge);
+        log.info("Consolidated {} authors into {}: {}", valuesToMerge.size(), targetValues, valuesToMerge);
     }
 
     private void consolidateCategories(List<String> targetValues, List<String> valuesToMerge, boolean moveFile) {
@@ -277,26 +270,24 @@ public class MetadataManagementService {
     }
 
     private void deleteAuthors(List<String> valuesToDelete, boolean moveFile) {
-        List<AuthorEntity> authorsToDelete = valuesToDelete.stream()
-                .map(authorRepository::findByName)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        for (AuthorEntity author : authorsToDelete) {
-            List<BookMetadataEntity> booksWithAuthor = bookMetadataRepository.findAllByAuthorsContaining(author);
-
-            for (BookMetadataEntity metadata : booksWithAuthor) {
-                metadata.getAuthors().remove(author);
+        for (String authorName : valuesToDelete) {
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByAuthorNameIgnoreCase(authorName);
+            if (affectedBookIds.isEmpty()) {
+                continue;
             }
 
-            bookMetadataRepository.saveAll(booksWithAuthor);
-            bookMetadataRepository.flush();
+            for (Long bookId : affectedBookIds) {
+                List<String> finalAuthors = new java.util.ArrayList<>(relationsRepository.findAuthorNamesByBookId(bookId));
+                finalAuthors.remove(authorName);
+                relationsRepository.setAuthorsForBook(bookId, finalAuthors);
+            }
+
+            List<BookMetadataEntity> booksWithAuthor = bookMetadataRepository.findAllById(affectedBookIds);
             writeMetadataToFile(booksWithAuthor, moveFile);
-            authorRepository.delete(author);
+            relationsRepository.deleteAuthorByName(authorName);
         }
 
-        log.info("Deleted {} authors: {}", authorsToDelete.size(), valuesToDelete);
+        log.info("Deleted {} authors: {}", valuesToDelete.size(), valuesToDelete);
     }
 
     private void deleteCategories(List<String> valuesToDelete, boolean moveFile) {

@@ -3,6 +3,7 @@ package org.booklore.service.metadata.writer;
 import org.booklore.model.entity.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -161,16 +162,13 @@ public class MetadataCopyHelper {
         }
     }
 
-    public void copyAuthors(boolean clear, Consumer<Set<String>> consumer) {
+    /** Same reasoning as copyMoods/copyCategories/copyTags: authors (ordered) is no longer Hibernate-managed. */
+    public void copyAuthors(boolean clear, List<String> currentAuthorNames, Consumer<List<String>> consumer) {
         if (!isLocked(metadata.getAuthorsLocked())) {
             if (clear) {
-                consumer.accept(Set.of());
-            } else if (metadata.getAuthors() != null) {
-                Set<String> names = metadata.getAuthors().stream()
-                        .map(AuthorEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(names);
+                consumer.accept(List.of());
+            } else if (currentAuthorNames != null) {
+                consumer.accept(currentAuthorNames);
             }
         }
     }

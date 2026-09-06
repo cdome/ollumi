@@ -367,14 +367,15 @@ public class BookMetadataEntity {
     @JoinColumn(name = "book_id", referencedColumnName = "book_id", insertable = false, updatable = false)
     private ComicMetadataEntity comicMetadata;
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    @JoinTable(
-            name = "book_metadata_author_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "author_id"))
-    @Fetch(FetchMode.SUBSELECT)
-    @OrderColumn(name = "sort_order")
-    private List<AuthorEntity> authors;
+    /**
+     * See moodNames/categoryNames/tagNames: same @Transient same-request scratch cache, not persisted.
+     * Also read by updateSearchText()'s @PrePersist/@PreUpdate hook via BookUtils.buildSearchText, so
+     * whoever writes authors via jOOQ must populate this before triggering a save in the same request
+     * (mirrors the pre-existing behavior: mutating the old Hibernate collection didn't dirty-check
+     * automatically either, hence the manual updateSearchText() calls already present at every writer).
+     */
+    @Transient
+    private List<String> authorNames;
 
     /** See moodNames: same @Transient same-request scratch cache, not persisted. */
     @Transient

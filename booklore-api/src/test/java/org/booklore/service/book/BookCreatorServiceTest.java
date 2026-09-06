@@ -1,6 +1,5 @@
 package org.booklore.service.book;
 
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.repository.*;
@@ -25,7 +24,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookCreatorServiceTest {
 
-    @Mock private AuthorRepository authorRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private BookRepository bookRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
@@ -50,40 +48,26 @@ class BookCreatorServiceTest {
     void addAuthorsToBook_nullAuthors_doesNothing() {
         bookCreatorService.addAuthorsToBook(null, bookEntity);
 
-        assertNull(bookEntity.getMetadata().getAuthors());
-        verifyNoInteractions(authorRepository);
+        assertNull(bookEntity.getMetadata().getAuthorNames());
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addAuthorsToBook_emptyAuthors_doesNothing() {
         bookCreatorService.addAuthorsToBook(Set.of(), bookEntity);
 
-        assertNull(bookEntity.getMetadata().getAuthors());
-        verifyNoInteractions(authorRepository);
+        assertNull(bookEntity.getMetadata().getAuthorNames());
+        verifyNoInteractions(relationsRepository);
     }
 
     @Test
     void addAuthorsToBook_validAuthors_addsToBook() {
-        AuthorEntity author = AuthorEntity.builder().name("Test Author").build();
-        when(authorRepository.findByName("Test Author")).thenReturn(Optional.of(author));
+        bookEntity.setId(1L);
 
         bookCreatorService.addAuthorsToBook(Set.of("Test Author"), bookEntity);
 
-        assertNotNull(bookEntity.getMetadata().getAuthors());
-        assertEquals(1, bookEntity.getMetadata().getAuthors().size());
-    }
-
-    @Test
-    void addAuthorsToBook_nullExistingAuthorsOnEntity_initializesSet() {
-        assertNull(bookEntity.getMetadata().getAuthors());
-
-        AuthorEntity author = AuthorEntity.builder().name("Author").build();
-        when(authorRepository.findByName("Author")).thenReturn(Optional.of(author));
-
-        bookCreatorService.addAuthorsToBook(Set.of("Author"), bookEntity);
-
-        assertNotNull(bookEntity.getMetadata().getAuthors());
-        assertTrue(bookEntity.getMetadata().getAuthors().contains(author));
+        verify(relationsRepository).setAuthorsForBook(1L, List.of("Test Author"));
+        assertEquals(List.of("Test Author"), bookEntity.getMetadata().getAuthorNames());
     }
 
     @Test
@@ -156,27 +140,13 @@ class BookCreatorServiceTest {
     }
 
     @Test
-    void addAuthorsToBook_existingAuthorsOnEntity_appendsWithoutOverwriting() {
-        AuthorEntity existingAuthor = AuthorEntity.builder().name("Existing").build();
-        bookEntity.getMetadata().setAuthors(new ArrayList<>(List.of(existingAuthor)));
-
-        AuthorEntity newAuthor = AuthorEntity.builder().name("New Author").build();
-        when(authorRepository.findByName("New Author")).thenReturn(Optional.of(newAuthor));
+    void addAuthorsToBook_existingAuthorsOnEntity_replacesThem() {
+        bookEntity.setId(1L);
+        bookEntity.getMetadata().setAuthorNames(new ArrayList<>(List.of("Existing")));
 
         bookCreatorService.addAuthorsToBook(Set.of("New Author"), bookEntity);
 
-        assertEquals(2, bookEntity.getMetadata().getAuthors().size());
-    }
-
-    @Test
-    void addAuthorsToBook_newAuthorNotInRepo_savesAndAdds() {
-        AuthorEntity saved = AuthorEntity.builder().name("Brand New").build();
-        when(authorRepository.findByName("Brand New")).thenReturn(Optional.empty());
-        when(authorRepository.save(any())).thenReturn(saved);
-
-        bookCreatorService.addAuthorsToBook(Set.of("Brand New"), bookEntity);
-
-        verify(authorRepository).save(any());
-        assertEquals(1, bookEntity.getMetadata().getAuthors().size());
+        verify(relationsRepository).setAuthorsForBook(1L, List.of("New Author"));
+        assertEquals(List.of("New Author"), bookEntity.getMetadata().getAuthorNames());
     }
 }

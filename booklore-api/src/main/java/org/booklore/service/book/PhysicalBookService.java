@@ -5,11 +5,9 @@ import org.booklore.exception.APIException;
 import org.booklore.mapper.BookMapper;
 import org.booklore.model.dto.Book;
 import org.booklore.model.dto.request.CreatePhysicalBookRequest;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.util.BookCoverUtils;
@@ -37,7 +35,6 @@ public class PhysicalBookService {
 
     private final BookRepository bookRepository;
     private final LibraryRepository libraryRepository;
-    private final AuthorRepository authorRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final BookMapper bookMapper;
     private final FileService fileService;
@@ -70,15 +67,17 @@ public class PhysicalBookService {
 
         bookEntity.setMetadata(metadata);
 
-        if (request.getAuthors() != null && !request.getAuthors().isEmpty()) {
-            addAuthorsToBook(new ArrayList<>(request.getAuthors()), bookEntity);
-        }
-
-        BookEntity savedBook = bookRepository.save(bookEntity);
+        // saveAndFlush (not save): the authors/categories writes below go through jOOQ on the same
+        // connection, keyed by the book's generated id - the cascaded book_metadata insert must be
+        // physically committed to the DB first, or the FK on book_metadata_author_mapping/
+        // book_metadata_category_mapping fails since a plain save() can defer the child insert.
+        BookEntity savedBook = bookRepository.saveAndFlush(bookEntity);
         log.info("Created physical book '{}' in library {} with id {}", request.getTitle(), library.getName(), savedBook.getId());
 
-        // categories write via jOOQ, keyed by the book's generated id, so this must run after the save
-        // (IDENTITY generation + the metadata cascade means book_metadata already exists at this point).
+        if (request.getAuthors() != null && !request.getAuthors().isEmpty()) {
+            addAuthorsToBook(new ArrayList<>(request.getAuthors()), savedBook);
+        }
+
         if (request.getCategories() != null && !request.getCategories().isEmpty()) {
             addCategoriesToBook(new HashSet<>(request.getCategories()), savedBook);
         }
@@ -127,14 +126,9 @@ public class PhysicalBookService {
     }
 
     private void addAuthorsToBook(List<String> authors, BookEntity bookEntity) {
-        if (bookEntity.getMetadata().getAuthors() == null) {
-            bookEntity.getMetadata().setAuthors(new ArrayList<>());
-        }
-        authors.stream()
-                .map(authorName -> truncate(authorName, 255))
-                .map(authorName -> authorRepository.findByName(authorName)
-                        .orElseGet(() -> authorRepository.save(AuthorEntity.builder().name(authorName).build())))
-                .forEach(authorEntity -> bookEntity.getMetadata().getAuthors().add(authorEntity));
+        List<String> truncated = authors.stream().map(name -> truncate(name, 255)).toList();
+        relationsRepository.setAuthorsForBook(bookEntity.getId(), truncated);
+        bookEntity.getMetadata().setAuthorNames(truncated);
         bookEntity.getMetadata().updateSearchText();
     }
 

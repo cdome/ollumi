@@ -1,7 +1,6 @@
 package org.booklore.it;
 
 import org.booklore.it.util.AuthTestHelper;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
@@ -10,7 +9,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
@@ -53,9 +51,6 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
     private JooqBookMetadataRelationsRepository relationsRepository;
-
-    @Autowired
-    private AuthorRepository authorRepository;
 
     @Autowired
     private BookFileRepository bookFileRepository;
@@ -605,9 +600,8 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = data.createBook(library, title);
         BookMetadataEntity metadata = book.getMetadata();
-        AuthorEntity author = authorRepository.save(AuthorEntity.builder().name(authorName).build());
+        relationsRepository.setAuthorsForBook(metadata.getBookId(), List.of(authorName));
         relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
-        metadata.setAuthors(new ArrayList<>(List.of(author)));
         metadata.setPageCount(300);
         bookMetadataRepository.save(metadata);
         return book;

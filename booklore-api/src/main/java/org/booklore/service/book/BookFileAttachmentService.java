@@ -13,6 +13,7 @@ import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
@@ -39,6 +40,7 @@ public class BookFileAttachmentService {
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final MonitoringRegistrationService monitoringRegistrationService;
@@ -153,6 +155,11 @@ public class BookFileAttachmentService {
 
     private List<Long> attachWithFileMove(BookEntity targetBook, List<BookEntity> sourceBooks,
                                           BookFileEntity targetPrimaryFile) {
+        // authors is no longer a Hibernate-managed collection; PathPatternResolver's entity-based
+        // overloads read BookMetadataEntity.authorNames (a @Transient scratch field).
+        if (targetBook.getMetadata() != null) {
+            targetBook.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(targetBook.getId()));
+        }
         String fileNamingPattern = fileMoveHelper.getFileNamingPattern(targetBook.getLibrary());
         String patternResolvedPath = PathPatternResolver.resolvePattern(targetBook, targetPrimaryFile, fileNamingPattern);
         Path libraryRootPath = Paths.get(targetBook.getLibraryPath().getPath());

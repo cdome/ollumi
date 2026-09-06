@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class BookMetadataUpdater {
 
-    private final AuthorRepository authorRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final BookRepository bookRepository;
     private final ComicMetadataRepository comicMetadataRepository;
@@ -86,6 +85,7 @@ public class BookMetadataUpdater {
         metadata.setMoodNames(relationsRepository.findMoodNamesByBookId(bookId));
         metadata.setCategoryNames(relationsRepository.findCategoryNamesByBookId(bookId));
         metadata.setTagNames(relationsRepository.findTagNamesByBookId(bookId));
+        metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(bookId));
 
         boolean thumbnailRequiresUpdate = StringUtils.hasText(newMetadata.getThumbnailUrl());
         boolean hasMetadataChanges = MetadataChangeDetector.isDifferent(newMetadata, metadata, clearFlags);
@@ -243,55 +243,59 @@ public class BookMetadataUpdater {
         return false;
     }
 
+    /**
+     * Writes authors via jOOQ instead of mutating a Hibernate collection: e.getAuthorNames() is the
+     * pre-update snapshot (ordered) populated once at the top of setBookMetadata. Every substantive
+     * branch computes the FINAL ordered name list and calls relationsRepository.setAuthorsForBook
+     * (which handles per-name dedup and sort_order) exactly once, keeps e.getAuthorNames() in sync,
+     * and calls e.updateSearchText() only when authors actually change, mirroring prior behavior.
+     */
     private void updateAuthorsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getAuthorsLocked())) return;
 
-        // Get or initialize authors collection
-        List<AuthorEntity> authors = e.getAuthors();
-        if (authors == null) {
-            authors = new ArrayList<>();
-            e.setAuthors(authors);
-        }
+        List<String> existingAuthors = Optional.ofNullable(e.getAuthorNames()).orElse(Collections.emptyList());
 
         if (clear.isAuthors()) {
-            authors.clear();
+            relationsRepository.clearAuthorsForBook(e.getBookId());
+            e.setAuthorNames(Collections.emptyList());
             return;
         }
 
         List<String> authorNames = Optional.ofNullable(m.getAuthors()).orElse(Collections.emptyList());
         if (authorNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) authors.clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearAuthorsForBook(e.getBookId());
+                e.setAuthorNames(Collections.emptyList());
+            }
             return;
         }
 
-        List<AuthorEntity> newAuthors = authorNames.stream()
+        List<String> newAuthors = authorNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> authorRepository.findByName(name)
-                        .orElseGet(() -> authorRepository.save(AuthorEntity.builder().name(name).build())))
                 .toList();
 
         if (newAuthors.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getAuthors().clear();
-            for (AuthorEntity author : newAuthors) {
-                if (!e.getAuthors().contains(author)) {
-                    e.getAuthors().add(author);
+        List<String> finalAuthors;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                List<String> combined = new ArrayList<>(existingAuthors);
+                for (String name : newAuthors) {
+                    if (!combined.contains(name)) combined.add(name);
                 }
+                finalAuthors = combined;
+            } else {
+                finalAuthors = newAuthors;
             }
-            e.updateSearchText();
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && authors.isEmpty()) {
-            authors.addAll(newAuthors);
-            e.updateSearchText();
-        } else if (replaceMode == null) {
-            if (!merge) e.getAuthors().clear();
-            for (AuthorEntity author : newAuthors) {
-                if (!e.getAuthors().contains(author)) {
-                    e.getAuthors().add(author);
-                }
-            }
-            e.updateSearchText();
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingAuthors.isEmpty()) {
+            finalAuthors = newAuthors;
+        } else {
+            return;
         }
+
+        relationsRepository.setAuthorsForBook(e.getBookId(), finalAuthors);
+        e.setAuthorNames(finalAuthors);
+        e.updateSearchText();
     }
 
     /** Same jOOQ-write pattern as updateMoodsIfNeeded; see its doc comment. */

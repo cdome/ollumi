@@ -38,13 +38,6 @@ public interface BookMapper {
     @Mapping(source = "bookFiles", target = "supplementaryFiles", qualifiedByName = "mapSupplementaryFiles")
     Book toBookWithDescription(BookEntity bookEntity, @Context boolean includeDescription);
 
-    default List<String> mapAuthors(List<AuthorEntity> authors) {
-        if (authors == null) return null;
-        return authors.stream()
-                .map(AuthorEntity::getName)
-                .toList();
-    }
-
     @Named("mapLibraryPathIdOnly")
     default LibraryPath mapLibraryPathIdOnly(LibraryPathEntity entity) {
         if (entity == null) return null;

@@ -6,6 +6,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.util.PathPatternResolver;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class FileMoveHelper {
 
     private final MonitoringRegistrationService monitoringRegistrationService;
     private final AppSettingService appSettingService;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
 
     private static final int MAX_ATTEMPTS = 3;
     private static final long RETRY_DELAY_MS = 100;
@@ -158,7 +160,19 @@ public class FileMoveHelper {
         return pattern;
     }
 
+    /**
+     * authors is no longer a Hibernate-managed collection; PathPatternResolver's entity-based overloads
+     * read BookMetadataEntity.authorNames (a @Transient scratch field), so populate it via jOOQ before
+     * any resolvePattern(BookEntity, ...) call.
+     */
+    private void populateAuthorNames(BookEntity book) {
+        if (book.getMetadata() != null) {
+            book.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(book.getId()));
+        }
+    }
+
     public Path generateNewFilePath(BookEntity book, LibraryPathEntity libraryPathEntity, String pattern) {
+        populateAuthorNames(book);
         String newRelativePathStr = PathPatternResolver.resolvePattern(book, pattern);
         if (newRelativePathStr.startsWith("/") || newRelativePathStr.startsWith("\\")) {
             newRelativePathStr = newRelativePathStr.substring(1);
@@ -168,6 +182,7 @@ public class FileMoveHelper {
     }
 
     public Path generateNewFilePath(BookEntity book, BookFileEntity bookFile, LibraryPathEntity libraryPathEntity, String pattern) {
+        populateAuthorNames(book);
         String newRelativePathStr = PathPatternResolver.resolvePattern(book, bookFile, pattern, bookFile.isFolderBased());
         if (newRelativePathStr.startsWith("/") || newRelativePathStr.startsWith("\\")) {
             newRelativePathStr = newRelativePathStr.substring(1);

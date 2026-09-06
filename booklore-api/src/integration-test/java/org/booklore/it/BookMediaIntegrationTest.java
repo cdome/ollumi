@@ -2,7 +2,7 @@ package org.booklore.it;
 
 import org.booklore.it.util.AuthTestHelper;
 import org.booklore.it.util.FixtureFactory;
-import org.booklore.model.entity.AuthorEntity;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
@@ -103,7 +103,7 @@ public class BookMediaIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanUploadAndRetrieveAuthorPhotoWithQueryToken() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("Photo Author " + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("Photo Author " + UUID.randomUUID());
         Path cover = writeFixtureCover();
 
         ResponseEntity<Void> uploadResponse = rest.postForEntity(
@@ -137,7 +137,7 @@ public class BookMediaIntegrationTest extends RestApiIntegrationTest {
     @Test
     void authorPhotoForAuthorWithoutPhotoReturnsNotFound() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("No Photo Author " + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("No Photo Author " + UUID.randomUUID());
 
         ResponseEntity<byte[]> photoResponse = rest.exchange(
                 baseUrl() + "/api/v1/media/author/" + author.getId() + "/photo?token=" + tokens.accessToken(),

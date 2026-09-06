@@ -247,7 +247,7 @@ public class MetadataChangeDetector {
 
     private static final List<CollectionFieldDescriptor> COLLECTION_FIELDS = List.of(
             new CollectionFieldDescriptor("authors",
-                    BookMetadata::getAuthors, BookMetadataEntity::getAuthors,
+                    BookMetadata::getAuthors, BookMetadataEntity::getAuthorNames,
                     BookMetadata::getAuthorsLocked, BookMetadataEntity::getAuthorsLocked,
                     MetadataClearFlags::isAuthors, true, true),
             new CollectionFieldDescriptor("categories",
@@ -401,7 +401,6 @@ public class MetadataChangeDetector {
         }
         return entities.stream()
                 .map(e -> switch (e) {
-                    case AuthorEntity author -> author.getName();
                     default -> e.toString();
                 })
                 .toList();
@@ -413,7 +412,6 @@ public class MetadataChangeDetector {
         }
         return entities.stream()
                 .map(e -> switch (e) {
-                    case AuthorEntity author -> author.getName();
                     default -> e.toString();
                 })
                 .collect(Collectors.toSet());

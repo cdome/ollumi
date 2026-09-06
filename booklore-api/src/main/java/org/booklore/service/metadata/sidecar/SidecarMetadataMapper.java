@@ -31,7 +31,7 @@ public class SidecarMetadataMapper {
         SidecarBookMetadata bookMetadata = SidecarBookMetadata.builder()
                 .title(entity.getTitle())
                 .subtitle(entity.getSubtitle())
-                .authors(extractNames(entity.getAuthors()))
+                .authors(relationsRepository.findAuthorNamesByBookId(entity.getBookId()))
                 .publisher(entity.getPublisher())
                 .publishedDate(entity.getPublishedDate())
                 .description(entity.getDescription())
@@ -149,13 +149,6 @@ public class SidecarMetadataMapper {
         int dotIndex = fileName.lastIndexOf('.');
         String baseName = (dotIndex > 0) ? fileName.substring(0, dotIndex) : fileName;
         return baseName + ".cover.jpg";
-    }
-
-    private List<String> extractNames(List<AuthorEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(AuthorEntity::getName)
-                .toList();
     }
 
     private SidecarSeries buildSeries(BookMetadataEntity entity) {

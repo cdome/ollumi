@@ -40,7 +40,6 @@ import static org.mockito.Mockito.*;
 class BookMetadataUpdaterTest {
 
     @Mock private AppProperties appProperties;
-    @Mock private AuthorRepository authorRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private BookRepository bookRepository;
     @Mock private ComicMetadataRepository comicMetadataRepository;
@@ -68,7 +67,7 @@ class BookMetadataUpdaterTest {
         metadataEntity = BookMetadataEntity.builder()
                 .bookId(1L)
                 .title("Original Title")
-                .authors(new ArrayList<>())
+                .authorNames(new ArrayList<>())
                 .build();
 
         bookEntity = BookEntity.builder()
@@ -328,11 +327,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void setBookMetadata_authorsReplaceAll_replacesExisting() {
-        AuthorEntity existing = AuthorEntity.builder().id(1L).name("Old Author").build();
-        metadataEntity.setAuthors(new ArrayList<>(List.of(existing)));
-
-        AuthorEntity newAuthor = AuthorEntity.builder().id(2L).name("New Author").build();
-        when(authorRepository.findByName("New Author")).thenReturn(Optional.of(newAuthor));
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Old Author"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of("New Author")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -342,14 +337,14 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getAuthors()).containsExactly(newAuthor);
+            verify(relationsRepository).setAuthorsForBook(1L, List.of("New Author"));
+            assertThat(metadataEntity.getAuthorNames()).containsExactly("New Author");
         }
     }
 
     @Test
     void setBookMetadata_authorsReplaceMissing_skipsWhenExistingAuthorsPresent() {
-        AuthorEntity existing = AuthorEntity.builder().id(1L).name("Existing").build();
-        metadataEntity.setAuthors(new ArrayList<>(List.of(existing)));
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Existing"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of("New Author")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -359,15 +354,14 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getAuthors()).containsExactly(existing);
+            verify(relationsRepository, never()).setAuthorsForBook(eq(1L), any());
+            assertThat(metadataEntity.getAuthorNames()).containsExactly("Existing");
         }
     }
 
     @Test
     void setBookMetadata_authorsReplaceMissing_addsWhenEmpty() {
-        metadataEntity.setAuthors(new ArrayList<>());
-        AuthorEntity newAuthor = AuthorEntity.builder().id(2L).name("New").build();
-        when(authorRepository.findByName("New")).thenReturn(Optional.of(newAuthor));
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
 
         BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of("New")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -377,15 +371,15 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getAuthors()).containsExactly(newAuthor);
+            verify(relationsRepository).setAuthorsForBook(1L, List.of("New"));
+            assertThat(metadataEntity.getAuthorNames()).containsExactly("New");
         }
     }
 
     @Test
     void setBookMetadata_authorsLocked_notUpdated() {
         metadataEntity.setAuthorsLocked(true);
-        AuthorEntity existing = AuthorEntity.builder().id(1L).name("Locked").build();
-        metadataEntity.setAuthors(new ArrayList<>(List.of(existing)));
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Locked"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of("New Author")).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -395,14 +389,14 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getAuthors()).containsExactly(existing);
+            verify(relationsRepository, never()).setAuthorsForBook(eq(1L), any());
+            assertThat(metadataEntity.getAuthorNames()).containsExactly("Locked");
         }
     }
 
     @Test
     void setBookMetadata_clearAuthors_clearsSet() {
-        AuthorEntity existing = AuthorEntity.builder().id(1L).name("Author").build();
-        metadataEntity.setAuthors(new ArrayList<>(List.of(existing)));
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Author"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").build();
         MetadataClearFlags clearFlags = new MetadataClearFlags();
@@ -419,7 +413,8 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getAuthors()).isEmpty();
+            verify(relationsRepository).clearAuthorsForBook(1L);
+            assertThat(metadataEntity.getAuthorNames()).isEmpty();
         }
     }
 
@@ -509,8 +504,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void setBookMetadata_authorsReplaceAll_emptyNewAuthors_clearsExisting() {
-        AuthorEntity existing = AuthorEntity.builder().id(1L).name("Author").build();
-        metadataEntity.setAuthors(new ArrayList<>(List.of(existing)));
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Author"));
 
         BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of()).build();
         MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -520,26 +514,8 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            assertThat(metadataEntity.getAuthors()).isEmpty();
-        }
-    }
-
-    @Test
-    void setBookMetadata_createsNewAuthorWhenNotFound() {
-        metadataEntity.setAuthors(new ArrayList<>());
-        AuthorEntity created = AuthorEntity.builder().id(5L).name("Brand New").build();
-        when(authorRepository.findByName("Brand New")).thenReturn(Optional.empty());
-        when(authorRepository.save(any(AuthorEntity.class))).thenReturn(created);
-
-        BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of("Brand New")).build();
-        MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
-
-        try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
-            mockSettingsAndChangeDetector(mcd, true, true);
-
-            updater.setBookMetadata(context);
-
-            verify(authorRepository).save(any(AuthorEntity.class));
+            verify(relationsRepository).clearAuthorsForBook(1L);
+            assertThat(metadataEntity.getAuthorNames()).isEmpty();
         }
     }
 
@@ -1419,11 +1395,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void authors_nullReplaceMode_noMerge_replacesExisting() {
-            AuthorEntity existing = AuthorEntity.builder().id(1L).name("Old").build();
-            metadataEntity.setAuthors(new ArrayList<>(List.of(existing)));
-
-            AuthorEntity newAuthor = AuthorEntity.builder().id(2L).name("New").build();
-            when(authorRepository.findByName("New")).thenReturn(Optional.of(newAuthor));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Old"));
 
             BookMetadata newMeta = BookMetadata.builder().title("T").authors(List.of("New")).build();
             MetadataUpdateContext context = buildContext(newMeta, null);
@@ -1431,7 +1403,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                assertThat(metadataEntity.getAuthors()).containsExactly(newAuthor);
+                verify(relationsRepository).setAuthorsForBook(1L, List.of("New"));
             }
         }
 

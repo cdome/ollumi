@@ -101,16 +101,8 @@ class CbxMetadataWriterTest {
         meta.setPageCount(42);
         meta.setLanguage("en");
 
-        List<AuthorEntity> authors = new ArrayList<>();
-        AuthorEntity aliceAuthor = new AuthorEntity();
-        aliceAuthor.setId(1L);
-        aliceAuthor.setName("Alice");
-        AuthorEntity bobAuthor = new AuthorEntity();
-        bobAuthor.setId(2L);
-        bobAuthor.setName("Bob");
-        authors.add(aliceAuthor);
-        authors.add(bobAuthor);
-        meta.setAuthors(authors);
+        Mockito.when(relationsRepository.findAuthorNamesByBookId(Mockito.anyLong()))
+                .thenReturn(List.of("Alice", "Bob"));
         Mockito.when(relationsRepository.findCategoryNamesByBookId(Mockito.anyLong()))
                 .thenReturn(Set.of("action", "adventure"));
 

@@ -66,15 +66,15 @@ class DuplicateDetectionServiceTest {
                 .bookType(fileType)
                 .build();
 
-        List<AuthorEntity> authors = new ArrayList<>();
+        List<String> authorNames = new ArrayList<>();
         if (authorName != null) {
-            authors.add(AuthorEntity.builder().id(id * 10).name(authorName).build());
+            authorNames.add(authorName);
         }
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .bookId(id)
                 .title(title)
-                .authors(authors)
+                .authorNames(authorNames)
                 .build();
 
         BookEntity book = BookEntity.builder()
@@ -125,9 +125,8 @@ class DuplicateDetectionServiceTest {
         // Author names now come from the jOOQ relations reader; derive them from the fixtures' entity authors.
         Map<Long, List<String>> authorsByBook = new HashMap<>();
         for (BookEntity b : books) {
-            if (b.getMetadata() == null || b.getMetadata().getAuthors() == null) continue;
-            List<String> names = b.getMetadata().getAuthors().stream()
-                    .map(AuthorEntity::getName)
+            if (b.getMetadata() == null || b.getMetadata().getAuthorNames() == null) continue;
+            List<String> names = b.getMetadata().getAuthorNames().stream()
                     .filter(Objects::nonNull)
                     .toList();
             if (!names.isEmpty()) authorsByBook.put(b.getId(), names);
@@ -411,9 +410,9 @@ class DuplicateDetectionServiceTest {
         @Test
         void skipsBooksWithNoAuthors() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Orphan Book", null);
-            book1.getMetadata().setAuthors(new ArrayList<>());
+            book1.getMetadata().setAuthorNames(new ArrayList<>());
             BookEntity book2 = createBook(BookFileType.MOBI, "Orphan Book", null);
-            book2.getMetadata().setAuthors(new ArrayList<>());
+            book2.getMetadata().setAuthorNames(new ArrayList<>());
             stubBooks(book1, book2);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyTitleAuthor());
@@ -446,10 +445,10 @@ class DuplicateDetectionServiceTest {
         @Test
         void groupsByOverlappingAuthors() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Collab Work", "Author A");
-            book1.getMetadata().getAuthors().add(AuthorEntity.builder().id(90L).name("Author B").build());
+            book1.getMetadata().getAuthorNames().add("Author B");
 
             BookEntity book2 = createBook(BookFileType.MOBI, "Collab Work", "Author B");
-            book2.getMetadata().getAuthors().add(AuthorEntity.builder().id(91L).name("Author C").build());
+            book2.getMetadata().getAuthorNames().add("Author C");
             stubBooks(book1, book2);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyTitleAuthor());
@@ -461,7 +460,7 @@ class DuplicateDetectionServiceTest {
         void requiresAtLeastTwoBooksWithAuthorsInTitleGroup() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Solo Title", "Author A");
             BookEntity book2 = createBook(BookFileType.MOBI, "Solo Title", null);
-            book2.getMetadata().setAuthors(new ArrayList<>());
+            book2.getMetadata().setAuthorNames(new ArrayList<>());
             stubBooks(book1, book2);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyTitleAuthor());
@@ -954,10 +953,10 @@ class DuplicateDetectionServiceTest {
         @Test
         void threeBooksInTitleAuthorGroupWithPartialAuthorOverlap() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Shared Title", "Author A");
-            book1.getMetadata().getAuthors().add(AuthorEntity.builder().id(80L).name("Author B").build());
+            book1.getMetadata().getAuthorNames().add("Author B");
 
             BookEntity book2 = createBook(BookFileType.MOBI, "Shared Title", "Author B");
-            book2.getMetadata().getAuthors().add(AuthorEntity.builder().id(81L).name("Author C").build());
+            book2.getMetadata().getAuthorNames().add("Author C");
 
             BookEntity book3 = createBook(BookFileType.PDF, "Shared Title", "Author C");
             stubBooks(book1, book2, book3);

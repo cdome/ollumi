@@ -2,7 +2,6 @@ package org.booklore.util;
 
 import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.BookMetadata;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,10 +81,7 @@ public class MetadataChangeDetectorTest {
                 .moodsLocked(false)
                 .tagsLocked(false)
                 .reviewsLocked(false)
-                .authors(List.of(
-                        AuthorEntity.builder().id(1L).name("Author One").build(),
-                        AuthorEntity.builder().id(2L).name("Author Two").build()
-                ))
+                .authorNames(List.of("Author One", "Author Two"))
                 .categoryNames(Set.of("Fiction", "Mystery"))
                 .moodNames(Set.of("Dark", "Suspenseful"))
                 .tagNames(Set.of("Thriller", "Bestseller"))
@@ -303,7 +299,7 @@ public class MetadataChangeDetectorTest {
                 .title("Original Title")
                 .subtitle("Original Subtitle")
                 .publisher("Original Publisher")
-                .authors(null) // null authors, this is what we're testing
+                .authorNames(null) // null authors, this is what we're testing
                 .authorsLocked(false)
                 .categoryNames(Set.of("Fiction"))
                 .categoriesLocked(false)
@@ -351,7 +347,7 @@ public class MetadataChangeDetectorTest {
         BookMetadataEntity testExisting = BookMetadataEntity.builder()
                 .bookId(1L)
                 .title("Test Title")
-                .authors(List.of()) // empty set, what we're testing
+                .authorNames(List.of()) // empty set, what we're testing
                 .authorsLocked(false)
                 .categoryNames(Set.of("Fiction"))
                 .categoriesLocked(false)
@@ -660,7 +656,7 @@ public class MetadataChangeDetectorTest {
         BookMetadataEntity testExisting = BookMetadataEntity.builder()
                 .bookId(1L)
                 .title("Test")
-                .authors(List.of())
+                .authorNames(List.of())
                 .authorsLocked(false)
                 .categoryNames(Set.of())
                 .categoriesLocked(false)

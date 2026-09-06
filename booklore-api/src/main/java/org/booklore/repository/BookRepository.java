@@ -19,11 +19,11 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
     Optional<BookEntity> findByIdWithBookFiles(@Param("id") Long id);
 
-    @EntityGraph(attributePaths = { "metadata", "metadata.authors", "metadata.comicMetadata", "library" })
+    @EntityGraph(attributePaths = { "metadata", "metadata.comicMetadata", "library" })
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
     Optional<BookEntity> findByIdWithMetadata(@Param("id") Long id);
 
-    @EntityGraph(attributePaths = { "metadata", "metadata.authors", "metadata.comicMetadata", "bookFiles" })
+    @EntityGraph(attributePaths = { "metadata", "metadata.comicMetadata", "bookFiles" })
     @Query("SELECT b FROM BookEntity b WHERE b.id = :id AND (b.deleted IS NULL OR b.deleted = false)")
     Optional<BookEntity> findByIdFull(@Param("id") Long id);
 
@@ -50,7 +50,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE (b.deleted IS NULL OR b.deleted = false)")
@@ -59,7 +58,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.id IN :bookIds AND (b.deleted IS NULL OR b.deleted = false)")
@@ -68,7 +66,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.id IN :bookIds AND (b.deleted IS NULL OR b.deleted = false)")
@@ -77,7 +74,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT b FROM BookEntity b WHERE b.library.id = :libraryId AND (b.deleted IS NULL OR b.deleted = false)")
@@ -90,7 +86,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @Query("""
             SELECT DISTINCT b FROM BookEntity b
             LEFT JOIN FETCH b.metadata m
-            LEFT JOIN FETCH m.authors
             LEFT JOIN FETCH b.bookFiles
             LEFT JOIN FETCH b.libraryPath
             WHERE b.library.id = :libraryId
@@ -101,7 +96,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @EntityGraph(attributePaths = {
         "metadata", "metadata.comicMetadata",
         "metadata.comicMetadata.characters", "metadata.comicMetadata.teams", "metadata.comicMetadata.locations", "metadata.comicMetadata.creatorMappings",
-        "metadata.authors",
         "shelves", "libraryPath", "library", "bookFiles"
     })
     @Query("SELECT DISTINCT b FROM BookEntity b JOIN b.shelves s WHERE s.id = :shelfId AND (b.deleted IS NULL OR b.deleted = false)")
@@ -114,7 +108,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
     @Query("""
                 SELECT DISTINCT b FROM BookEntity b
                 LEFT JOIN FETCH b.metadata m
-                LEFT JOIN FETCH m.authors
                 LEFT JOIN FETCH m.comicMetadata
                 LEFT JOIN FETCH b.shelves
                 WHERE (b.deleted IS NULL OR b.deleted = false)
@@ -129,14 +122,6 @@ public interface BookRepository extends JpaRepository<BookEntity, Long> {
                 LIMIT :limit OFFSET :offset
             """, nativeQuery = true)
     List<BookEntity> findBooksForMigrationBatch(@Param("offset") int offset, @Param("limit") int limit);
-
-    @Query("""
-                SELECT DISTINCT b FROM BookEntity b
-                LEFT JOIN FETCH b.metadata m
-                LEFT JOIN FETCH m.authors
-                WHERE b.id IN :bookIds
-            """)
-    List<BookEntity> findBooksWithMetadataAndAuthors(@Param("bookIds") List<Long> bookIds);
 
     @Query("""
         SELECT DISTINCT b FROM BookEntity b

@@ -117,15 +117,12 @@ public class KomgaMapper {
             return KomgaBookMetadataDto.builder().build();
         }
         
-        List<KomgaAuthorDto> authors = new ArrayList<>();
-        if (metadata.getAuthors() != null) {
-            authors = metadata.getAuthors().stream()
-                    .map(author -> KomgaAuthorDto.builder()
-                            .name(author.getName())
-                            .role("writer")
-                            .build())
-                    .collect(Collectors.toList());
-        }
+        List<KomgaAuthorDto> authors = relationsRepository.findAuthorNamesByBookId(metadata.getBookId()).stream()
+                .map(name -> KomgaAuthorDto.builder()
+                        .name(name)
+                        .role("writer")
+                        .build())
+                .collect(Collectors.toList());
         
         List<String> tags = new ArrayList<>(relationsRepository.findTagNamesByBookId(metadata.getBookId()));
         
@@ -202,9 +199,7 @@ public class KomgaMapper {
             for (BookEntity book : books) {
             BookMetadataEntity metadata = book.getMetadata();
             if (metadata != null) {
-                if (metadata.getAuthors() != null) {
-                    metadata.getAuthors().forEach(author -> authorNames.add(author.getName()));
-                }
+                authorNames.addAll(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
                 
                 allTags.addAll(relationsRepository.findTagNamesByBookId(metadata.getBookId()));
                 

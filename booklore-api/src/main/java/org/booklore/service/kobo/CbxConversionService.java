@@ -1,6 +1,5 @@
 package org.booklore.service.kobo;
 
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.util.ArchiveUtils;
 import org.booklore.util.FileService;
@@ -625,10 +624,9 @@ public class CbxConversionService {
                 model.put("goodreadsId", metadata.getGoodreadsId());
             }
 
-            if (metadata.getAuthors() != null && !metadata.getAuthors().isEmpty()) {
-                model.put("authors", metadata.getAuthors().stream()
-                        .map(AuthorEntity::getName)
-                        .toList());
+            java.util.List<String> authorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+            if (!authorNames.isEmpty()) {
+                model.put("authors", authorNames);
             }
 
             java.util.Set<String> categoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());

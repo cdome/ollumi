@@ -61,6 +61,8 @@ class FileUploadServiceTest {
     @Mock
     JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
+    org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    @Mock
     BookRepository bookRepository;
     @Mock
     BookAdditionalFileRepository bookAdditionalFileRepository;
@@ -93,7 +95,7 @@ class FileUploadServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(settings);
 
         service = new FileUploadService(
-                libraryRepository, jooqLibraryPathRepository, bookRepository, bookAdditionalFileRepository,
+                libraryRepository, jooqLibraryPathRepository, relationsRepository, bookRepository, bookAdditionalFileRepository,
                 appSettingService, appProperties, metadataExtractorFactory, additionalFileMapper, fileMovingHelper, monitoringRegistrationService, auditService
         );
     }

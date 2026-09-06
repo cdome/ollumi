@@ -4,13 +4,13 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.BookCoverUpdate;
 import org.booklore.service.NotificationService;
@@ -47,6 +47,7 @@ public class BookCoverService {
 
     private final AppProperties appProperties;
     private final BookRepository bookRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookRepository jooqBookRepository;
     private final NotificationService notificationService;
     private final AppSettingService appSettingService;
@@ -536,12 +537,11 @@ public class BookCoverService {
     }
 
     private String getAuthorNames(BookEntity bookEntity) {
-        if (bookEntity.getMetadata().getAuthors() != null && !bookEntity.getMetadata().getAuthors().isEmpty()) {
-            return bookEntity.getMetadata().getAuthors().stream()
-                    .map(AuthorEntity::getName)
-                    .collect(Collectors.joining(", "));
+        List<String> authors = relationsRepository.findAuthorNamesByBookId(bookEntity.getId());
+        if (authors.isEmpty()) {
+            return null;
         }
-        return null;
+        return String.join(", ", authors);
     }
 
     private void writeCoverToBookFile(BookEntity bookEntity, BiConsumer<MetadataWriter, BookEntity> writerAction) {

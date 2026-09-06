@@ -75,7 +75,8 @@ public class AudiobookMetadataWriter implements MetadataWriter {
                 setTagField(tag, FieldKey.TITLE, val, hasChanges);
             });
 
-            helper.copyAuthors(clear != null && clear.isAuthors(), authors -> {
+            java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+            helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, authors -> {
                 String authorStr = authors != null ? String.join("; ", authors) : null;
                 setTagField(tag, FieldKey.ALBUM_ARTIST, authorStr, hasChanges);
                 setTagField(tag, FieldKey.ARTIST, authorStr, hasChanges);

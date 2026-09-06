@@ -47,7 +47,7 @@ public class MetadataMatchService {
         if (isPresent(metadata.getTitle(), metadata.getTitleLocked())) score += weights.getTitle();
         if (isPresent(metadata.getSubtitle(), metadata.getSubtitleLocked())) score += weights.getSubtitle();
         if (isPresent(metadata.getDescription(), metadata.getDescriptionLocked())) score += weights.getDescription();
-        if (hasContent(metadata.getAuthors(), metadata.getAuthorsLocked())) score += weights.getAuthors();
+        if (hasContent(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()), metadata.getAuthorsLocked())) score += weights.getAuthors();
         if (isPresent(metadata.getPublisher(), metadata.getPublisherLocked())) score += weights.getPublisher();
         if (metadata.getPublishedDate() != null || Boolean.TRUE.equals(metadata.getPublishedDateLocked())) score += weights.getPublishedDate();
         if (isPresent(metadata.getSeriesName(), metadata.getSeriesNameLocked())) score += weights.getSeriesName();

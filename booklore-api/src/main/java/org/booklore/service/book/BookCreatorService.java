@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class BookCreatorService {
 
-    private final AuthorRepository authorRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookRepository bookRepository;
     private final BookMetadataRepository bookMetadataRepository;
@@ -35,7 +34,7 @@ public class BookCreatorService {
     // Temporary storage for comic metadata DTOs during processing
     private final Map<Long, ComicMetadata> pendingComicMetadata = new ConcurrentHashMap<>();
 
-    public BookCreatorService(AuthorRepository authorRepository,
+    public BookCreatorService(
                               JooqBookMetadataRelationsRepository relationsRepository,
                               BookRepository bookRepository,
                               BookMetadataRepository bookMetadataRepository,
@@ -44,7 +43,6 @@ public class BookCreatorService {
                               ComicTeamRepository comicTeamRepository,
                               ComicLocationRepository comicLocationRepository,
                               ComicCreatorRepository comicCreatorRepository) {
-        this.authorRepository = authorRepository;
         this.relationsRepository = relationsRepository;
         this.bookRepository = bookRepository;
         this.bookMetadataRepository = bookMetadataRepository;
@@ -130,15 +128,10 @@ public class BookCreatorService {
 
     public void addAuthorsToBook(Collection<String> authors, BookEntity bookEntity) {
         if (authors == null || authors.isEmpty()) return;
-        if (bookEntity.getMetadata().getAuthors() == null) {
-            bookEntity.getMetadata().setAuthors(new ArrayList<>());
-        }
-        authors.stream()
-                .map(authorName -> truncate(authorName, 255))
-                .map(authorName -> authorRepository.findByName(authorName)
-                        .orElseGet(() -> authorRepository.save(AuthorEntity.builder().name(authorName).build())))
-                .forEach(authorEntity -> bookEntity.getMetadata().getAuthors().add(authorEntity));
-        bookEntity.getMetadata().updateSearchText(); // Manually trigger search text update since collection modification doesn't trigger @PreUpdate
+        List<String> truncated = authors.stream().map(name -> truncate(name, 255)).toList();
+        relationsRepository.setAuthorsForBook(bookEntity.getId(), truncated);
+        bookEntity.getMetadata().setAuthorNames(truncated);
+        bookEntity.getMetadata().updateSearchText(); // Manually trigger search text update since a jOOQ write doesn't dirty-check the entity
     }
 
     public void addMoodsToBook(Set<String> moods, BookEntity bookEntity) {
@@ -161,9 +154,6 @@ public class BookCreatorService {
 
     @Transactional
     public void saveConnections(BookEntity bookEntity) {
-        if (bookEntity.getMetadata().getAuthors() != null && !bookEntity.getMetadata().getAuthors().isEmpty()) {
-            authorRepository.saveAll(bookEntity.getMetadata().getAuthors());
-        }
         bookRepository.save(bookEntity);
         bookMetadataRepository.save(bookEntity.getMetadata());
 

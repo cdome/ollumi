@@ -8,9 +8,9 @@ import org.booklore.app.dto.AppAuthorSummary;
 import org.booklore.app.dto.AppPageResponse;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
-import org.booklore.model.entity.AuthorEntity;
-import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.jooq.JooqAppAuthorRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.repository.jooq.dto.AuthorSummaryRow;
 import org.booklore.util.FileService;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,7 @@ public class AppAuthorService {
     private static final int DEFAULT_PAGE_SIZE = 30;
     private static final int MAX_PAGE_SIZE = 50;
 
-    private final AuthorRepository authorRepository;
+    private final JooqAuthorRepository jooqAuthorRepository;
     private final JooqAppAuthorRepository jooqAppAuthorRepository;
     private final AuthenticationService authenticationService;
     private final FileService fileService;
@@ -87,12 +87,12 @@ public class AppAuthorService {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         Set<Long> accessibleLibraryIds = getAccessibleLibraryIds(user);
 
-        AuthorEntity author = authorRepository.findById(authorId)
+        AuthorRow author = jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
 
         // Verify access for non-admin users
         if (accessibleLibraryIds != null) {
-            if (accessibleLibraryIds.isEmpty() || !authorRepository.existsByIdAndLibraryIds(authorId, accessibleLibraryIds)) {
+            if (accessibleLibraryIds.isEmpty() || !jooqAuthorRepository.existsByIdAndLibraryIds(authorId, accessibleLibraryIds)) {
                 throw ApiError.AUTHOR_NOT_FOUND.createException(authorId);
             }
         }

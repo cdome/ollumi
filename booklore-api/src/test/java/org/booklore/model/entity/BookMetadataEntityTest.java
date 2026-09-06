@@ -12,7 +12,7 @@ class BookMetadataEntityTest {
         BookMetadataEntity metadata = new BookMetadataEntity();
         metadata.setTitle("Jo Nesbø Book");
         metadata.setSubtitle("Murder Mystery");
-        metadata.setAuthors(List.of(AuthorEntity.builder().name("Jo Nesbø").build()));
+        metadata.setAuthorNames(List.of("Jo Nesbø"));
 
         metadata.updateSearchText();
 
@@ -27,7 +27,7 @@ class BookMetadataEntityTest {
     void updateSearchText_normalizesAuthorWithDiacritics() {
         BookMetadataEntity metadata = new BookMetadataEntity();
         metadata.setTitle("The Snowman");
-        metadata.setAuthors(List.of(AuthorEntity.builder().name("Jo Nesbø").build()));
+        metadata.setAuthorNames(List.of("Jo Nesbø"));
 
         metadata.updateSearchText();
 
@@ -44,10 +44,7 @@ class BookMetadataEntityTest {
         metadata.setTitle("Müller's Café");
         metadata.setSubtitle("À la française");
         metadata.setSeriesName("José's Stories");
-        metadata.setAuthors(List.of(
-            AuthorEntity.builder().name("François Müller").build(),
-            AuthorEntity.builder().name("José García").build()
-        ));
+        metadata.setAuthorNames(List.of("François Müller", "José García"));
 
         metadata.updateSearchText();
 
@@ -160,7 +157,7 @@ class BookMetadataEntityTest {
     void searchSimulation_withDiacritics() {
         BookMetadataEntity metadata = new BookMetadataEntity();
         metadata.setTitle("The Bat");
-        metadata.setAuthors(List.of(AuthorEntity.builder().name("Jo Nesbø").build()));
+        metadata.setAuthorNames(List.of("Jo Nesbø"));
         metadata.updateSearchText();
         
         String storedSearchText = metadata.getSearchText();

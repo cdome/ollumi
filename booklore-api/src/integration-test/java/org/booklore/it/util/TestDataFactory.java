@@ -3,7 +3,8 @@ package org.booklore.it.util;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.*;
 import org.booklore.model.dto.OpdsUserV2;
-import org.booklore.repository.AuthorRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
@@ -32,7 +33,7 @@ public class TestDataFactory {
     private final BookRepository bookRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final ShelfRepository shelfRepository;
-    private final AuthorRepository authorRepository;
+    private final JooqAuthorRepository jooqAuthorRepository;
     private final JooqOpdsUserV2Repository opdsUserRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -42,7 +43,7 @@ public class TestDataFactory {
                            BookRepository bookRepository,
                            BookMetadataRepository bookMetadataRepository,
                            ShelfRepository shelfRepository,
-                           AuthorRepository authorRepository,
+                           JooqAuthorRepository jooqAuthorRepository,
                            JooqOpdsUserV2Repository opdsUserRepository,
                            UserRepository userRepository,
                            PasswordEncoder passwordEncoder) {
@@ -51,7 +52,7 @@ public class TestDataFactory {
         this.bookRepository = bookRepository;
         this.bookMetadataRepository = bookMetadataRepository;
         this.shelfRepository = shelfRepository;
-        this.authorRepository = authorRepository;
+        this.jooqAuthorRepository = jooqAuthorRepository;
         this.opdsUserRepository = opdsUserRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -155,9 +156,8 @@ public class TestDataFactory {
         };
     }
 
-    public AuthorEntity createAuthor(String name) {
-        AuthorEntity author = AuthorEntity.builder().name(name).build();
-        return authorRepository.save(author);
+    public AuthorRow createAuthor(String name) {
+        return jooqAuthorRepository.save(new AuthorRow(null, name, null, null, false, false, false, false));
     }
 
     public ShelfEntity createShelf(BookLoreUserEntity user, String name, boolean isPublic) {

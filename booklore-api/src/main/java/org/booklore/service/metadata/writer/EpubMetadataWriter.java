@@ -101,7 +101,8 @@ public class EpubMetadataWriter implements MetadataWriter {
             helper.copyPublishedDate(clear != null && clear.isPublishedDate(), val -> replaceAndTrackChange(opfDoc, metadataElement, "date", DC_NS, val != null ? val.toString() : null, hasChanges));
             helper.copyLanguage(clear != null && clear.isLanguage(), val -> replaceAndTrackChange(opfDoc, metadataElement, "language", DC_NS, val, hasChanges));
 
-            helper.copyAuthors(clear != null && clear.isAuthors(), names -> {
+            java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+            helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, names -> {
                 removeCreatorsByRole(metadataElement, "");
                 removeCreatorsByRole(metadataElement, "aut");
                 if (names != null) {
