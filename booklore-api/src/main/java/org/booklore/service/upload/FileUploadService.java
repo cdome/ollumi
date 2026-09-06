@@ -37,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.service.audit.AuditService;
@@ -52,6 +53,7 @@ public class FileUploadService {
     private static final long MB_TO_BYTES_MULTIPLIER = 1024L * 1024L;
 
     private final LibraryRepository libraryRepository;
+    private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookRepository bookRepository;
@@ -184,8 +186,8 @@ public class FileUploadService {
         } finally {
             if (monitoringUnregistered) {
                 try {
-                    if (book.getLibrary() != null && book.getLibrary().getLibraryPaths() != null) {
-                        for (LibraryPathEntity libPath : book.getLibrary().getLibraryPaths()) {
+                    if (book.getLibrary() != null) {
+                        for (org.booklore.repository.jooq.dto.LibraryPathRow libPath : jooqLibraryPathRepository.findPathsByLibraryId(book.getLibrary().getId())) {
                             Path libraryRoot = Path.of(libPath.getPath());
                             log.debug("Re-registering library {} for monitoring", libraryId);
                             monitoringRegistrationService.registerLibraryPaths(libraryId, libraryRoot);
@@ -200,11 +202,15 @@ public class FileUploadService {
     }
 
     private LibraryPathEntity determineLibraryPathForPhysicalBook(BookEntity book) {
-        if (book.getLibrary() == null || book.getLibrary().getLibraryPaths() == null || book.getLibrary().getLibraryPaths().isEmpty()) {
+        if (book.getLibrary() == null) {
+            throw new IllegalStateException("Cannot upload file to physical book: library has no paths configured");
+        }
+        List<LibraryPathEntity> paths = libraryPathRepository.findByLibraryId(book.getLibrary().getId());
+        if (paths.isEmpty()) {
             throw new IllegalStateException("Cannot upload file to physical book: library has no paths configured");
         }
         // Use the first library path for physical books
-        return book.getLibrary().getLibraryPaths().iterator().next();
+        return paths.get(0);
     }
 
     private BookFileEntity createAdditionalFileEntityWithSubPath(BookEntity book, String fileName, String fileSubPath, boolean isBook, BookFileType bookType, long fileSize, String fileHash, String description) {

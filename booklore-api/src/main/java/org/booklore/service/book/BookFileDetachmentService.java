@@ -39,6 +39,7 @@ import java.util.Set;
 public class BookFileDetachmentService {
 
     private final BookRepository bookRepository;
+    private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final AuthenticationService authenticationService;
@@ -198,7 +199,7 @@ public class BookFileDetachmentService {
 
     private LibraryPathEntity resolveLibraryPath(BookEntity sourceBook, Path fileDiskPath) {
         Path normalizedFilePath = fileDiskPath.toAbsolutePath().normalize();
-        return sourceBook.getLibrary().getLibraryPaths().stream()
+        return libraryPathRepository.findByLibraryId(sourceBook.getLibrary().getId()).stream()
                 .map(lp -> Map.entry(lp, Paths.get(lp.getPath()).toAbsolutePath().normalize()))
                 .filter(entry -> normalizedFilePath.startsWith(entry.getValue()))
                 .max(Comparator.comparingInt(entry -> entry.getValue().getNameCount()))

@@ -11,7 +11,9 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -37,6 +39,7 @@ class BookFileAttachmentServiceTest {
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
+    @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
@@ -71,7 +74,8 @@ class BookFileAttachmentServiceTest {
                 .path(tempDir.toString())
                 .build();
 
-        library.setLibraryPaths(new ArrayList<>(List.of(libraryPath)));
+        lenient().when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
+                .thenReturn(List.of(new LibraryPathRow(libraryPath.getId(), libraryPath.getPath())));
     }
 
     private BookEntity createBook(Long id) {
@@ -767,7 +771,10 @@ class BookFileAttachmentServiceTest {
                     .library(library)
                     .path(tempDir.resolve("other_root").toString())
                     .build();
-            library.setLibraryPaths(new ArrayList<>(List.of(libraryPath, otherLibraryPath)));
+            lenient().when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(List.of(
+                    new LibraryPathRow(libraryPath.getId(), libraryPath.getPath()),
+                    new LibraryPathRow(otherLibraryPath.getId(), otherLibraryPath.getPath())
+            ));
 
             Files.createDirectories(tempDir.resolve("other_root"));
 

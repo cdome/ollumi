@@ -12,6 +12,8 @@ import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.dto.*;
@@ -66,6 +68,7 @@ public class BookService {
     private final FileService fileService;
     private final JooqBookReadRepository jooqBookReadRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
     private final ReadingProgressService readingProgressService;
@@ -386,8 +389,8 @@ public class BookService {
                             log.info("Deleted book file: {}", fullFilePath);
                         }
 
-                        Set<Path> libraryRoots = book.getLibrary().getLibraryPaths().stream()
-                                .map(LibraryPathEntity::getPath)
+                        Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(book.getLibrary().getId()).stream()
+                                .map(LibraryPathRow::getPath)
                                 .map(Paths::get)
                                 .map(Path::normalize)
                                 .collect(Collectors.toSet());

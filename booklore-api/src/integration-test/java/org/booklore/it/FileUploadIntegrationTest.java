@@ -34,7 +34,7 @@ public class FileUploadIntegrationTest extends RestApiIntegrationTest {
         MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
         parts.add("file", new FileSystemResource(pdf));
         parts.add("libraryId", library.getId());
-        parts.add("pathId", library.getLibraryPaths().get(0).getId());
+        parts.add("pathId", data.getFirstLibraryPath(library).getId());
 
         HttpHeaders headers = auth.bearerHeaders(tokens.accessToken());
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);

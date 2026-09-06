@@ -11,12 +11,11 @@ import org.booklore.model.dto.request.UpdateUserSettingRequest;
 import org.booklore.model.dto.request.UserUpdateRequest;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.audit.AuditService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final JooqUserSettingRepository userSettingRepository;
     private final AuthenticationService authenticationService;
     private final PasswordEncoder passwordEncoder;
@@ -62,8 +61,7 @@ public class UserService {
 
         if (updateRequest.getAssignedLibraries() != null && getMyself().getPermissions().isAdmin()) {
             List<Long> libraryIds = updateRequest.getAssignedLibraries();
-            Set<LibraryEntity> updatedLibraries = new HashSet<>(libraryRepository.findAllById(libraryIds));
-            user.setLibraries(updatedLibraries);
+            jooqUserLibraryRepository.setLibrariesForUser(id, libraryIds);
         }
 
         userRepository.save(user);

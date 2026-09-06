@@ -15,8 +15,11 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
@@ -42,6 +45,8 @@ public class FileMoveService {
     private final JooqBookRepository jooqBookRepository;
     private final BookAdditionalFileRepository bookFileRepository;
     private final LibraryRepository libraryRepository;
+    private final LibraryPathRepository libraryPathRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final FileMoveHelper fileMoveHelper;
     private final MonitoringRegistrationService monitoringRegistrationService;
     private final LibraryMapper libraryMapper;
@@ -113,8 +118,9 @@ public class FileMoveService {
             }
             BookEntity bookEntity = optionalBook.get();
             LibraryEntity targetLibrary = optionalLibrary.get();
+            List<LibraryPathEntity> targetLibraryPaths = libraryPathRepository.findByLibraryId(targetLibrary.getId());
 
-            Optional<LibraryPathEntity> optionalLibraryPathEntity = targetLibrary.getLibraryPaths().stream()
+            Optional<LibraryPathEntity> optionalLibraryPathEntity = targetLibraryPaths.stream()
                     .filter(libraryPath -> Objects.equals(libraryPath.getId(), targetLibraryPathId))
                     .findFirst();
             if (optionalLibraryPathEntity.isEmpty()) {
@@ -215,13 +221,13 @@ public class FileMoveService {
                 throw e;
             }
 
-            Set<Path> libraryRoots = targetLibrary.getLibraryPaths().stream()
+            Set<Path> libraryRoots = targetLibraryPaths.stream()
                     .map(LibraryPathEntity::getPath)
                     .map(Paths::get)
                     .map(Path::toAbsolutePath)
                     .map(Path::normalize)
                     .collect(Collectors.toSet());
-            
+
             for (Path sourceParent : sourceParentsToCleanup) {
                 fileMoveHelper.deleteEmptyParentDirsUpToLibraryFolders(sourceParent, libraryRoots);
             }
@@ -374,8 +380,8 @@ public class FileMoveService {
             }
 
             // Clean up empty parent directories
-            Set<Path> libraryRoots = bookWithFiles.getLibraryPath().getLibrary().getLibraryPaths().stream()
-                    .map(LibraryPathEntity::getPath)
+            Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(libraryId).stream()
+                    .map(LibraryPathRow::getPath)
                     .map(Paths::get)
                     .map(Path::toAbsolutePath)
                     .map(Path::normalize)

@@ -5,12 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.OidcGroupMapping;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqOidcGroupMappingRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.springframework.stereotype.Service;
@@ -29,8 +28,8 @@ public class OidcGroupMappingService {
     private final JooqOidcGroupMappingRepository repository;
     private final AuditService auditService;
     private final AppSettingService appSettingService;
-    private final LibraryRepository libraryRepository;
     private final UserRepository userRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
 
     public List<OidcGroupMapping> getAll() {
         return repository.findAll();
@@ -95,20 +94,15 @@ public class OidcGroupMappingService {
         switch (syncMode) {
             case "ON_LOGIN" -> {
                 applyPermissions(perms, mergedPermissions, mergedAdmin, false);
-                List<LibraryEntity> libraries = libraryRepository.findAllById(mergedLibraryIds);
-                user.setLibraries(new HashSet<>(libraries));
+                jooqUserLibraryRepository.setLibrariesForUser(user.getId(), mergedLibraryIds);
             }
             case "ON_LOGIN_ADDITIVE" -> {
                 applyPermissions(perms, mergedPermissions, mergedAdmin, true);
-                Set<Long> existingLibIds = new HashSet<>();
-                if (user.getLibraries() != null) {
-                    user.getLibraries().forEach(lib -> existingLibIds.add(lib.getId()));
-                }
+                Set<Long> existingLibIds = jooqUserLibraryRepository.findLibraryIdsByUserId(user.getId());
                 Set<Long> allLibIds = new HashSet<>(existingLibIds);
                 allLibIds.addAll(mergedLibraryIds);
                 if (!allLibIds.equals(existingLibIds)) {
-                    List<LibraryEntity> libraries = libraryRepository.findAllById(allLibIds);
-                    user.setLibraries(new HashSet<>(libraries));
+                    jooqUserLibraryRepository.setLibrariesForUser(user.getId(), allLibIds);
                 }
             }
             default -> {

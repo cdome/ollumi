@@ -15,6 +15,7 @@ import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -59,6 +60,8 @@ class FileUploadServiceTest {
     @Mock
     LibraryRepository libraryRepository;
     @Mock
+    LibraryPathRepository libraryPathRepository;
+    @Mock
     JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
@@ -95,7 +98,7 @@ class FileUploadServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(settings);
 
         service = new FileUploadService(
-                libraryRepository, jooqLibraryPathRepository, relationsRepository, bookRepository, bookAdditionalFileRepository,
+                libraryRepository, libraryPathRepository, jooqLibraryPathRepository, relationsRepository, bookRepository, bookAdditionalFileRepository,
                 appSettingService, appProperties, metadataExtractorFactory, additionalFileMapper, fileMovingHelper, monitoringRegistrationService, auditService
         );
     }

@@ -6,7 +6,9 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
+import org.booklore.repository.LibraryPathRepository;
 import org.booklore.util.FileUtils;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
@@ -29,13 +31,16 @@ import java.util.Set;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class LibraryFileHelper {
 
     private static final int MIN_AUDIO_FILES_FOR_FOLDER_AUDIOBOOK = 2;
 
+    private final LibraryPathRepository libraryPathRepository;
+
     public List<LibraryFile> getAllLibraryFiles(LibraryEntity libraryEntity) throws IOException {
         List<LibraryFile> allFiles = new ArrayList<>();
-        for (LibraryPathEntity pathEntity : libraryEntity.getLibraryPaths()) {
+        for (LibraryPathEntity pathEntity : libraryPathRepository.findByLibraryId(libraryEntity.getId())) {
             allFiles.addAll(findLibraryFiles(pathEntity, libraryEntity));
         }
         return allFiles;
@@ -54,7 +59,7 @@ public class LibraryFileHelper {
 
     public List<LibraryFile> getAllLibraryFilesFlat(LibraryEntity libraryEntity) throws IOException {
         List<LibraryFile> allFiles = new ArrayList<>();
-        for (LibraryPathEntity pathEntity : libraryEntity.getLibraryPaths()) {
+        for (LibraryPathEntity pathEntity : libraryPathRepository.findByLibraryId(libraryEntity.getId())) {
             allFiles.addAll(findLibraryFilesFlat(pathEntity, libraryEntity));
         }
         return allFiles;

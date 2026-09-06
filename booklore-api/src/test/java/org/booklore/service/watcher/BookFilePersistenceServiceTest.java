@@ -63,7 +63,6 @@ class BookFilePersistenceServiceTest {
         library = LibraryEntity.builder()
                 .id(1L)
                 .name("Test Library")
-                .libraryPaths(List.of(libraryPath))
                 .build();
 
         // paths are read via jOOQ now, not off the LAZY entity collection

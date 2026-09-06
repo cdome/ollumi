@@ -9,11 +9,14 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookAdditionalFileRepository;
+import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.task.options.RescanLibraryContext;
@@ -37,6 +40,9 @@ import java.util.stream.Collectors;
 public class LibraryProcessingService {
 
     private final LibraryRepository libraryRepository;
+    private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final FileAsBookProcessor fileAsBookProcessor;
@@ -53,7 +59,8 @@ public class LibraryProcessingService {
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started processing library: " + libraryEntity.getName()));
         try {
             List<LibraryFile> libraryFiles = libraryFileHelper.getLibraryFiles(libraryEntity);
-            List<LibraryFile> newFiles = detectNewBookPaths(libraryFiles, libraryEntity);
+            List<BookEntity> existingBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+            List<LibraryFile> newFiles = detectNewBookPaths(libraryFiles, existingBooks, libraryId);
 
             // Use BookGroupingService for consistent grouping based on organization mode
             Map<String, List<LibraryFile>> groups = bookGroupingService.groupForInitialScan(newFiles, libraryEntity);
@@ -69,7 +76,7 @@ public class LibraryProcessingService {
 
     @Transactional
     public void rescanLibrary(RescanLibraryContext context) throws IOException {
-        LibraryEntity libraryEntity = libraryRepository.findByIdWithBooks(context.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        LibraryEntity libraryEntity = libraryRepository.findById(context.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started refreshing library: " + libraryEntity.getName()));
 
         validateLibraryPathsAccessible(libraryEntity);
@@ -78,22 +85,24 @@ public class LibraryProcessingService {
         List<LibraryFile> filteredFiles = libraryFileHelper.filterByAllowedFormats(
                 allLibraryFiles, libraryEntity.getAllowedFormats());
 
-        int existingBookCount = libraryEntity.getBookEntities().size();
+        long existingBookCount = jooqBookRepository.countByLibraryId(libraryEntity.getId());
         if (existingBookCount > 0 && allLibraryFiles.isEmpty()) {
-            String paths = libraryEntity.getLibraryPaths().stream()
-                    .map(LibraryPathEntity::getPath)
+            String paths = jooqLibraryPathRepository.findPathsByLibraryId(libraryEntity.getId()).stream()
+                    .map(LibraryPathRow::getPath)
                     .collect(Collectors.joining(", "));
             log.error("Library '{}' has {} existing books but scan found 0 files. Paths may be offline: {}",
                     libraryEntity.getName(), existingBookCount, paths);
             throw ApiError.LIBRARY_PATH_NOT_ACCESSIBLE.createException(paths);
         }
 
+        List<BookEntity> existingBooks = bookRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
+
         List<Long> additionalFileIds = detectDeletedAdditionalFiles(allLibraryFiles, libraryEntity);
         if (!additionalFileIds.isEmpty()) {
             log.info("Detected {} removed additional files in library: {}", additionalFileIds.size(), libraryEntity.getName());
             bookDeletionService.deleteRemovedAdditionalFiles(additionalFileIds);
         }
-        List<Long> bookIds = detectDeletedBookIds(allLibraryFiles, libraryEntity);
+        List<Long> bookIds = detectDeletedBookIds(allLibraryFiles, existingBooks);
         if (!bookIds.isEmpty()) {
             log.info("Detected {} removed books in library: {}", bookIds.size(), libraryEntity.getName());
             bookDeletionService.processDeletedLibraryFiles(bookIds, allLibraryFiles);
@@ -101,11 +110,12 @@ public class LibraryProcessingService {
         bookRestorationService.restoreDeletedBooks(allLibraryFiles);
         bookDeletionService.purgeDisallowedFormats(libraryEntity);
         entityManager.clear();
-        // Re-fetch library entity with books to get fresh state after entity manager was cleared
-        libraryEntity = libraryRepository.findByIdWithBooks(context.getLibraryId())
+        // Re-fetch library entity to get fresh state after entity manager was cleared
+        libraryEntity = libraryRepository.findById(context.getLibraryId())
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        List<BookEntity> refreshedBooks = bookRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
 
-        List<LibraryFile> newFiles = detectNewBookPaths(filteredFiles, libraryEntity);
+        List<LibraryFile> newFiles = detectNewBookPaths(filteredFiles, refreshedBooks, libraryEntity.getId());
 
         // Use BookGroupingService to determine what to attach vs create new
         BookGroupingService.GroupingResult groupingResult = bookGroupingService.groupForRescan(newFiles, libraryEntity);
@@ -128,8 +138,8 @@ public class LibraryProcessingService {
     }
 
     private void validateLibraryPathsAccessible(LibraryEntity libraryEntity) {
-        for (var pathEntity : libraryEntity.getLibraryPaths()) {
-            Path path = Path.of(pathEntity.getPath());
+        for (LibraryPathRow pathRow : jooqLibraryPathRepository.findPathsByLibraryId(libraryEntity.getId())) {
+            Path path = Path.of(pathRow.getPath());
             if (!Files.exists(path) || !Files.isDirectory(path) || !Files.isReadable(path)) {
                 log.error("Library path not accessible: {}", path);
                 throw ApiError.LIBRARY_PATH_NOT_ACCESSIBLE.createException(path.toString());
@@ -137,12 +147,12 @@ public class LibraryProcessingService {
         }
     }
 
-    protected static List<Long> detectDeletedBookIds(List<LibraryFile> libraryFiles, LibraryEntity libraryEntity) {
+    protected static List<Long> detectDeletedBookIds(List<LibraryFile> libraryFiles, List<BookEntity> existingBooks) {
         Set<Path> currentFullPaths = libraryFiles.stream()
                 .map(LibraryFile::getFullPath)
                 .collect(Collectors.toSet());
 
-        return libraryEntity.getBookEntities().stream()
+        return existingBooks.stream()
                 .filter(book -> (book.getDeleted() == null || !book.getDeleted()))
                 .filter(book -> {
                     // Don't mark fileless books as deleted - they're intentionally without files
@@ -155,13 +165,13 @@ public class LibraryProcessingService {
                 .collect(Collectors.toList());
     }
 
-    protected List<LibraryFile> detectNewBookPaths(List<LibraryFile> libraryFiles, LibraryEntity libraryEntity) {
-        Set<String> existingKeys = libraryEntity.getBookEntities().stream()
+    protected List<LibraryFile> detectNewBookPaths(List<LibraryFile> libraryFiles, List<BookEntity> existingBooks, Long libraryId) {
+        Set<String> existingKeys = existingBooks.stream()
                 .filter(book -> book.getBookFiles() != null && !book.getBookFiles().isEmpty())
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
-        Set<String> additionalFileKeys = bookAdditionalFileRepository.findByLibraryId(libraryEntity.getId()).stream()
+        Set<String> additionalFileKeys = bookAdditionalFileRepository.findByLibraryId(libraryId).stream()
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 

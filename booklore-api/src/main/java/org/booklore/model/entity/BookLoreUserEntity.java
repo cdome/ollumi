@@ -61,16 +61,6 @@ public class BookLoreUserEntity {
     @Builder.Default
     private Set<ShelfEntity> shelves = new HashSet<>();
 
-    @BatchSize(size = 20)
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "user_library_mapping",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "library_id")
-    )
-    @Builder.Default
-    private Set<LibraryEntity> libraries = new HashSet<>();
-
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();

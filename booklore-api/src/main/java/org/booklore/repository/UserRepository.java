@@ -22,15 +22,16 @@ public interface UserRepository extends JpaRepository<BookLoreUserEntity, Long> 
     Optional<BookLoreUserEntity> findById(@NonNull Long id);
 
     /**
-     * Fetch a user with all eagerly-needed associations (settings, libraries, permissions)
-     * in a single query to prevent N+1 problems after OSIV is disabled.
+     * Fetch a user with eagerly-needed associations (permissions) in a single query to
+     * prevent N+1 problems after OSIV is disabled. Assigned libraries now come from
+     * JooqUserLibraryRepository, not an entity association.
      */
-    @EntityGraph(attributePaths = {"libraries", "libraries.libraryPaths", "permissions"})
+    @EntityGraph(attributePaths = {"permissions"})
     @Query("SELECT u FROM BookLoreUserEntity u WHERE u.id = :id")
     Optional<BookLoreUserEntity> findByIdWithDetails(@Param("id") Long id);
 
     /**
-     * Fetch a user with permissions (without libraries) for settings-related operations.
+     * Fetch a user with permissions for settings-related operations.
      * User settings now live in user_settings (jOOQ), no longer eager-loaded here.
      */
     @EntityGraph(attributePaths = {"permissions"})
@@ -38,9 +39,10 @@ public interface UserRepository extends JpaRepository<BookLoreUserEntity, Long> 
     Optional<BookLoreUserEntity> findByIdWithSettings(@Param("id") Long id);
 
     /**
-     * Fetch a user with libraries and permissions for authorization/library-access operations.
+     * Fetch a user with permissions for authorization/library-access operations.
+     * Assigned libraries now come from JooqUserLibraryRepository, not an entity association.
      */
-    @EntityGraph(attributePaths = {"libraries", "libraries.libraryPaths", "permissions"})
+    @EntityGraph(attributePaths = {"permissions"})
     @Query("SELECT u FROM BookLoreUserEntity u WHERE u.id = :id")
     Optional<BookLoreUserEntity> findByIdWithLibraries(@Param("id") Long id);
 
@@ -52,10 +54,11 @@ public interface UserRepository extends JpaRepository<BookLoreUserEntity, Long> 
     Optional<BookLoreUserEntity> findByIdWithPermissions(@Param("id") Long id);
 
     /**
-     * Fetch all users with their settings, libraries, and permissions in a single query.
-     * Prevents N+1 when listing all users (admin panel).
+     * Fetch all users with their permissions in a single query.
+     * Prevents N+1 when listing all users (admin panel). Assigned libraries now come from
+     * JooqUserLibraryRepository, not an entity association.
      */
-    @EntityGraph(attributePaths = {"libraries", "libraries.libraryPaths", "permissions"})
+    @EntityGraph(attributePaths = {"permissions"})
     @Query("SELECT DISTINCT u FROM BookLoreUserEntity u")
     List<BookLoreUserEntity> findAllWithDetails();
 

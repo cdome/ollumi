@@ -39,7 +39,6 @@ class BookGroupingServiceTest {
         return LibraryEntity.builder()
                 .name("Test Library")
                 .organizationMode(mode)
-                .libraryPaths(List.of(paths))
                 .build();
     }
 

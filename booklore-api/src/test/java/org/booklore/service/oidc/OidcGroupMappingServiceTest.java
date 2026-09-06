@@ -6,9 +6,9 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqOidcGroupMappingRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class OidcGroupMappingServiceTest {
     private AppSettingService appSettingService;
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqUserLibraryRepository jooqUserLibraryRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -185,10 +185,6 @@ class OidcGroupMappingServiceTest {
         var mapping = createMapping(false, List.of("permissionUpload", "permissionEditMetadata"), List.of(1L));
         setupSyncMocks("ON_LOGIN", List.of("group1"), List.of(mapping));
 
-        var lib1 = new LibraryEntity();
-        lib1.setId(1L);
-        when(libraryRepository.findAllById(any())).thenReturn(List.of(lib1));
-
         service.syncUserGroups(user, List.of("group1"));
 
         assertThat(perms.isPermissionUpload()).isTrue();
@@ -201,24 +197,15 @@ class OidcGroupMappingServiceTest {
     @Test
     void syncUserGroups_onLogin_replacesLibraries() {
         var perms = new UserPermissionsEntity();
-        var librariesHolder = new AtomicReference<Set<LibraryEntity>>();
-        var existingLib = new LibraryEntity();
-        existingLib.setId(10L);
-        librariesHolder.set(new HashSet<>(List.of(existingLib)));
-        var user = createMockedUserWithLibraries(perms, librariesHolder);
+        var libraryIdsHolder = new AtomicReference<Set<Long>>(new HashSet<>(Set.of(10L)));
+        var user = createMockedUserWithLibraries(perms, libraryIdsHolder);
 
         var mapping = createMapping(false, List.of(), List.of(1L, 2L));
         setupSyncMocks("ON_LOGIN", List.of("group1"), List.of(mapping));
 
-        var lib1 = new LibraryEntity();
-        lib1.setId(1L);
-        var lib2 = new LibraryEntity();
-        lib2.setId(2L);
-        when(libraryRepository.findAllById(any())).thenReturn(List.of(lib1, lib2));
-
         service.syncUserGroups(user, List.of("group1"));
 
-        assertThat(librariesHolder.get()).containsExactlyInAnyOrder(lib1, lib2);
+        assertThat(libraryIdsHolder.get()).containsExactlyInAnyOrder(1L, 2L);
         verify(userRepository).save(user);
     }
 
@@ -231,10 +218,6 @@ class OidcGroupMappingServiceTest {
         var mapping = createMapping(false, List.of("permissionUpload"), List.of(1L));
         setupSyncMocks("ON_LOGIN_ADDITIVE", List.of("group1"), List.of(mapping));
 
-        var lib1 = new LibraryEntity();
-        lib1.setId(1L);
-        when(libraryRepository.findAllById(any())).thenReturn(List.of(lib1));
-
         service.syncUserGroups(user, List.of("group1"));
 
         assertThat(perms.isPermissionUpload()).isTrue();
@@ -245,24 +228,15 @@ class OidcGroupMappingServiceTest {
     @Test
     void syncUserGroups_onLoginAdditive_addsLibrariesToExisting() {
         var perms = new UserPermissionsEntity();
-        var librariesHolder = new AtomicReference<Set<LibraryEntity>>();
-        var existingLib = new LibraryEntity();
-        existingLib.setId(10L);
-        librariesHolder.set(new HashSet<>(List.of(existingLib)));
-        var user = createMockedUserWithLibraries(perms, librariesHolder);
+        var libraryIdsHolder = new AtomicReference<Set<Long>>(new HashSet<>(Set.of(10L)));
+        var user = createMockedUserWithLibraries(perms, libraryIdsHolder);
 
         var mapping = createMapping(false, List.of(), List.of(1L));
         setupSyncMocks("ON_LOGIN_ADDITIVE", List.of("group1"), List.of(mapping));
 
-        var lib1 = new LibraryEntity();
-        lib1.setId(1L);
-        var lib10 = new LibraryEntity();
-        lib10.setId(10L);
-        when(libraryRepository.findAllById(any())).thenReturn(List.of(lib1, lib10));
-
         service.syncUserGroups(user, List.of("group1"));
 
-        assertThat(librariesHolder.get()).hasSize(2);
+        assertThat(libraryIdsHolder.get()).containsExactlyInAnyOrder(1L, 10L);
         verify(userRepository).save(user);
     }
 
@@ -287,24 +261,16 @@ class OidcGroupMappingServiceTest {
     void syncUserGroups_createsPermissionsEntityIfNull() {
         var permissionsHolder = new AtomicReference<UserPermissionsEntity>();
         var user = mock(BookLoreUserEntity.class);
-        when(user.getUsername()).thenReturn("testuser");
+        lenient().when(user.getUsername()).thenReturn("testuser");
+        lenient().when(user.getId()).thenReturn(1L);
         when(user.getPermissions()).thenReturn(null).thenAnswer(_ -> permissionsHolder.get());
         doAnswer(invocation -> {
             permissionsHolder.set(invocation.getArgument(0));
             return null;
         }).when(user).setPermissions(any());
-        doAnswer(invocation -> {
-            permissionsHolder.get().setUser(user);
-            return null;
-        }).when(user).setLibraries(any());
-        lenient().when(user.getLibraries()).thenReturn(null);
 
         var mapping = createMapping(false, List.of("permissionUpload"), List.of(1L));
         setupSyncMocks("ON_LOGIN", List.of("group1"), List.of(mapping));
-
-        var lib1 = new LibraryEntity();
-        lib1.setId(1L);
-        when(libraryRepository.findAllById(any())).thenReturn(List.of(lib1));
 
         service.syncUserGroups(user, List.of("group1"));
 
@@ -331,21 +297,22 @@ class OidcGroupMappingServiceTest {
     private BookLoreUserEntity createMockedUser(UserPermissionsEntity perms) {
         var user = mock(BookLoreUserEntity.class);
         lenient().when(user.getUsername()).thenReturn("testuser");
+        lenient().when(user.getId()).thenReturn(1L);
         when(user.getPermissions()).thenReturn(perms);
-        lenient().when(user.getLibraries()).thenReturn(null);
         return user;
     }
 
     private BookLoreUserEntity createMockedUserWithLibraries(UserPermissionsEntity perms,
-                                                              AtomicReference<Set<LibraryEntity>> librariesHolder) {
+                                                              AtomicReference<Set<Long>> libraryIdsHolder) {
         var user = mock(BookLoreUserEntity.class);
         lenient().when(user.getUsername()).thenReturn("testuser");
+        lenient().when(user.getId()).thenReturn(1L);
         when(user.getPermissions()).thenReturn(perms);
-        lenient().when(user.getLibraries()).thenAnswer(_ -> librariesHolder.get());
-        doAnswer(invocation -> {
-            librariesHolder.set(invocation.getArgument(0));
+        lenient().when(jooqUserLibraryRepository.findLibraryIdsByUserId(1L)).thenAnswer(_ -> libraryIdsHolder.get());
+        lenient().doAnswer(invocation -> {
+            libraryIdsHolder.set(new HashSet<>(invocation.getArgument(1)));
             return null;
-        }).when(user).setLibraries(any());
+        }).when(jooqUserLibraryRepository).setLibrariesForUser(eq(1L), any());
         return user;
     }
 

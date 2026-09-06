@@ -15,6 +15,7 @@ import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class UserProvisioningService {
     private final AppProperties appProperties;
     private final UserRepository userRepository;
     private final LibraryRepository libraryRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final UserDefaultsService userDefaultsService;
     private final AppSettingService appSettingService;
@@ -131,12 +133,11 @@ public class UserProvisioningService {
         permissions.setPermissionBulkResetBookReadStatus(request.isPermissionBulkResetBookReadStatus());
         user.setPermissions(permissions);
 
-        if (request.getSelectedLibraries() != null && !request.getSelectedLibraries().isEmpty()) {
-            List<LibraryEntity> libraries = libraryRepository.findAllById(request.getSelectedLibraries());
-            user.setLibraries(new HashSet<>(libraries));
-        }
+        Set<Long> libraryIds = request.getSelectedLibraries() != null
+                ? new HashSet<>(request.getSelectedLibraries())
+                : Set.of();
 
-        createUser(user);
+        createUser(user, libraryIds);
     }
 
     @Transactional
@@ -179,12 +180,9 @@ public class UserProvisioningService {
         user.setPermissions(perms);
 
         List<Long> defaultLibraryIds = oidcAutoProvisionDetails.getDefaultLibraryIds();
-        if (defaultLibraryIds != null && !defaultLibraryIds.isEmpty()) {
-            List<LibraryEntity> libraries = libraryRepository.findAllById(defaultLibraryIds);
-            user.setLibraries(new HashSet<>(libraries));
-        }
+        Set<Long> libraryIds = defaultLibraryIds != null ? new HashSet<>(defaultLibraryIds) : Set.of();
 
-        return createUser(user);
+        return createUser(user, libraryIds);
     }
 
     /**
@@ -261,19 +259,27 @@ public class UserProvisioningService {
         permissions.setPermissionAdmin(isAdmin);
         user.setPermissions(permissions);
 
+        Set<Long> libraryIds;
         if (isAdmin) {
-            List<LibraryEntity> libraries = libraryRepository.findAll();
-            user.setLibraries(new HashSet<>(libraries));
-        } else if (oidcAutoProvisionDetails != null && oidcAutoProvisionDetails.getDefaultLibraryIds() != null && !oidcAutoProvisionDetails.getDefaultLibraryIds().isEmpty()) {
-            List<LibraryEntity> libraries = libraryRepository.findAllById(oidcAutoProvisionDetails.getDefaultLibraryIds());
-            user.setLibraries(new HashSet<>(libraries));
+            libraryIds = libraryRepository.findAll().stream().map(LibraryEntity::getId).collect(java.util.stream.Collectors.toSet());
+        } else if (oidcAutoProvisionDetails != null && oidcAutoProvisionDetails.getDefaultLibraryIds() != null) {
+            libraryIds = new HashSet<>(oidcAutoProvisionDetails.getDefaultLibraryIds());
+        } else {
+            libraryIds = Set.of();
         }
 
-        return createUser(user);
+        return createUser(user, libraryIds);
     }
 
     protected BookLoreUserEntity createUser(BookLoreUserEntity user) {
+        return createUser(user, null);
+    }
+
+    protected BookLoreUserEntity createUser(BookLoreUserEntity user, Set<Long> libraryIds) {
         BookLoreUserEntity save = userRepository.save(user);
+        if (libraryIds != null && !libraryIds.isEmpty()) {
+            jooqUserLibraryRepository.setLibrariesForUser(save.getId(), libraryIds);
+        }
         userDefaultsService.addDefaultShelves(save);
         userDefaultsService.addDefaultSettings(save);
         auditService.log(AuditAction.USER_CREATED, "User", save.getId(), "Created user: " + save.getUsername());

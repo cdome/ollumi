@@ -64,6 +64,8 @@ public class BookDropService {
 
     private final JooqBookdropFileRepository bookdropFileRepository;
     private final LibraryRepository libraryRepository;
+    private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
+    private final org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
     private final BookRepository bookRepository;
     private final BookdropMonitoringService bookdropMonitoringService;
     private final NotificationService notificationService;
@@ -290,7 +292,7 @@ public class BookDropService {
             try {
                 LibraryEntity library = libraryRepository.findById(libraryId).orElse(null);
                 if (library != null) {
-                    for (LibraryPathEntity libPath : library.getLibraryPaths()) {
+                    for (org.booklore.repository.jooq.dto.LibraryPathRow libPath : jooqLibraryPathRepository.findPathsByLibraryId(libraryId)) {
                         Path libraryRoot = Path.of(libPath.getPath());
                         monitoringRegistrationService.registerLibraryPaths(libraryId, libraryRoot);
                         log.debug("Re-registered library {} path {} for monitoring", libraryId, libraryRoot);
@@ -375,7 +377,7 @@ public class BookDropService {
         LibraryEntity library = libraryRepository.findById(libraryId)
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
 
-        LibraryPathEntity path = library.getLibraryPaths().stream()
+        LibraryPathEntity path = libraryPathRepository.findByLibraryId(libraryId).stream()
                 .filter(p -> p.getId().equals(pathId))
                 .findFirst()
                 .orElseThrow(() -> ApiError.INVALID_LIBRARY_PATH.createException(libraryId));

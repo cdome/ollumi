@@ -30,6 +30,7 @@ public class KoboLibrarySnapshotService {
     private final JooqKoboSnapshotBookRepository koboSnapshotBookRepository;
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
+    private final org.booklore.repository.jooq.JooqUserLibraryRepository jooqUserLibraryRepository;
     private final BookRepository bookRepository;
     private final JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
     private final KoboCompatibilityService koboCompatibilityService;
@@ -142,10 +143,8 @@ public class KoboLibrarySnapshotService {
         if (user.getPermissions().isAdmin()) {
             return true;
         }
-        return book.getLibrary()
-                .getUsers()
+        return jooqUserLibraryRepository.findUserIdsByLibraryId(book.getLibrary().getId())
                 .stream()
-                .map(BookLoreUserEntity::getId)
                 .anyMatch(id -> Objects.equals(id, userId));
     }
 

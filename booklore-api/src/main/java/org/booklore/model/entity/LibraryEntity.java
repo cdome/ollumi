@@ -31,15 +31,6 @@ public class LibraryEntity {
     @Convert(converter = SortConverter.class)
     private Sort sort;
 
-    @OneToMany(mappedBy = "library", orphanRemoval = true)
-    private List<BookEntity> bookEntities;
-
-    @OneToMany(mappedBy = "library", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<LibraryPathEntity> libraryPaths;
-
-    @ManyToMany(mappedBy = "libraries")
-    private List<BookLoreUserEntity> users;
-
     private boolean watch;
 
     private String icon;

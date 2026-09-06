@@ -60,7 +60,7 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
     private BookEntity createPhantomBook(LibraryEntity library, String title) throws Exception {
         BookEntity book = BookEntity.builder()
                 .library(library)
-                .libraryPath(library.getLibraryPaths().get(0))
+                .libraryPath(data.getFirstLibraryPath(library))
                 .addedOn(Instant.now())
                 .scannedOn(Instant.now())
                 .deleted(false)
@@ -84,7 +84,7 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
                 .build();
         book.setBookFiles(new ArrayList<>(List.of(file)));
 
-        Path libraryRoot = Path.of(library.getLibraryPaths().get(0).getPath());
+        Path libraryRoot = Path.of(data.getFirstLibraryPath(library).getPath());
         Files.createFile(libraryRoot.resolve(fileName));
 
         return bookRepository.save(book);

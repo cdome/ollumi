@@ -12,4 +12,6 @@ public interface LibraryPathRepository extends JpaRepository<LibraryPathEntity, 
 
     @Query("SELECT lp FROM LibraryPathEntity lp JOIN FETCH lp.library")
     List<LibraryPathEntity> findAllWithLibrary();
+
+    List<LibraryPathEntity> findByLibraryId(Long libraryId);
 }

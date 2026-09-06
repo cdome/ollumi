@@ -11,6 +11,7 @@ import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.repository.jooq.JooqShelfRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,6 +36,7 @@ public class TestDataFactory {
     private final BookMetadataRepository bookMetadataRepository;
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final JooqAuthorRepository jooqAuthorRepository;
     private final JooqOpdsUserV2Repository opdsUserRepository;
     private final UserRepository userRepository;
@@ -46,6 +48,7 @@ public class TestDataFactory {
                            BookMetadataRepository bookMetadataRepository,
                            ShelfRepository shelfRepository,
                            JooqShelfRepository jooqShelfRepository,
+                           JooqUserLibraryRepository jooqUserLibraryRepository,
                            JooqAuthorRepository jooqAuthorRepository,
                            JooqOpdsUserV2Repository opdsUserRepository,
                            UserRepository userRepository,
@@ -56,6 +59,7 @@ public class TestDataFactory {
         this.bookMetadataRepository = bookMetadataRepository;
         this.shelfRepository = shelfRepository;
         this.jooqShelfRepository = jooqShelfRepository;
+        this.jooqUserLibraryRepository = jooqUserLibraryRepository;
         this.jooqAuthorRepository = jooqAuthorRepository;
         this.opdsUserRepository = opdsUserRepository;
         this.userRepository = userRepository;
@@ -63,9 +67,6 @@ public class TestDataFactory {
     }
 
     public LibraryEntity createLibrary(String name, Path rootDir) {
-        LibraryPathEntity path = new LibraryPathEntity();
-        path.setPath(rootDir.toAbsolutePath().toString());
-
         LibraryEntity library = LibraryEntity.builder()
                 .name(name)
                 .watch(false)
@@ -74,10 +75,23 @@ public class TestDataFactory {
                 .formatPriority(new ArrayList<>(List.of(BookFileType.EPUB, BookFileType.PDF, BookFileType.CBX)))
                 .build();
 
-        path.setLibrary(library);
-        library.setLibraryPaths(new ArrayList<>(List.of(path)));
+        library = libraryRepository.save(library);
 
-        return libraryRepository.save(library);
+        LibraryPathEntity path = new LibraryPathEntity();
+        path.setPath(rootDir.toAbsolutePath().toString());
+        path.setLibrary(library);
+        libraryPathRepository.save(path);
+
+        return library;
+    }
+
+    /** The first (and typically only) configured path of [library], loaded fresh via the JPA repository. */
+    public LibraryPathEntity getFirstLibraryPath(LibraryEntity library) {
+        List<LibraryPathEntity> paths = libraryPathRepository.findByLibraryId(library.getId());
+        if (paths.isEmpty()) {
+            throw new IllegalStateException("Library " + library.getId() + " has no configured paths");
+        }
+        return paths.get(0);
     }
 
     public LibraryEntity createLibrary(String name, String pathStr) {
@@ -104,16 +118,16 @@ public class TestDataFactory {
     }
 
     public void assignLibraryToUser(BookLoreUserEntity user, LibraryEntity library) {
-        Set<LibraryEntity> libraries = new HashSet<>(user.getLibraries());
-        libraries.add(library);
-        user.setLibraries(libraries);
-        userRepository.save(user);
+        Set<Long> libraryIds = new HashSet<>(jooqUserLibraryRepository.findLibraryIdsByUserId(user.getId()));
+        libraryIds.add(library.getId());
+        jooqUserLibraryRepository.setLibrariesForUser(user.getId(), libraryIds);
     }
 
     public BookEntity createBookWithFile(LibraryEntity library, String title, BookFileType bookType, Path fixtureFile) throws IOException {
         String extension = primaryExtension(bookType);
         String subPath = "books";
-        Path libraryDir = Path.of(library.getLibraryPaths().get(0).getPath());
+        LibraryPathEntity libraryPath = getFirstLibraryPath(library);
+        Path libraryDir = Path.of(libraryPath.getPath());
         Path targetDir = libraryDir.resolve(subPath);
         Files.createDirectories(targetDir);
         String fileName = title + "." + extension;
@@ -124,7 +138,7 @@ public class TestDataFactory {
 
         BookEntity book = BookEntity.builder()
                 .library(library)
-                .libraryPath(library.getLibraryPaths().get(0))
+                .libraryPath(libraryPath)
                 .addedOn(Instant.now())
                 .scannedOn(Instant.now())
                 .deleted(false)

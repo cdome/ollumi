@@ -15,6 +15,7 @@ import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
 import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.repository.jooq.dto.KoboLibrarySnapshot;
 import org.booklore.repository.jooq.dto.KoboSnapshotBook;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +54,9 @@ class KoboLibrarySnapshotServiceTest {
 
     @Mock
     private JooqShelfRepository jooqShelfRepository;
+
+    @Mock
+    private JooqUserLibraryRepository jooqUserLibraryRepository;
 
     @Mock
     private BookRepository bookRepository;
@@ -82,12 +87,15 @@ class KoboLibrarySnapshotServiceTest {
         otherUser = BookLoreUserEntity.builder().id(2L).isDefaultPassword(false).build();
 
         LibraryEntity ownersLibrary = LibraryEntity.builder()
-                .users(List.of(owner))
+                .id(10L)
                 .build();
 
         LibraryEntity othersLibrary = LibraryEntity.builder()
-                .users(List.of(otherUser))
+                .id(20L)
                 .build();
+
+        lenient().when(jooqUserLibraryRepository.findUserIdsByLibraryId(10L)).thenReturn(Set.of(owner.getId()));
+        lenient().when(jooqUserLibraryRepository.findUserIdsByLibraryId(20L)).thenReturn(Set.of(otherUser.getId()));
 
         ownersBook = BookEntity.builder()
                 .id(101L)

@@ -10,6 +10,8 @@ import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
@@ -67,6 +69,8 @@ class BookServiceTest {
     private JooqBookReadRepository jooqBookReadRepository;
     @Mock
     private JooqUserBookProgressRepository userBookProgressRepository;
+    @Mock
+    private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -340,7 +344,6 @@ class BookServiceTest {
         library.setId(42L);
         LibraryPathEntity libPath = new LibraryPathEntity();
         libPath.setPath("/tmp");
-        library.setLibraryPaths(List.of(libPath));
         entity.setLibrary(library);
         entity.setLibraryPath(libPath);
         BookFileEntity primaryFile = new BookFileEntity();
@@ -356,6 +359,7 @@ class BookServiceTest {
         doNothing().when(bookRepository).deleteAllInBatch(anyList());
         when(bookQueryService.findAllWithMetadataByIds(Set.of(11L))).thenReturn(List.of(entity));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(42L)).thenReturn(List.of(new LibraryPathRow(1L, "/tmp")));
 
         BookDeletionResponse response = bookService.deleteBooks(Set.of(11L)).getBody();
 
@@ -373,7 +377,6 @@ class BookServiceTest {
         library.setId(42L);
         LibraryPathEntity libPath = new LibraryPathEntity();
         libPath.setPath("/tmp");
-        library.setLibraryPaths(List.of(libPath));
         entity.setLibrary(library);
         entity.setLibraryPath(libPath);
         BookFileEntity primaryFile = new BookFileEntity();

@@ -23,6 +23,9 @@ import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.monitoring.LibraryWatchService;
@@ -67,6 +70,8 @@ public class LibraryService {
 
     private final LibraryRepository libraryRepository;
     private final LibraryPathRepository libraryPathRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryProcessingService libraryProcessingService;
@@ -105,8 +110,9 @@ public class LibraryService {
             library.setOrganizationMode(request.getOrganizationMode());
         }
 
-        Set<String> currentPaths = library.getLibraryPaths().stream()
-                .map(LibraryPathEntity::getPath)
+        List<LibraryPathRow> currentPathRows = jooqLibraryPathRepository.findPathsByLibraryId(libraryId);
+        Set<String> currentPaths = currentPathRows.stream()
+                .map(LibraryPathRow::getPath)
                 .collect(Collectors.toSet());
         Set<String> updatedPaths = request.getPaths().stream()
                 .map(LibraryPath::getPath)
@@ -120,28 +126,26 @@ public class LibraryService {
                 .collect(Collectors.toSet());
 
         if (!deletedPaths.isEmpty()) {
-            Set<LibraryPathEntity> pathsToRemove = library.getLibraryPaths().stream()
-                    .filter(pathEntity -> deletedPaths.contains(pathEntity.getPath()))
+            Set<Long> idsToRemove = currentPathRows.stream()
+                    .filter(row -> deletedPaths.contains(row.getPath()))
+                    .map(LibraryPathRow::getId)
                     .collect(Collectors.toSet());
 
-            library.getLibraryPaths().removeAll(pathsToRemove);
-            List<Long> books = jooqBookRepository.findBookIdsByLibraryPathIds(
-                    pathsToRemove.stream().map(LibraryPathEntity::getId).collect(Collectors.toSet()));
+            List<Long> books = jooqBookRepository.findBookIdsByLibraryPathIds(idsToRemove);
 
             if (!books.isEmpty()) {
                 notificationService.sendMessage(Topic.BOOKS_REMOVE, books);
             }
 
-            libraryPathRepository.deleteAll(pathsToRemove);
+            libraryPathRepository.deleteAllById(idsToRemove);
         }
 
         if (!newPaths.isEmpty()) {
-            Set<LibraryPathEntity> newPathEntities = newPaths.stream()
+            List<LibraryPathEntity> newPathEntities = newPaths.stream()
                     .map(path -> LibraryPathEntity.builder().path(path).library(library).build())
-                    .collect(Collectors.toSet());
+                    .collect(Collectors.toList());
 
-            library.getLibraryPaths().addAll(newPathEntities);
-            libraryPathRepository.saveAll(library.getLibraryPaths());
+            libraryPathRepository.saveAll(newPathEntities);
         }
 
         LibraryEntity savedLibrary = libraryRepository.save(library);
@@ -162,18 +166,8 @@ public class LibraryService {
 
     @Transactional
     public Library createLibrary(CreateLibraryRequest request) {
-        BookLoreUser bookLoreUser = authenticationService.getAuthenticatedUser();
-        Optional<BookLoreUserEntity> user = userRepository.findById(bookLoreUser.getId());
-
         LibraryEntity libraryEntity = LibraryEntity.builder()
                 .name(request.getName())
-                .libraryPaths(
-                        request.getPaths() == null || request.getPaths().isEmpty() ?
-                                Collections.emptyList() :
-                                request.getPaths().stream()
-                                        .map(path -> LibraryPathEntity.builder().path(path.getPath()).build())
-                                        .collect(Collectors.toList())
-                )
                 .icon(request.getIcon())
                 .iconType(request.getIconType())
                 .watch(request.isWatch())
@@ -181,14 +175,24 @@ public class LibraryService {
                 .allowedFormats(request.getAllowedFormats())
                 .metadataSource(request.getMetadataSource())
                 .organizationMode(request.getOrganizationMode())
-                .users(List.of(user.get()))
                 .build();
 
-        libraryEntity = libraryRepository.save(libraryEntity);
+        final LibraryEntity savedLibraryEntity = libraryRepository.save(libraryEntity);
+        libraryEntity = savedLibraryEntity;
         Long libraryId = libraryEntity.getId();
 
+        List<LibraryPathEntity> pathEntities = request.getPaths() == null || request.getPaths().isEmpty() ?
+                Collections.emptyList() :
+                request.getPaths().stream()
+                        .map(path -> LibraryPathEntity.builder().path(path.getPath()).library(savedLibraryEntity).build())
+                        .collect(Collectors.toList());
+
+        if (!pathEntities.isEmpty()) {
+            libraryPathRepository.saveAll(pathEntities);
+        }
+
         if (request.isWatch()) {
-            for (LibraryPathEntity pathEntity : libraryEntity.getLibraryPaths()) {
+            for (LibraryPathEntity pathEntity : pathEntities) {
                 Path path = Paths.get(pathEntity.getPath());
                 libraryWatchService.registerPath(path, libraryId);
             }
@@ -245,7 +249,7 @@ public class LibraryService {
         if (userEntity.getPermissions().isPermissionAdmin()) {
             libraries = libraryRepository.findAll();
         } else {
-            List<Long> libraryIds = userEntity.getLibraries().stream().map(LibraryEntity::getId).toList();
+            List<Long> libraryIds = new ArrayList<>(jooqUserLibraryRepository.findLibraryIdsByUserId(user.getId()));
             libraries = libraryRepository.findByIdIn(libraryIds);
         }
         return libraries.stream().map(libraryMapper::toLibrary).toList();
@@ -253,10 +257,10 @@ public class LibraryService {
 
     @Transactional
     public void deleteLibrary(long id) {
-        LibraryEntity library = libraryRepository.findByIdWithBooks(id)
+        LibraryEntity library = libraryRepository.findById(id)
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(id));
         libraryWatchService.unregisterLibrary(id);
-        Set<Long> bookIds = library.getBookEntities().stream().map(BookEntity::getId).collect(Collectors.toSet());
+        Set<Long> bookIds = jooqBookRepository.findBookIdsByLibraryId(id);
         fileService.deleteBookCovers(bookIds);
         String libraryName = library.getName();
         libraryRepository.deleteById(id);

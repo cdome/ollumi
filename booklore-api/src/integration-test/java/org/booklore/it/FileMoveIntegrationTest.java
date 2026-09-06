@@ -47,9 +47,7 @@ public class FileMoveIntegrationTest extends RestApiIntegrationTest {
         LibraryPathEntity path2 = new LibraryPathEntity();
         path2.setPath(path2Dir.toAbsolutePath().toString());
         path2.setLibrary(library);
-        library.getLibraryPaths().add(path2);
         libraryPathRepository.save(path2);
-        libraryRepository.save(library);
 
         Path pdf = Files.createTempFile("move-source-", ".pdf");
         FixtureFactory.writePdf(pdf);

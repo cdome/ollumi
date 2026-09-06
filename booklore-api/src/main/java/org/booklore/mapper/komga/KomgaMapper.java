@@ -6,6 +6,8 @@ import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.model.dto.komga.*;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.appsettings.AppSettingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -27,16 +29,16 @@ public class KomgaMapper {
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private final AppSettingService appSettingService;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final String UNKNOWN_SERIES = "Unknown Series";
 
     public KomgaLibraryDto toKomgaLibraryDto(LibraryEntity library) {
+        List<LibraryPathRow> paths = jooqLibraryPathRepository.findPathsByLibraryId(library.getId());
         return KomgaLibraryDto.builder()
                 .id(library.getId().toString())
                 .name(library.getName())
-                .root(library.getLibraryPaths() != null && !library.getLibraryPaths().isEmpty() 
-                      ? library.getLibraryPaths().get(0).getPath() 
-                      : "")
+                .root(paths.isEmpty() ? "" : paths.get(0).getPath())
                 .unavailable(false)
                 .build();
     }

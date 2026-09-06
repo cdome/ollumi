@@ -67,6 +67,8 @@ class BookDropServiceTest {
     @Mock
     private LibraryPathRepository libraryPathRepository;
     @Mock
+    private org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
+    @Mock
     private BookRepository bookRepository;
     @Mock
     private BookdropMonitoringService bookdropMonitoringService;
@@ -108,7 +110,9 @@ class BookDropServiceTest {
         libraryEntity = new LibraryEntity();
         libraryEntity.setId(1L);
         libraryEntity.setName("Test Library");
-        libraryEntity.setLibraryPaths(List.of(libraryPathEntity));
+        when(libraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPathEntity));
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
+                .thenReturn(List.of(new org.booklore.repository.jooq.dto.LibraryPathRow(libraryPathEntity.getId(), libraryPathEntity.getPath())));
 
         bookdropFileEntity = new BookdropFileRow(
                 1L,

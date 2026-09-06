@@ -78,7 +78,6 @@ class BookFileTransactionalHandlerTest {
         library = LibraryEntity.builder()
                 .id(1L)
                 .name("Test Library")
-                .libraryPaths(List.of(libraryPath))
                 .organizationMode(LibraryOrganizationMode.AUTO_DETECT)
                 .build();
 

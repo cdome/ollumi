@@ -9,6 +9,7 @@ import org.booklore.model.dto.response.DetachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.audit.AuditService;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.*;
 class BookFileDetachmentServiceTest {
 
     @Mock private BookRepository bookRepository;
+    @Mock private LibraryPathRepository libraryPathRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
@@ -60,7 +62,7 @@ class BookFileDetachmentServiceTest {
                 .path("/tmp/test-library")
                 .build();
 
-        library.setLibraryPaths(new ArrayList<>(List.of(libraryPath)));
+        lenient().when(libraryPathRepository.findByLibraryId(1L)).thenReturn(new ArrayList<>(List.of(libraryPath)));
     }
 
     private BookEntity createBook(Long id) {
@@ -263,7 +265,7 @@ class BookFileDetachmentServiceTest {
                 .library(library)
                 .path("/tmp/test-library/folder-2")
                 .build();
-        library.getLibraryPaths().add(libraryPath2);
+        when(libraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPath, libraryPath2));
 
         BookEntity book = createBook(1L);
         BookFileEntity primaryFile = createBookFile(10L, book, true, BookFileType.EPUB);

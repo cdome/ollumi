@@ -53,6 +53,7 @@ class BookServiceDeleteTests {
         FileService fileService = Mockito.mock(FileService.class);
         JooqBookReadRepository jooqBookReadRepository = Mockito.mock(JooqBookReadRepository.class);
         JooqUserBookProgressRepository userBookProgressRepository = Mockito.mock(JooqUserBookProgressRepository.class);
+        org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository = Mockito.mock(org.booklore.repository.jooq.JooqLibraryPathRepository.class);
         AuthenticationService authenticationService = Mockito.mock(AuthenticationService.class);
         BookQueryService bookQueryService = Mockito.mock(BookQueryService.class);
         ReadingProgressService readingProgressService = Mockito.mock(ReadingProgressService.class);
@@ -72,6 +73,7 @@ class BookServiceDeleteTests {
                 fileService,
                 jooqBookReadRepository,
                 userBookProgressRepository,
+                jooqLibraryPathRepository,
                 authenticationService,
                 bookQueryService,
                 readingProgressService,

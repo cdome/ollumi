@@ -14,7 +14,9 @@ import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -41,6 +43,7 @@ public class BookFileAttachmentService {
     private final BookFileRepository bookFileRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final MonitoringRegistrationService monitoringRegistrationService;
@@ -330,8 +333,8 @@ public class BookFileAttachmentService {
                 bookRepository.deleteAll(sourceBooksToDelete);
             }
 
-            Set<Path> libraryRoots = targetBook.getLibrary().getLibraryPaths().stream()
-                    .map(LibraryPathEntity::getPath)
+            Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(targetBook.getLibrary().getId()).stream()
+                    .map(LibraryPathRow::getPath)
                     .map(Paths::get)
                     .map(Path::normalize)
                     .collect(Collectors.toSet());
