@@ -70,15 +70,6 @@ public class BookEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    @BatchSize(size = 20)
-    @ManyToMany
-    @JoinTable(
-            name = "book_shelf_mapping",
-            joinColumns = @JoinColumn(name = "book_id"),
-            inverseJoinColumns = @JoinColumn(name = "shelf_id")
-    )
-    private Set<ShelfEntity> shelves;
-
     @Convert(converter = BookRecommendationIdsListConverter.class)
     @Column(name = "similar_books_json", columnDefinition = "TEXT")
     private Set<BookRecommendationLite> similarBooksJson;

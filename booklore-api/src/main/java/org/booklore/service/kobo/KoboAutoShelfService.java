@@ -8,14 +8,15 @@ import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.ShelfRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -25,6 +26,7 @@ public class KoboAutoShelfService {
 
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository jooqShelfRepository;
     private final BookRepository bookRepository;
     private final KoboCompatibilityService koboCompatibilityService;
 
@@ -53,36 +55,27 @@ public class KoboAutoShelfService {
 
         List<ShelfEntity> shelves = shelfRepository.findByUserIdInAndName(userIds, ShelfType.KOBO.getName());
 
-        Map<Long, ShelfEntity> shelfByUser = shelves
+        Map<Long, Long> shelfIdByUser = shelves
                 .stream()
-                .collect(Collectors.toMap(s -> s.getUser().getId(), s -> s));
+                .collect(Collectors.toMap(s -> s.getUser().getId(), ShelfEntity::getId));
 
-        boolean modified = false;
+        Set<Long> existingShelfIds = jooqShelfRepository.findShelfIdsByBookId(book.getId());
 
         for (KoboUserSettings setting : eligibleUsers) {
-            ShelfEntity shelf = shelfByUser.get(setting.getUserId());
+            Long shelfId = shelfIdByUser.get(setting.getUserId());
 
-            if (shelf == null) {
+            if (shelfId == null) {
                 log.debug("User {} has auto-add enabled but no Kobo shelf exists", setting.getUserId());
                 continue;
             }
 
-            if (book.getShelves() == null) {
-                book.setShelves(new HashSet<>());
-            }
-
-            if (book.getShelves().contains(shelf)) {
+            if (existingShelfIds.contains(shelfId)) {
                 log.debug("Book {} already on Kobo shelf for user {}", book.getId(), setting.getUserId());
                 continue;
             }
 
-            book.getShelves().add(shelf);
-            modified = true;
+            jooqShelfRepository.assignShelfToBook(book.getId(), shelfId);
             log.info("Auto-added book {} to Kobo shelf for user {}", book.getId(), setting.getUserId());
-        }
-
-        if (modified) {
-            bookRepository.save(book);
         }
     }
 

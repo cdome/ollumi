@@ -15,6 +15,7 @@ import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import lombok.AllArgsConstructor;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.service.audit.AuditService;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @AllArgsConstructor
 @Service
@@ -32,6 +34,7 @@ import java.util.Optional;
 public class ShelfService {
 
     private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository jooqShelfRepository;
     private final BookRepository bookRepository;
     private final ShelfMapper shelfMapper;
     private final BookMapper bookMapper;
@@ -100,7 +103,8 @@ public class ShelfService {
 
     public List<Book> getShelfBooks(Long shelfId) {
         findShelfByIdOrThrow(shelfId);
-        return bookRepository.findAllWithMetadataByShelfId(shelfId).stream()
+        Set<Long> bookIds = jooqShelfRepository.findBookIdsByShelfId(shelfId);
+        return bookRepository.findAllWithMetadataByIds(bookIds).stream()
                 .map(bookMapper::toBook)
                 .toList();
     }

@@ -5,11 +5,8 @@ import lombok.*;
 import org.booklore.convertor.SortConverter;
 import org.booklore.model.dto.Sort;
 import org.booklore.model.enums.IconType;
-import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Formula;
 
-import java.util.HashSet;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -47,14 +44,4 @@ public class ShelfEntity {
 
     @Formula("(SELECT COUNT(*) FROM book_shelf_mapping bsm WHERE bsm.shelf_id = id)")
     private int bookCount;
-
-    @BatchSize(size = 20)
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "book_shelf_mapping",
-            joinColumns = {@JoinColumn(name = "shelf_id")},
-            inverseJoinColumns = {@JoinColumn(name = "book_id")}
-    )
-    @Builder.Default
-    private Set<BookEntity> bookEntities = new HashSet<>();
 }

@@ -48,6 +48,7 @@ public class KoboEntitlementService {
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
     private final ShelfRepository shelfRepository;
+    private final org.booklore.repository.jooq.JooqShelfRepository jooqShelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final MagicShelfBookService magicShelfBookService;
     private final KoboSettingsService koboSettingsService;
@@ -116,9 +117,12 @@ public class KoboEntitlementService {
 
     public List<KoboTagWrapper> generateTags() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        Set<Long> koboBookIDs = shelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName())
+        Long koboShelfId = shelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName())
                 .orElseThrow(() -> new NoSuchElementException("Kobo shelf not found for user: " + userId))
-                .getBookEntities().stream().filter(koboCompatibilityService::isBookSupportedForKobo)
+                .getId();
+        Set<Long> koboShelfBookIds = jooqShelfRepository.findBookIdsByShelfId(koboShelfId);
+        Set<Long> koboBookIDs = bookQueryService.findAllWithMetadataByIds(koboShelfBookIds).stream()
+                .filter(koboCompatibilityService::isBookSupportedForKobo)
                 .map(BookEntity::getId)
                 .collect(Collectors.toSet());
 
@@ -127,7 +131,7 @@ public class KoboEntitlementService {
         shelfRepository.findByUserId(userId).stream()
                 .filter(shelf -> !Objects.equals(shelf.getName(), ShelfType.KOBO.getName()))
                 .map(shelf -> buildKoboTag("BL-S-" + shelf.getId(), shelf.getName(), null, null,
-                        shelf.getBookEntities().stream().map(BookEntity::getId).toList(), koboBookIDs))
+                        jooqShelfRepository.findBookIdsByShelfId(shelf.getId()).stream().toList(), koboBookIDs))
                 .forEach(tags::add);
 
         // Magic Shelves

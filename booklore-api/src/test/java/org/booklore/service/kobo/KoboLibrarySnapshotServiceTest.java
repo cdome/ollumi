@@ -9,10 +9,12 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
+import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
 import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.dto.KoboLibrarySnapshot;
 import org.booklore.repository.jooq.dto.KoboSnapshotBook;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +49,12 @@ class KoboLibrarySnapshotServiceTest {
 
     @Mock
     private ShelfRepository shelfRepository;
+
+    @Mock
+    private JooqShelfRepository jooqShelfRepository;
+
+    @Mock
+    private BookRepository bookRepository;
 
     @Mock
     private JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
@@ -120,12 +128,14 @@ class KoboLibrarySnapshotServiceTest {
     @Test
     void create_shouldIncludeOnlyBooksOwnedBySnapshotUser() {
         ShelfEntity shelf = ShelfEntity.builder()
+                .id(500L)
                 .name(ShelfType.KOBO.getName())
-                .bookEntities(Set.of(ownersBook, otherUsersBook))
                 .build();
 
         when(shelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
                 .thenReturn(Optional.of(shelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(500L)).thenReturn(Set.of(101L, 202L));
+        when(bookRepository.findAllById(any())).thenReturn(List.of(ownersBook, otherUsersBook));
 
         when(koboCompatibilityService.isBookSupportedForKobo(any())).thenReturn(true);
 
@@ -144,12 +154,14 @@ class KoboLibrarySnapshotServiceTest {
     @Test
     void create_shouldSkipOwnedBooksThatAreIncompatibleWithKobo() {
         ShelfEntity shelf = ShelfEntity.builder()
+                .id(500L)
                 .name(ShelfType.KOBO.getName())
-                .bookEntities(Set.of(ownersBook))
                 .build();
 
         when(shelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
                 .thenReturn(Optional.of(shelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(500L)).thenReturn(Set.of(101L));
+        when(bookRepository.findAllById(any())).thenReturn(List.of(ownersBook));
 
         when(koboCompatibilityService.isBookSupportedForKobo(ownersBook)).thenReturn(false);
 

@@ -16,6 +16,7 @@ import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.progress.ReadingProgressService;
@@ -40,7 +41,7 @@ public class BookUpdateService {
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository jooqShelfRepository;
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
@@ -115,10 +116,13 @@ public class BookUpdateService {
         validateShelfOwnership(userEntity, shelfIdsToAssign, shelfIdsToUnassign);
 
         List<BookEntity> bookEntities = bookQueryService.findAllWithMetadataByIds(bookIds);
-        List<ShelfEntity> shelvesToAssign = shelfRepository.findAllById(shelfIdsToAssign);
 
-        updateBookShelves(bookEntities, shelvesToAssign, shelfIdsToUnassign);
-        bookRepository.saveAll(bookEntities);
+        if (!shelfIdsToUnassign.isEmpty()) {
+            jooqShelfRepository.unassignShelvesFromBooks(bookIds, shelfIdsToUnassign);
+        }
+        if (!shelfIdsToAssign.isEmpty()) {
+            jooqShelfRepository.assignShelvesToBooks(bookIds, shelfIdsToAssign);
+        }
 
         return buildBooksWithProgress(bookEntities, user.getId());
     }
@@ -208,13 +212,6 @@ public class BookUpdateService {
         }
         if (!userShelfIds.containsAll(shelfIdsToUnassign)) {
             throw ApiError.GENERIC_UNAUTHORIZED.createException("Cannot unassign shelves that do not belong to the user.");
-        }
-    }
-
-    private void updateBookShelves(List<BookEntity> books, List<ShelfEntity> shelvesToAssign, Set<Long> shelfIdsToUnassign) {
-        for (BookEntity book : books) {
-            book.getShelves().removeIf(shelf -> shelfIdsToUnassign.contains(shelf.getId()));
-            book.getShelves().addAll(shelvesToAssign);
         }
     }
 

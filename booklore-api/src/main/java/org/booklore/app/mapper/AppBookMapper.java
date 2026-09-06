@@ -15,7 +15,6 @@ import org.mapstruct.*;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
@@ -34,17 +33,7 @@ public interface AppBookMapper {
         return "/api/books/" + book.getId() + "/cover";
     }
 
-    @Named("mapShelves")
-    default List<AppShelfSummary> mapShelves(Set<ShelfEntity> shelves) {
-        if (shelves == null || shelves.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return shelves.stream()
-                .map(this::toShelfSummary)
-                .collect(Collectors.toList());
-    }
-
-    default AppShelfSummary toShelfSummary(ShelfEntity shelf) {
+    default AppShelfSummary toShelfSummaryFromEntity(ShelfEntity shelf) {
         if (shelf == null) {
             return null;
         }
@@ -248,19 +237,6 @@ public interface AppBookMapper {
                 .bookCount(bookCount)
                 .allowedFormats(library.getAllowedFormats())
                 .paths(paths)
-                .build();
-    }
-
-    default AppShelfSummary toShelfSummaryFromEntity(ShelfEntity shelf) {
-        if (shelf == null) {
-            return null;
-        }
-        return AppShelfSummary.builder()
-                .id(shelf.getId())
-                .name(shelf.getName())
-                .icon(shelf.getIcon())
-                .bookCount(shelf.getBookCount())
-                .publicShelf(shelf.isPublic())
                 .build();
     }
 

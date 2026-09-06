@@ -10,6 +10,7 @@ import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -33,6 +34,7 @@ public class TestDataFactory {
     private final BookRepository bookRepository;
     private final BookMetadataRepository bookMetadataRepository;
     private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository jooqShelfRepository;
     private final JooqAuthorRepository jooqAuthorRepository;
     private final JooqOpdsUserV2Repository opdsUserRepository;
     private final UserRepository userRepository;
@@ -43,6 +45,7 @@ public class TestDataFactory {
                            BookRepository bookRepository,
                            BookMetadataRepository bookMetadataRepository,
                            ShelfRepository shelfRepository,
+                           JooqShelfRepository jooqShelfRepository,
                            JooqAuthorRepository jooqAuthorRepository,
                            JooqOpdsUserV2Repository opdsUserRepository,
                            UserRepository userRepository,
@@ -52,6 +55,7 @@ public class TestDataFactory {
         this.bookRepository = bookRepository;
         this.bookMetadataRepository = bookMetadataRepository;
         this.shelfRepository = shelfRepository;
+        this.jooqShelfRepository = jooqShelfRepository;
         this.jooqAuthorRepository = jooqAuthorRepository;
         this.opdsUserRepository = opdsUserRepository;
         this.userRepository = userRepository;
@@ -170,10 +174,7 @@ public class TestDataFactory {
     }
 
     public void addBookToShelf(BookEntity book, ShelfEntity shelf) {
-        // BookShelfMapping was dropped; book_shelf_mapping is now written through the
-        // ShelfEntity <-> BookEntity @ManyToMany join table.
-        shelf.getBookEntities().add(book);
-        shelfRepository.save(shelf);
+        jooqShelfRepository.assignShelfToBook(book.getId(), shelf.getId());
     }
 
     public OpdsUserV2 createOpdsUser(BookLoreUserEntity user, String username, String rawPassword) {

@@ -17,6 +17,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
@@ -80,6 +81,9 @@ class KoboEntitlementServiceTest {
 
     @Mock
     private ShelfRepository shelfRepository;
+
+    @Mock
+    private JooqShelfRepository jooqShelfRepository;
 
     @Mock
     private JooqMagicShelfRepository magicShelfRepository;
@@ -193,8 +197,8 @@ class KoboEntitlementServiceTest {
         BookEntity book1 = createEpubBookEntity(1L);
         BookEntity book2 = createEpubBookEntity(2L);
 
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1, book2)).build();
-        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").bookEntities(Set.of(book1)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
+        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").build();
 
         MagicShelfRow magicShelf = new MagicShelfRow(
                 201L, user.getId(), "Sci-Fi Books", "pi-book", null, "{}", false,
@@ -203,6 +207,9 @@ class KoboEntitlementServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L, 2L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(List.of(book1, book2));
+        when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of(magicShelf));
@@ -235,11 +242,13 @@ class KoboEntitlementServiceTest {
     @Test
     void generateTags_shouldExcludeKoboShelfFromTags() {
         BookEntity book1 = createEpubBookEntity(1L);
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
@@ -255,13 +264,16 @@ class KoboEntitlementServiceTest {
         BookEntity book2 = createEpubBookEntity(2L);
 
         // Kobo shelf only has book1
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
         // User shelf only has book2, which is not in Kobo shelf
-        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").bookEntities(Set.of(book2)).build();
+        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
+        when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(2L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
@@ -282,12 +294,15 @@ class KoboEntitlementServiceTest {
         BookEntity supportedBook = createEpubBookEntity(1L);
         BookEntity unsupportedBook = createEpubBookEntity(2L);
 
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(supportedBook, unsupportedBook)).build();
-        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").bookEntities(Set.of(supportedBook, unsupportedBook)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
+        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L, 2L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(List.of(supportedBook, unsupportedBook));
+        when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L, 2L));
         when(koboCompatibilityService.isBookSupportedForKobo(supportedBook)).thenReturn(true);
         when(koboCompatibilityService.isBookSupportedForKobo(unsupportedBook)).thenReturn(false);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
@@ -307,12 +322,15 @@ class KoboEntitlementServiceTest {
     @Test
     void generateTags_shouldSetCorrectTagItemType() {
         BookEntity book1 = createEpubBookEntity(1L);
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1)).build();
-        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("Reading").bookEntities(Set.of(book1)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
+        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("Reading").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
+        when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
@@ -328,7 +346,7 @@ class KoboEntitlementServiceTest {
     @Test
     void generateTags_shouldUseMagicShelfTimestamps() {
         BookEntity book1 = createEpubBookEntity(1L);
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
 
         LocalDateTime createdAt = LocalDateTime.of(2024, 1, 15, 10, 30, 0);
         LocalDateTime updatedAt = LocalDateTime.of(2024, 6, 20, 14, 45, 0);
@@ -338,6 +356,8 @@ class KoboEntitlementServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of(magicShelf));
@@ -356,11 +376,13 @@ class KoboEntitlementServiceTest {
     @Test
     void generateTags_shouldHandleEmptyShelvesAndMagicShelves() {
         BookEntity book1 = createEpubBookEntity(1L);
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
@@ -376,12 +398,15 @@ class KoboEntitlementServiceTest {
         BookEntity book2 = createEpubBookEntity(2L);
         BookEntity book3 = createEpubBookEntity(3L);
 
-        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).bookEntities(Set.of(book1, book2, book3)).build();
-        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("Collection").bookEntities(Set.of(book1, book2, book3)).build();
+        ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
+        ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("Collection").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
                 .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L, 2L, 3L));
+        when(bookQueryService.findAllWithMetadataByIds(Set.of(1L, 2L, 3L))).thenReturn(List.of(book1, book2, book3));
+        when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L, 2L, 3L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
         when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
