@@ -8,6 +8,8 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MergeMetadataType;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileMoveService;
 import org.booklore.service.metadata.writer.MetadataWriter;
@@ -35,11 +37,13 @@ class MetadataManagementServiceTest {
 
     @Mock private AppProperties appProperties;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private BookMetadataRepository bookMetadataRepository;
+    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private AppSettingService appSettingService;
     @Mock private MetadataWriterFactory metadataWriterFactory;
     @Mock private FileMoveService fileMoveService;
-    @Mock private BookRepository bookRepository;
 
     @InjectMocks
     private MetadataManagementService service;
@@ -72,7 +76,7 @@ class MetadataManagementServiceTest {
         verify(relationsRepository).setAuthorsForBook(bookId, List.of("Target Author"));
         verify(relationsRepository).deleteAuthorByName("Old Author");
         assertThat(metadata.getAuthorNames()).isEqualTo(List.of("Target Author"));
-        verify(bookMetadataRepository).saveAll(List.of(metadata));
+        verify(jooqBookMetadataRepository).updateSearchText(eq(bookId), any());
     }
 
     @Test
@@ -125,13 +129,15 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateSeries_updatesSeriesNameOnAllBooks() {
-        BookMetadataEntity metadata = BookMetadataEntity.builder().seriesName("Old Series").build();
+        long bookId = 42L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).seriesName("Old Series").build();
         when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Old Series")).thenReturn(List.of(metadata));
+        when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
 
         service.consolidateMetadata(MergeMetadataType.series, List.of("New Series"), List.of("Old Series"));
 
         assertThat(metadata.getSeriesName()).isEqualTo("New Series");
-        verify(bookMetadataRepository).saveAll(List.of(metadata));
+        verify(jooqBookMetadataRepository).updateSeriesName(eq(bookId), eq("New Series"), any());
     }
 
     @Test
@@ -144,12 +150,14 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidatePublishers_updatesPublisherOnAllBooks() {
-        BookMetadataEntity metadata = BookMetadataEntity.builder().publisher("Old Pub").build();
+        long bookId = 43L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).publisher("Old Pub").build();
         when(bookMetadataRepository.findAllByPublisherIgnoreCase("Old Pub")).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.publishers, List.of("New Pub"), List.of("Old Pub"));
 
         assertThat(metadata.getPublisher()).isEqualTo("New Pub");
+        verify(jooqBookMetadataRepository).updatePublisher(bookId, "New Pub");
     }
 
     @Test
@@ -161,12 +169,14 @@ class MetadataManagementServiceTest {
 
     @Test
     void consolidateLanguages_updatesLanguageOnAllBooks() {
-        BookMetadataEntity metadata = BookMetadataEntity.builder().language("fr").build();
+        long bookId = 44L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).language("fr").build();
         when(bookMetadataRepository.findAllByLanguageIgnoreCase("fr")).thenReturn(List.of(metadata));
 
         service.consolidateMetadata(MergeMetadataType.languages, List.of("en"), List.of("fr"));
 
         assertThat(metadata.getLanguage()).isEqualTo("en");
+        verify(jooqBookMetadataRepository).updateLanguage(bookId, "en");
     }
 
     @Test
@@ -190,6 +200,7 @@ class MetadataManagementServiceTest {
         java.nio.file.Files.createFile(tempFile);
 
         BookFileEntity bookFile = BookFileEntity.builder()
+                .id(101L)
                 .fileName("test.epub")
                 .fileSubPath("sub")
                 .bookType(BookFileType.EPUB)
@@ -220,7 +231,7 @@ class MetadataManagementServiceTest {
         }
 
         verify(writer).saveMetadataToFile(any(), eq(metadata), isNull(), isNull());
-        verify(bookRepository).saveAndFlush(book);
+        verify(jooqBookRepository).updateBookFileHash(101L, "newhash");
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);
@@ -249,6 +260,7 @@ class MetadataManagementServiceTest {
         java.nio.file.Files.createFile(tempFile);
 
         BookFileEntity bookFile = BookFileEntity.builder()
+                .id(102L)
                 .fileName("test.epub")
                 .fileSubPath("sub")
                 .bookType(BookFileType.EPUB)
@@ -277,7 +289,7 @@ class MetadataManagementServiceTest {
 
         assertThat(bookFile.getFileName()).isEqualTo("new.epub");
         assertThat(bookFile.getFileSubPath()).isEqualTo("new/sub");
-        verify(bookRepository).saveAndFlush(book);
+        verify(bookAdditionalFileRepository).updateFileNameAndSubPath(102L, "new.epub", "new/sub");
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);
@@ -346,38 +358,46 @@ class MetadataManagementServiceTest {
 
     @Test
     void deleteSeries_clearsSeriesFieldsFromBooks() {
+        long bookId = 45L;
         BookMetadataEntity metadata = BookMetadataEntity.builder()
+                .bookId(bookId)
                 .seriesName("My Series")
                 .seriesNumber(1.0f)
                 .seriesTotal(3)
                 .build();
         when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("My Series")).thenReturn(List.of(metadata));
+        when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
 
         service.deleteMetadata(MergeMetadataType.series, List.of("My Series"));
 
         assertThat(metadata.getSeriesName()).isNull();
         assertThat(metadata.getSeriesNumber()).isNull();
         assertThat(metadata.getSeriesTotal()).isNull();
+        verify(jooqBookMetadataRepository).clearSeries(eq(bookId), any());
     }
 
     @Test
     void deletePublishers_clearsPublisherFromBooks() {
-        BookMetadataEntity metadata = BookMetadataEntity.builder().publisher("Old Pub").build();
+        long bookId = 46L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).publisher("Old Pub").build();
         when(bookMetadataRepository.findAllByPublisherIgnoreCase("Old Pub")).thenReturn(List.of(metadata));
 
         service.deleteMetadata(MergeMetadataType.publishers, List.of("Old Pub"));
 
         assertThat(metadata.getPublisher()).isNull();
+        verify(jooqBookMetadataRepository).updatePublisher(bookId, null);
     }
 
     @Test
     void deleteLanguages_clearsLanguageFromBooks() {
-        BookMetadataEntity metadata = BookMetadataEntity.builder().language("fr").build();
+        long bookId = 47L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).language("fr").build();
         when(bookMetadataRepository.findAllByLanguageIgnoreCase("fr")).thenReturn(List.of(metadata));
 
         service.deleteMetadata(MergeMetadataType.languages, List.of("fr"));
 
         assertThat(metadata.getLanguage()).isNull();
+        verify(jooqBookMetadataRepository).updateLanguage(bookId, null);
     }
 
     @Test
@@ -386,7 +406,7 @@ class MetadataManagementServiceTest {
 
         service.deleteMetadata(MergeMetadataType.series, List.of("Missing"));
 
-        verify(bookMetadataRepository, never()).saveAll(anyList());
+        verify(jooqBookMetadataRepository, never()).clearSeries(anyLong(), any());
     }
 
     @Test
@@ -395,7 +415,7 @@ class MetadataManagementServiceTest {
 
         service.deleteMetadata(MergeMetadataType.publishers, List.of("Missing"));
 
-        verify(bookMetadataRepository, never()).saveAll(anyList());
+        verify(jooqBookMetadataRepository, never()).updatePublisher(anyLong(), any());
     }
 
     @Test
@@ -411,13 +431,16 @@ class MetadataManagementServiceTest {
 
     @Test
     void writeMetadataToFile_skipsWhenBookIsNull() {
-        BookMetadataEntity metadata = BookMetadataEntity.builder().book(null).build();
+        long bookId = 48L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).book(null).build();
         when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Old")).thenReturn(List.of(metadata));
+        when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
 
         service.consolidateMetadata(MergeMetadataType.series, List.of("New"), List.of("Old"));
 
         verify(metadataWriterFactory, never()).getWriter(any());
-        verify(bookRepository, never()).saveAndFlush(any());
+        verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
+        verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
     }
 
     @Test
@@ -442,6 +465,7 @@ class MetadataManagementServiceTest {
                 .libraryPath(libraryPath)
                 .build();
         BookMetadataEntity metadata = BookMetadataEntity.builder()
+                .bookId(1L)
                 .seriesName("Old")
                 .book(book)
                 .build();
@@ -449,10 +473,12 @@ class MetadataManagementServiceTest {
 
         when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Old")).thenReturn(List.of(metadata));
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.empty());
+        when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
 
         service.consolidateMetadata(MergeMetadataType.series, List.of("New"), List.of("Old"));
 
-        verify(bookRepository, never()).saveAndFlush(any());
+        verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
+        verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);
@@ -508,7 +534,7 @@ class MetadataManagementServiceTest {
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target"), List.of("Old"));
 
         assertThat(bookFile.getFileName()).isEqualTo("original.epub");
-        verify(bookRepository, never()).saveAndFlush(any());
+        verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);

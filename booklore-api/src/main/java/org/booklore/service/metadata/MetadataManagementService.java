@@ -7,11 +7,14 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MergeMetadataType;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.file.FileMoveService;
 import org.booklore.service.metadata.writer.MetadataWriter;
 import org.booklore.service.metadata.writer.MetadataWriterFactory;
+import org.booklore.util.BookUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,11 +33,13 @@ public class MetadataManagementService {
 
     private final AppProperties appProperties;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookMetadataRepository bookMetadataRepository;
+    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AppSettingService appSettingService;
     private final MetadataWriterFactory metadataWriterFactory;
     private final FileMoveService fileMoveService;
-    private final BookRepository bookRepository;
 
 
     @Transactional
@@ -58,7 +63,6 @@ public class MetadataManagementService {
         for (BookMetadataEntity metadata : metadataList) {
             if (metadata.getBook() != null) {
                 BookEntity book = metadata.getBook();
-                boolean bookModified = false;
 
                 var primaryFile = book.getPrimaryBookFile();
                 BookFileType bookType = primaryFile.getBookType();
@@ -69,7 +73,7 @@ public class MetadataManagementService {
                         writerOpt.get().saveMetadataToFile(file, metadata, null, null);
                         String newHash = FileFingerprint.generateHash(book.getFullFilePath());
                         primaryFile.setCurrentHash(newHash);
-                        bookModified = true;
+                        jooqBookRepository.updateBookFileHash(primaryFile.getId(), newHash);
                     }
                 }
 
@@ -78,12 +82,9 @@ public class MetadataManagementService {
                     if (result.isMoved()) {
                         primaryFile.setFileName(result.getNewFileName());
                         primaryFile.setFileSubPath(result.getNewFileSubPath());
-                        bookModified = true;
+                        bookAdditionalFileRepository.updateFileNameAndSubPath(
+                                primaryFile.getId(), result.getNewFileName(), result.getNewFileSubPath());
                     }
-                }
-
-                if (bookModified) {
-                    bookRepository.saveAndFlush(book);
                 }
             }
         }
@@ -110,10 +111,8 @@ public class MetadataManagementService {
             List<BookMetadataEntity> booksWithOldAuthor = bookMetadataRepository.findAllById(affectedBookIds);
             for (BookMetadataEntity metadata : booksWithOldAuthor) {
                 metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
-                metadata.updateSearchText();
+                jooqBookMetadataRepository.updateSearchText(metadata.getBookId(), BookUtils.buildSearchText(metadata));
             }
-            bookMetadataRepository.saveAll(booksWithOldAuthor);
-            bookMetadataRepository.flush();
             writeMetadataToFile(booksWithOldAuthor, moveFile);
             relationsRepository.deleteAuthorByName(oldAuthorName);
         }
@@ -197,16 +196,17 @@ public class MetadataManagementService {
         if (targetValues.size() != 1) {
             throw new IllegalArgumentException("Series merge requires exactly one target value");
         }
-        String targetSeriesName = targetValues.getFirst();
+        String targetSeriesName = trimOrNull(targetValues.getFirst());
 
         for (String oldSeriesName : valuesToMerge) {
             List<BookMetadataEntity> booksWithOldSeries = bookMetadataRepository.findAllBySeriesNameIgnoreCase(oldSeriesName);
 
             for (BookMetadataEntity metadata : booksWithOldSeries) {
                 metadata.setSeriesName(targetSeriesName);
+                metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
+                jooqBookMetadataRepository.updateSeriesName(metadata.getBookId(), targetSeriesName, BookUtils.buildSearchText(metadata));
             }
 
-            bookMetadataRepository.saveAll(booksWithOldSeries);
             writeMetadataToFile(booksWithOldSeries, moveFile);
         }
 
@@ -217,16 +217,16 @@ public class MetadataManagementService {
         if (targetValues.size() != 1) {
             throw new IllegalArgumentException("Publisher merge requires exactly one target value");
         }
-        String targetPublisher = targetValues.getFirst();
+        String targetPublisher = trimOrNull(targetValues.getFirst());
 
         for (String oldPublisher : valuesToMerge) {
             List<BookMetadataEntity> booksWithOldPublisher = bookMetadataRepository.findAllByPublisherIgnoreCase(oldPublisher);
 
             for (BookMetadataEntity metadata : booksWithOldPublisher) {
                 metadata.setPublisher(targetPublisher);
+                jooqBookMetadataRepository.updatePublisher(metadata.getBookId(), targetPublisher);
             }
 
-            bookMetadataRepository.saveAll(booksWithOldPublisher);
             writeMetadataToFile(booksWithOldPublisher, moveFile);
         }
 
@@ -237,16 +237,16 @@ public class MetadataManagementService {
         if (targetValues.size() != 1) {
             throw new IllegalArgumentException("Language merge requires exactly one target value");
         }
-        String targetLanguage = targetValues.getFirst();
+        String targetLanguage = trimOrNull(targetValues.getFirst());
 
         for (String oldLanguage : valuesToMerge) {
             List<BookMetadataEntity> booksWithOldLanguage = bookMetadataRepository.findAllByLanguageIgnoreCase(oldLanguage);
 
             for (BookMetadataEntity metadata : booksWithOldLanguage) {
                 metadata.setLanguage(targetLanguage);
+                jooqBookMetadataRepository.updateLanguage(metadata.getBookId(), targetLanguage);
             }
 
-            bookMetadataRepository.saveAll(booksWithOldLanguage);
             writeMetadataToFile(booksWithOldLanguage, moveFile);
         }
 
@@ -361,10 +361,11 @@ public class MetadataManagementService {
                 metadata.setSeriesName(null);
                 metadata.setSeriesNumber(null);
                 metadata.setSeriesTotal(null);
+                metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
+                jooqBookMetadataRepository.clearSeries(metadata.getBookId(), BookUtils.buildSearchText(metadata));
             }
 
             if (!booksWithSeries.isEmpty()) {
-                bookMetadataRepository.saveAll(booksWithSeries);
                 writeMetadataToFile(booksWithSeries, moveFile);
             }
         }
@@ -378,10 +379,10 @@ public class MetadataManagementService {
 
             for (BookMetadataEntity metadata : booksWithPublisher) {
                 metadata.setPublisher(null);
+                jooqBookMetadataRepository.updatePublisher(metadata.getBookId(), null);
             }
 
             if (!booksWithPublisher.isEmpty()) {
-                bookMetadataRepository.saveAll(booksWithPublisher);
                 writeMetadataToFile(booksWithPublisher, moveFile);
             }
         }
@@ -395,14 +396,20 @@ public class MetadataManagementService {
 
             for (BookMetadataEntity metadata : booksWithLanguage) {
                 metadata.setLanguage(null);
+                jooqBookMetadataRepository.updateLanguage(metadata.getBookId(), null);
             }
 
             if (!booksWithLanguage.isEmpty()) {
-                bookMetadataRepository.saveAll(booksWithLanguage);
                 writeMetadataToFile(booksWithLanguage, moveFile);
             }
         }
 
         log.info("Deleted {} languages: {}", valuesToDelete.size(), valuesToDelete);
+    }
+
+    private static String trimOrNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
