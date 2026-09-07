@@ -176,6 +176,44 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .execute()
     }
 
+    // ========================================================================
+    // Writes: cover updates (book + book_metadata timestamp/hash columns only —
+    // no cascade, these rows already exist)
+    // ========================================================================
+
+    fun updateCoverMetadata(bookId: Long, bookCoverHash: String, now: Instant) {
+        val ts = LocalDateTime.ofInstant(now, ZoneOffset.UTC)
+        dsl.update(BOOK)
+            .set(BOOK.BOOK_COVER_HASH, bookCoverHash)
+            .set(BOOK.METADATA_UPDATED_AT, ts)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+        dsl.update(bm)
+            .set(bm.COVER_UPDATED_ON, ts)
+            .where(bm.BOOK_ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateAudiobookCoverMetadata(bookId: Long, audiobookCoverHash: String, now: Instant) {
+        val ts = LocalDateTime.ofInstant(now, ZoneOffset.UTC)
+        dsl.update(BOOK)
+            .set(BOOK.AUDIOBOOK_COVER_HASH, audiobookCoverHash)
+            .set(BOOK.METADATA_UPDATED_AT, ts)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+        dsl.update(bm)
+            .set(bm.AUDIOBOOK_COVER_UPDATED_ON, ts)
+            .where(bm.BOOK_ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateBookFileHash(bookFileId: Long, hash: String) {
+        dsl.update(bf)
+            .set(bf.CURRENT_HASH, hash)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
     private fun firstBookFileName(): Field<String> {
         val bf2 = BOOK_FILE.`as`("bf2")
         return field(

@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Instant;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -263,10 +264,7 @@ class BookCoverServiceTest {
 
             service.regenerateCover(1L);
 
-            assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
-            assertThat(book.getMetadataUpdatedAt()).isNotNull();
-            assertThat(book.getBookCoverHash()).isNotNull();
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -381,7 +379,7 @@ class BookCoverServiceTest {
 
             verify(coverImageGenerator).generateCover("Test Book", "Jane Doe");
             verify(fileService).createThumbnailFromBytes(eq(1L), any());
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -499,9 +497,7 @@ class BookCoverServiceTest {
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
             verify(fileService).createThumbnailFromUrl(1L, "https://example.com/cover.jpg");
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
-            assertThat(book.getBookCoverHash()).isNotNull();
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -518,8 +514,7 @@ class BookCoverServiceTest {
             service.updateCoverFromFile(1L, file);
 
             verify(fileService).createThumbnailFromFile(1L, file);
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -536,9 +531,7 @@ class BookCoverServiceTest {
             service.updateAudiobookCoverFromFile(1L, file);
 
             verify(fileService).createAudiobookThumbnailFromFile(1L, file);
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
-            assertThat(book.getAudiobookCoverHash()).isNotNull();
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
@@ -563,9 +556,7 @@ class BookCoverServiceTest {
             service.updateAudiobookCoverFromUrl(1L, "https://example.com/audiobook-cover.jpg");
 
             verify(fileService).createAudiobookThumbnailFromUrl(1L, "https://example.com/audiobook-cover.jpg");
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
-            assertThat(book.getAudiobookCoverHash()).isNotNull();
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
@@ -596,9 +587,7 @@ class BookCoverServiceTest {
 
             service.regenerateAudiobookCover(1L);
 
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
-            assertThat(book.getAudiobookCoverHash()).isNotNull();
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -617,8 +606,7 @@ class BookCoverServiceTest {
 
             verify(coverImageGenerator).generateSquareCover("Test Audiobook", "Author Name");
             verify(fileService).createAudiobookThumbnailFromBytes(eq(1L), any());
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
@@ -767,8 +755,7 @@ class BookCoverServiceTest {
 
                 service.regenerateCovers(false);
 
-                verify(bookRepository).save(book);
-                assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
+                verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
             }
         }
 
@@ -791,7 +778,7 @@ class BookCoverServiceTest {
 
                 service.regenerateCovers(false);
 
-                verify(bookRepository, never()).save(any());
+                verify(jooqBookRepository, never()).updateCoverMetadata(anyLong(), anyString(), any());
             }
         }
 
@@ -833,7 +820,7 @@ class BookCoverServiceTest {
                 service.regenerateCovers(true);
 
                 verify(transactionTemplate, times(1)).execute(any());
-                verify(bookRepository).save(withoutCover);
+                verify(jooqBookRepository).updateCoverMetadata(eq(2L), anyString(), any(Instant.class));
                 verify(bookRepository, never()).findById(1L);
             }
         }
@@ -964,6 +951,7 @@ class BookCoverServiceTest {
         void writesAndUpdatesHashWhenWriterExists() {
             BookEntity book = buildBook(1L, false);
             BookFileEntity primaryFile = BookFileEntity.builder()
+                    .id(20L)
                     .bookType(BookFileType.EPUB).isBookFormat(true)
                     .fileName("test.epub").fileSubPath("sub")
                     .build();
@@ -988,7 +976,7 @@ class BookCoverServiceTest {
                 service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
                 verify(metadataWriterFactory).getWriter(BookFileType.EPUB);
-                assertThat(primaryFile.getCurrentHash()).isEqualTo("abc123");
+                verify(jooqBookRepository).updateBookFileHash(20L, "abc123");
             }
         }
 
@@ -1083,7 +1071,7 @@ class BookCoverServiceTest {
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
             verify(metadataWriterFactory, never()).getWriter(any());
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
@@ -1101,7 +1089,7 @@ class BookCoverServiceTest {
             service.updateAudiobookCoverFromUrl(1L, "https://example.com/audiobook-cover.jpg");
 
             verify(metadataWriterFactory, never()).getWriter(any());
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 }

@@ -85,7 +85,6 @@ public class BookCoverService {
         fileService.createThumbnailFromBytes(bookId, coverBytes);
         writeCoverToBookFile(bookEntity, (writer, book) -> writer.replaceCoverImageFromBytes(book, coverBytes));
         updateBookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -103,7 +102,6 @@ public class BookCoverService {
         fileService.createThumbnailFromFile(bookId, file);
         writeCoverToBookFile(bookEntity, (writer, book) -> writer.replaceCoverImageFromUpload(book, file));
         updateBookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -121,7 +119,6 @@ public class BookCoverService {
         fileService.createThumbnailFromUrl(bookId, url);
         writeCoverToBookFile(bookEntity, (writer, book) -> writer.replaceCoverImageFromUrl(book, url));
         updateBookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -143,7 +140,6 @@ public class BookCoverService {
         fileService.createAudiobookThumbnailFromFile(bookId, file);
         writeAudiobookCoverToFile(bookEntity, (writer, book) -> writer.replaceCoverImageFromUpload(book, file));
         updateAudiobookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -161,7 +157,6 @@ public class BookCoverService {
         fileService.createAudiobookThumbnailFromUrl(bookId, url);
         writeAudiobookCoverToFile(bookEntity, (writer, book) -> writer.replaceCoverImageFromUrl(book, url));
         updateAudiobookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -186,7 +181,6 @@ public class BookCoverService {
             throw ApiError.FAILED_TO_REGENERATE_COVER.createException("no embedded cover image found in the audiobook file");
         }
         updateAudiobookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -208,7 +202,6 @@ public class BookCoverService {
         fileService.createAudiobookThumbnailFromBytes(bookId, coverBytes);
         writeAudiobookCoverToFile(bookEntity, (writer, book) -> writer.replaceCoverImageFromBytes(book, coverBytes));
         updateAudiobookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
         notifyBookCoverUpdate(bookEntity);
     }
 
@@ -248,7 +241,6 @@ public class BookCoverService {
             throw ApiError.FAILED_TO_REGENERATE_COVER.createException("no embedded cover image found in the file");
         }
         updateBookCoverMetadata(bookEntity);
-        bookRepository.save(bookEntity);
     }
 
     /**
@@ -334,7 +326,6 @@ public class BookCoverService {
 
                                 if (success) {
                                     updateBookCoverMetadata(book);
-                                    bookRepository.save(book);
                                     refreshedIds.add(book.getId());
                                     log.info("{}Successfully regenerated cover for book ID {} ({})", progress, book.getId(), bookInfo.title());
                                 } else {
@@ -380,7 +371,6 @@ public class BookCoverService {
                             fileService.createThumbnailFromBytes(bookInfo.id(), coverImageBytes);
                             writeCoverToBookFile(book, (writer, b) -> writer.replaceCoverImageFromBytes(b, coverImageBytes));
                             updateBookCoverMetadata(book);
-                            bookRepository.save(book);
                             refreshedIds.add(book.getId());
                         });
                         return null;
@@ -421,7 +411,6 @@ public class BookCoverService {
 
                             if (success) {
                                 updateBookCoverMetadata(book);
-                                bookRepository.save(book);
                                 refreshedIds.add(book.getId());
                             }
                         });
@@ -465,7 +454,6 @@ public class BookCoverService {
                             fileService.createThumbnailFromBytes(book.getId(), coverBytes);
                             writeCoverToBookFile(book, (writer, b) -> writer.replaceCoverImageFromBytes(b, coverBytes));
                             updateBookCoverMetadata(book);
-                            bookRepository.save(book);
                             refreshedIds.add(book.getId());
                         });
                         return null;
@@ -561,7 +549,7 @@ public class BookCoverService {
                     .ifPresent(writer -> {
                         writerAction.accept(writer, bookEntity);
                         String newHash = FileFingerprint.generateHash(bookEntity.getFullFilePath());
-                        primaryFile.setCurrentHash(newHash);
+                        jooqBookRepository.updateBookFileHash(primaryFile.getId(), newHash);
                     });
         }
     }
@@ -584,23 +572,17 @@ public class BookCoverService {
                     writerAction.accept(writer, bookEntity);
                     if (!audiobookFile.isFolderBased()) {
                         String newHash = FileFingerprint.generateHash(audiobookFile.getFullFilePath());
-                        audiobookFile.setCurrentHash(newHash);
+                        jooqBookRepository.updateBookFileHash(audiobookFile.getId(), newHash);
                     }
                 });
     }
 
     private void updateBookCoverMetadata(BookEntity bookEntity) {
-        Instant now = Instant.now();
-        bookEntity.setMetadataUpdatedAt(now);
-        bookEntity.getMetadata().setCoverUpdatedOn(now);
-        bookEntity.setBookCoverHash(BookCoverUtils.generateCoverHash());
+        jooqBookRepository.updateCoverMetadata(bookEntity.getId(), BookCoverUtils.generateCoverHash(), Instant.now());
     }
 
     private void updateAudiobookCoverMetadata(BookEntity bookEntity) {
-        Instant now = Instant.now();
-        bookEntity.setMetadataUpdatedAt(now);
-        bookEntity.getMetadata().setAudiobookCoverUpdatedOn(now);
-        bookEntity.setAudiobookCoverHash(BookCoverUtils.generateCoverHash());
+        jooqBookRepository.updateAudiobookCoverMetadata(bookEntity.getId(), BookCoverUtils.generateCoverHash(), Instant.now());
     }
 
     private void notifyBookCoverUpdate(BookEntity bookEntity) {
