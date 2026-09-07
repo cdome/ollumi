@@ -3,6 +3,7 @@ package org.booklore.repository.jooq
 import org.booklore.jooq.tables.ComicCharacter.COMIC_CHARACTER
 import org.booklore.jooq.tables.ComicCreator.COMIC_CREATOR
 import org.booklore.jooq.tables.ComicLocation.COMIC_LOCATION
+import org.booklore.jooq.tables.ComicMetadata.COMIC_METADATA
 import org.booklore.jooq.tables.ComicMetadataCharacterMapping.COMIC_METADATA_CHARACTER_MAPPING
 import org.booklore.jooq.tables.ComicMetadataCreatorMapping.COMIC_METADATA_CREATOR_MAPPING
 import org.booklore.jooq.tables.ComicMetadataLocationMapping.COMIC_METADATA_LOCATION_MAPPING
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Repository
 @Repository
 class JooqComicMetadataRepository(private val dsl: DSLContext) {
 
+    private val cm = COMIC_METADATA
     private val ccm = COMIC_METADATA_CHARACTER_MAPPING
     private val ctm = COMIC_METADATA_TEAM_MAPPING
     private val clm = COMIC_METADATA_LOCATION_MAPPING
@@ -167,4 +169,41 @@ class JooqComicMetadataRepository(private val dsl: DSLContext) {
         dsl.deleteFrom(COMIC_CREATOR)
             .where(DSL.notExists(dsl.selectOne().from(crm).where(crm.CREATOR_ID.eq(COMIC_CREATOR.ID))))
             .execute()
+
+    // ========================================================================
+    // comic_metadata's own lock columns (replaces ComicMetadataEntity.applyLockToAllFields)
+    // ========================================================================
+
+    /** No-op for any bookId with no comic_metadata row - the WHERE clause naturally excludes it. */
+    fun lockAllFields(bookIds: Collection<Long>, lock: Boolean) {
+        if (bookIds.isEmpty()) return
+        val value: Byte = if (lock) 1 else 0
+        dsl.update(cm)
+            .set(cm.ISSUE_NUMBER_LOCKED, value)
+            .set(cm.VOLUME_NAME_LOCKED, value)
+            .set(cm.VOLUME_NUMBER_LOCKED, value)
+            .set(cm.STORY_ARC_LOCKED, value)
+            .set(cm.STORY_ARC_NUMBER_LOCKED, value)
+            .set(cm.ALTERNATE_SERIES_LOCKED, value)
+            .set(cm.ALTERNATE_ISSUE_LOCKED, value)
+            .set(cm.IMPRINT_LOCKED, value)
+            .set(cm.FORMAT_LOCKED, value)
+            .set(cm.BLACK_AND_WHITE_LOCKED, value)
+            .set(cm.MANGA_LOCKED, value)
+            .set(cm.READING_DIRECTION_LOCKED, value)
+            .set(cm.WEB_LINK_LOCKED, value)
+            .set(cm.NOTES_LOCKED, value)
+            .set(cm.CREATORS_LOCKED, value)
+            .set(cm.PENCILLERS_LOCKED, value)
+            .set(cm.INKERS_LOCKED, value)
+            .set(cm.COLORISTS_LOCKED, value)
+            .set(cm.LETTERERS_LOCKED, value)
+            .set(cm.COVER_ARTISTS_LOCKED, value)
+            .set(cm.EDITORS_LOCKED, value)
+            .set(cm.CHARACTERS_LOCKED, value)
+            .set(cm.TEAMS_LOCKED, value)
+            .set(cm.LOCATIONS_LOCKED, value)
+            .where(cm.BOOK_ID.`in`(bookIds))
+            .execute()
+    }
 }

@@ -15,11 +15,11 @@ import org.booklore.model.dto.request.BulkMetadataUpdateRequest;
 import org.booklore.model.dto.request.FetchMetadataRequest;
 import org.booklore.model.dto.request.ToggleAllLockRequest;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.*;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.book.BookQueryService;
@@ -42,7 +42,6 @@ import reactor.core.scheduler.Schedulers;
 import org.booklore.model.dto.request.IsbnLookupRequest;
 
 import java.io.File;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -57,7 +56,8 @@ public class BookMetadataService {
     private final BookMetadataMapper bookMetadataMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
     private final NotificationService notificationService;
-    private final BookMetadataRepository bookMetadataRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final JooqComicMetadataRepository jooqComicMetadataRepository;
     private final BookQueryService bookQueryService;
     private final AuditService auditService;
     private final Map<MetadataProvider, BookParser> parserMap;
@@ -156,26 +156,17 @@ public class BookMetadataService {
         Map<String, String> fieldMapping = Map.of(
                 "thumbnailLocked", "coverLocked"
         );
-        List<BookMetadataEntity> metadataEntities = bookMetadataRepository
-                .getMetadataForBookIds(bookIds)
-                .stream()
-                .distinct()
-                .toList();
 
-        for (BookMetadataEntity metadataEntity : metadataEntities) {
-            fieldActions.forEach((field, action) -> {
-                String entityField = fieldMapping.getOrDefault(field, field);
-                try {
-                    String setterName = "set" + Character.toUpperCase(entityField.charAt(0)) + entityField.substring(1);
-                    Method setter = BookMetadataEntity.class.getMethod(setterName, Boolean.class);
-                    setter.invoke(metadataEntity, "LOCK".equalsIgnoreCase(action));
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to invoke setter for field: " + entityField + " on bookId: " + metadataEntity.getBookId(), e);
-                }
-            });
-        }
+        Map<String, Boolean> resolvedActions = new LinkedHashMap<>();
+        fieldActions.forEach((field, action) -> {
+            String entityField = fieldMapping.getOrDefault(field, field);
+            if (!JooqBookMetadataRepository.isKnownLockField(entityField)) {
+                throw new RuntimeException("Failed to invoke setter for field: " + entityField);
+            }
+            resolvedActions.put(entityField, "LOCK".equalsIgnoreCase(action));
+        });
 
-        bookMetadataRepository.saveAll(metadataEntities);
+        jooqBookMetadataRepository.updateLockFields(bookIds, resolvedActions);
     }
 
     @Transactional
@@ -185,7 +176,18 @@ public class BookMetadataService {
                 .stream()
                 .peek(book -> book.getMetadata().applyLockToAllFields(lock))
                 .toList();
-        bookRepository.saveAll(books);
+
+        List<Long> bookIds = books.stream().map(BookEntity::getId).toList();
+        jooqBookMetadataRepository.lockAllFields(bookIds, lock);
+
+        List<Long> comicBookIds = books.stream()
+                .filter(book -> book.getMetadata().getComicMetadata() != null)
+                .map(BookEntity::getId)
+                .toList();
+        if (!comicBookIds.isEmpty()) {
+            jooqComicMetadataRepository.lockAllFields(comicBookIds, lock);
+        }
+
         return books.stream().map(b -> bookMetadataMapper.toBookMetadata(b.getMetadata(), false)).collect(Collectors.toList());
     }
 
