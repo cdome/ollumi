@@ -60,8 +60,6 @@ public class BookReviewService {
             List<BookReview> fetchedReviews = fetchBookReviews(bookEntity);
             if (!fetchedReviews.isEmpty()) {
                 bookReviewUpdateService.addReviewsToBook(fetchedReviews, bookEntity.getMetadata());
-                // Flush the cascade insert so the jOOQ read below sees the persisted, limit-applied reviews.
-                bookRepository.saveAndFlush(bookEntity);
                 return bookReviewRepository.findByBookId(bookId);
             }
         } catch (Exception e) {
@@ -104,14 +102,10 @@ public class BookReviewService {
         BookEntity bookEntity = bookRepository.findByIdWithMetadata(bookId)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
-        // clear() + save relies on the reviews @OneToMany orphanRemoval cascade to delete the old rows.
-        bookEntity.getMetadata().getReviews().clear();
-        bookRepository.save(bookEntity);
+        bookReviewRepository.deleteByBookId(bookId);
 
         List<BookReview> freshReviews = fetchBookReviews(bookEntity);
         bookReviewUpdateService.addReviewsToBook(freshReviews, bookEntity.getMetadata());
-        // Flush the cascade delete+insert so the jOOQ read below sees the final persisted reviews.
-        bookRepository.saveAndFlush(bookEntity);
 
         return bookReviewRepository.findByBookId(bookId);
     }

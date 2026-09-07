@@ -5,13 +5,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
-import org.hibernate.annotations.Fetch;
-import org.hibernate.annotations.FetchMode;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -394,11 +390,6 @@ public class BookMetadataEntity {
     /** See moodNames/categoryNames: same @Transient same-request scratch cache, not persisted. */
     @Transient
     private Set<String> tagNames;
-
-    @OneToMany(mappedBy = "bookMetadata", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Fetch(FetchMode.SUBSELECT)
-    @Builder.Default
-    private Set<BookReviewEntity> reviews = new HashSet<>();
 
     public void applyLockToAllFields(boolean lock) {
         this.titleLocked = lock;

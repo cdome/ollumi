@@ -186,7 +186,6 @@ class BookReviewServiceTest {
         assertEquals(freshReview, result.getFirst());
         verify(bookReviewUpdateService).addReviewsToBook(
             Collections.singletonList(freshReview), bookEntity.getMetadata());
-        verify(bookRepository).saveAndFlush(bookEntity);
     }
 
     @Test
@@ -218,7 +217,6 @@ class BookReviewServiceTest {
 
         assertEquals(1, result.size());
         verify(bookReviewUpdateService).addReviewsToBook(anyList(), any());
-        verify(bookRepository).saveAndFlush(bookEntity);
     }
 
     @Test
