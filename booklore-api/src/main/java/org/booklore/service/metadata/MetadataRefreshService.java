@@ -168,7 +168,6 @@ public class MetadataRefreshService {
                         log.error("Metadata update failed for book: {}", getBookIdentifier(book), e);
                         sendBatchProgressNotification(jobId, finalCompletedCount, totalBooks, String.format("Failed to process: %s - %s", book.getMetadata().getTitle(), e.getMessage()), MetadataFetchTaskStatus.ERROR, isReviewMode);
                     }
-                    bookRepository.saveAndFlush(book);
                     return null;
                 });
                 completedCount++;

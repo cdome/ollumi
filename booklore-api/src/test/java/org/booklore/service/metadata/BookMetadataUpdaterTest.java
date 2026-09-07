@@ -41,9 +41,10 @@ class BookMetadataUpdaterTest {
 
     @Mock private AppProperties appProperties;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    @Mock private BookRepository bookRepository;
-    @Mock private ComicMetadataRepository comicMetadataRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock private org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
+    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private FileService fileService;
     @Mock private MetadataMatchService metadataMatchService;
     @Mock private AppSettingService appSettingService;
@@ -106,7 +107,7 @@ class BookMetadataUpdaterTest {
 
         updater.setBookMetadata(context);
 
-        verify(bookRepository, never()).save(any());
+        verify(jooqBookMetadataRepository, never()).updateFullRow(any());
     }
 
     @Test
@@ -120,7 +121,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            verify(bookRepository, never()).save(any());
+            verify(jooqBookMetadataRepository, never()).updateFullRow(any());
         }
     }
 
@@ -137,7 +138,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            verify(bookRepository, never()).save(any());
+            verify(jooqBookMetadataRepository, never()).updateFullRow(any());
         }
     }
 
@@ -153,7 +154,7 @@ class BookMetadataUpdaterTest {
 
             updater.setBookMetadata(context);
 
-            verify(bookRepository).save(bookEntity);
+            verify(jooqBookMetadataRepository).updateFullRow(metadataEntity);
         }
     }
 
@@ -578,7 +579,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void updateFileNameIfConverted_noChangeWhenOriginalExists() {
-        BookFileEntity bookFile = BookFileEntity.builder().fileName("test.cbr").build();
+        BookFileEntity bookFile = BookFileEntity.builder().id(10L).fileName("test.cbr").build();
         java.nio.file.Path tempDir;
         try {
             tempDir = java.nio.file.Files.createTempDirectory("test-metadata-");
@@ -588,6 +589,7 @@ class BookMetadataUpdaterTest {
             updater.updateFileNameIfConverted(bookFile, original);
 
             assertThat(bookFile.getFileName()).isEqualTo("test.cbr");
+            verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
             java.nio.file.Files.deleteIfExists(original);
             java.nio.file.Files.deleteIfExists(tempDir);
         } catch (Exception e) {
@@ -597,7 +599,7 @@ class BookMetadataUpdaterTest {
 
     @Test
     void updateFileNameIfConverted_updatesToCbzWhenOriginalGoneAndCbzExists() {
-        BookFileEntity bookFile = BookFileEntity.builder().fileName("test.cbr").build();
+        BookFileEntity bookFile = BookFileEntity.builder().id(10L).fileName("test.cbr").build();
         try {
             java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test-metadata-");
             java.nio.file.Path original = tempDir.resolve("test.cbr");
@@ -607,6 +609,7 @@ class BookMetadataUpdaterTest {
             updater.updateFileNameIfConverted(bookFile, original);
 
             assertThat(bookFile.getFileName()).isEqualTo("test.cbz");
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(10L, "test.cbz", null);
             java.nio.file.Files.deleteIfExists(cbz);
             java.nio.file.Files.deleteIfExists(tempDir);
         } catch (Exception e) {
@@ -915,14 +918,10 @@ class BookMetadataUpdaterTest {
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
 
-            ComicMetadataEntity saved = ComicMetadataEntity.builder().bookId(1L).issueNumber("5").build();
-            when(comicMetadataRepository.saveAndFlush(any(ComicMetadataEntity.class))).thenReturn(saved);
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(saved);
-
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                verify(comicMetadataRepository).saveAndFlush(any(ComicMetadataEntity.class));
+                verify(comicRelationsRepository).insertBlankRow(1L);
             }
         }
 
@@ -935,8 +934,7 @@ class BookMetadataUpdaterTest {
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                verify(comicMetadataRepository, never()).saveAndFlush(any());
-                verify(comicMetadataRepository, never()).save(any());
+                verify(comicRelationsRepository, never()).insertBlankRow(anyLong());
             }
         }
 
@@ -946,14 +944,10 @@ class BookMetadataUpdaterTest {
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
 
-            ComicMetadataEntity saved = ComicMetadataEntity.builder().bookId(1L).build();
-            when(comicMetadataRepository.saveAndFlush(any(ComicMetadataEntity.class))).thenReturn(saved);
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(saved);
-
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
-                verify(comicMetadataRepository).saveAndFlush(any(ComicMetadataEntity.class));
+                verify(comicRelationsRepository).insertBlankRow(1L);
             }
         }
 
@@ -973,8 +967,6 @@ class BookMetadataUpdaterTest {
                     .build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
-
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
@@ -1009,8 +1001,6 @@ class BookMetadataUpdaterTest {
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
 
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             try (MockedStatic<MetadataChangeDetector> mcd = mockStatic(MetadataChangeDetector.class)) {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
@@ -1028,8 +1018,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of("Superman")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1049,8 +1037,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of("Superman")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1068,8 +1054,6 @@ class BookMetadataUpdaterTest {
         void updatesTeams_replaceAll() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
-
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().teams(Set.of("Avengers")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
@@ -1089,8 +1073,6 @@ class BookMetadataUpdaterTest {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
 
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().locations(Set.of("Gotham")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1108,8 +1090,6 @@ class BookMetadataUpdaterTest {
         void updatesCreators_pencillers() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
-
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().pencillers(Set.of("Jim Lee")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
@@ -1129,8 +1109,6 @@ class BookMetadataUpdaterTest {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).pencillersLocked(true).build();
             metadataEntity.setComicMetadata(existing);
 
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().pencillers(Set.of("Jim Lee")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1149,8 +1127,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of()).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1170,8 +1146,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findCharacterNamesByBookId(1L)).thenReturn(Set.of("Batman"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().characters(Set.of("Superman")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1188,8 +1162,6 @@ class BookMetadataUpdaterTest {
         void deletesOrphanedEntitiesAfterUpdate() {
             ComicMetadataEntity existing = ComicMetadataEntity.builder().bookId(1L).build();
             metadataEntity.setComicMetadata(existing);
-
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
 
             ComicMetadata comicDto = ComicMetadata.builder().issueNumber("1").build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
@@ -1212,8 +1184,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findCreatorNamesByBookIdAndRole(1L, ComicCreatorRole.PENCILLER)).thenReturn(Set.of("Artist"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().pencillers(Set.of()).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_ALL);
@@ -1233,8 +1203,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findTeamNamesByBookId(1L)).thenReturn(Set.of("X-Men"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().teams(Set.of("Avengers")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1254,8 +1222,6 @@ class BookMetadataUpdaterTest {
             metadataEntity.setComicMetadata(existing);
 
             when(comicRelationsRepository.findLocationNamesByBookId(1L)).thenReturn(Set.of("Gotham"));
-            when(comicMetadataRepository.save(any(ComicMetadataEntity.class))).thenReturn(existing);
-
             ComicMetadata comicDto = ComicMetadata.builder().locations(Set.of("Metropolis")).build();
             BookMetadata newMeta = BookMetadata.builder().title("T").comicMetadata(comicDto).build();
             MetadataUpdateContext context = buildContext(newMeta, MetadataReplaceMode.REPLACE_MISSING);
@@ -1578,7 +1544,7 @@ class BookMetadataUpdaterTest {
                 mockSettingsAndChangeDetector(mcd, true, true);
                 updater.setBookMetadata(context);
 
-                verify(bookRepository).save(bookEntity);
+                verify(jooqBookMetadataRepository).updateFullRow(metadataEntity);
             }
         }
 
@@ -1639,7 +1605,7 @@ class BookMetadataUpdaterTest {
 
                 updater.setBookMetadata(context);
 
-                verify(bookRepository).save(bookEntity);
+                verify(jooqBookMetadataRepository).updateFullRow(metadataEntity);
             }
         }
     }
@@ -1706,7 +1672,7 @@ class BookMetadataUpdaterTest {
 
                 updater.setBookMetadata(context);
 
-                verify(bookRepository).save(bookEntity);
+                verify(jooqBookMetadataRepository).updateFullRow(metadataEntity);
             }
         }
     }
@@ -1716,7 +1682,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void noChangeWhenNeitherOriginalNorCbzExists() {
-            BookFileEntity bookFile = BookFileEntity.builder().fileName("test.cbr").build();
+            BookFileEntity bookFile = BookFileEntity.builder().id(11L).fileName("test.cbr").build();
             try {
                 java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test-metadata-");
                 java.nio.file.Path original = tempDir.resolve("test.cbr");
@@ -1724,6 +1690,7 @@ class BookMetadataUpdaterTest {
                 updater.updateFileNameIfConverted(bookFile, original);
 
                 assertThat(bookFile.getFileName()).isEqualTo("test.cbr");
+                verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
                 java.nio.file.Files.deleteIfExists(tempDir);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -1732,7 +1699,7 @@ class BookMetadataUpdaterTest {
 
         @Test
         void handlesFileNameWithNoExtension() {
-            BookFileEntity bookFile = BookFileEntity.builder().fileName("testfile").build();
+            BookFileEntity bookFile = BookFileEntity.builder().id(11L).fileName("testfile").build();
             try {
                 java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test-metadata-");
                 java.nio.file.Path original = tempDir.resolve("testfile");
@@ -1742,6 +1709,7 @@ class BookMetadataUpdaterTest {
                 updater.updateFileNameIfConverted(bookFile, original);
 
                 assertThat(bookFile.getFileName()).isEqualTo("testfile.cbz");
+                verify(bookAdditionalFileRepository).updateFileNameAndSubPath(11L, "testfile.cbz", null);
                 java.nio.file.Files.deleteIfExists(cbz);
                 java.nio.file.Files.deleteIfExists(tempDir);
             } catch (Exception e) {
@@ -1773,7 +1741,7 @@ class BookMetadataUpdaterTest {
                 updater.setBookMetadata(context);
 
                 verify(metadataWriterFactory, never()).getWriter(any());
-                verify(bookRepository).save(bookEntity);
+                verify(jooqBookMetadataRepository).updateFullRow(metadataEntity);
             }
         }
     }

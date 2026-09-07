@@ -2,9 +2,13 @@ package org.booklore.repository.jooq
 
 import org.booklore.jooq.tables.BookMetadata.BOOK_METADATA
 import org.booklore.jooq.tables.records.BookMetadataRecord
+import org.booklore.model.entity.BookMetadataEntity
 import org.jooq.DSLContext
+import org.jooq.Field
 import org.jooq.TableField
 import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 /**
  * jOOQ write access to book_metadata's own scalar columns (not the @ManyToMany relations, see
@@ -89,6 +93,102 @@ class JooqBookMetadataRepository(private val dsl: DSLContext) {
     }
 
     private fun toByte(value: Boolean): Byte = if (value) 1 else 0
+    private fun toByteOrNull(value: Boolean?): Byte? = value?.let { if (it) 1 else 0 }
+
+    /**
+     * Writes every book_metadata scalar + lock column from the entity's CURRENT in-memory state,
+     * replacing BookMetadataEntity's @DynamicUpdate Hibernate flush. Callers must call
+     * metadata.updateSearchText() first (trims string fields + recomputes search_text), matching
+     * what the old @PreUpdate hook did on every dirty flush. rating/review_count and the embedding_*
+     * columns are dead/out-of-scope for this write and intentionally omitted (see LOCK_FIELDS doc
+     * for the analogous dead-lock-column note).
+     */
+    fun updateFullRow(metadata: BookMetadataEntity) {
+        val bookId = metadata.bookId ?: return
+        val values: Map<Field<*>, Any?> = mapOf(
+            bm.TITLE to metadata.title,
+            bm.SUBTITLE to metadata.subtitle,
+            bm.PUBLISHER to metadata.publisher,
+            bm.PUBLISHED_DATE to metadata.publishedDate,
+            bm.DESCRIPTION to metadata.description,
+            bm.SERIES_NAME to metadata.seriesName,
+            bm.SERIES_NUMBER to metadata.seriesNumber?.toDouble(),
+            bm.SERIES_TOTAL to metadata.seriesTotal,
+            bm.ISBN_13 to metadata.isbn13,
+            bm.ISBN_10 to metadata.isbn10,
+            bm.PAGE_COUNT to metadata.pageCount,
+            bm.LANGUAGE to metadata.language,
+            bm.COVER_UPDATED_ON to metadata.coverUpdatedOn?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) },
+            bm.AUDIOBOOK_COVER_UPDATED_ON to metadata.audiobookCoverUpdatedOn?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) },
+            bm.AMAZON_RATING to metadata.amazonRating,
+            bm.AMAZON_REVIEW_COUNT to metadata.amazonReviewCount,
+            bm.GOODREADS_RATING to metadata.goodreadsRating,
+            bm.GOODREADS_REVIEW_COUNT to metadata.goodreadsReviewCount,
+            bm.HARDCOVER_RATING to metadata.hardcoverRating,
+            bm.HARDCOVER_REVIEW_COUNT to metadata.hardcoverReviewCount,
+            bm.ASIN to metadata.asin,
+            bm.GOODREADS_ID to metadata.goodreadsId,
+            bm.HARDCOVER_ID to metadata.hardcoverId,
+            bm.HARDCOVER_BOOK_ID to metadata.hardcoverBookId,
+            bm.GOOGLE_ID to metadata.googleId,
+            bm.COMICVINE_ID to metadata.comicvineId,
+            bm.LUBIMYCZYTAC_ID to metadata.lubimyczytacId,
+            bm.LUBIMYCZYTAC_RATING to metadata.lubimyczytacRating,
+            bm.RANOBEDB_ID to metadata.ranobedbId,
+            bm.RANOBEDB_RATING to metadata.ranobedbRating,
+            bm.AUDIBLE_ID to metadata.audibleId,
+            bm.AUDIBLE_RATING to metadata.audibleRating,
+            bm.AUDIBLE_REVIEW_COUNT to metadata.audibleReviewCount,
+            bm.NARRATOR to metadata.narrator,
+            bm.ABRIDGED to toByteOrNull(metadata.abridged),
+            bm.SEARCH_TEXT to metadata.searchText,
+            bm.AGE_RATING to metadata.ageRating,
+            bm.CONTENT_RATING to metadata.contentRating,
+            bm.TITLE_LOCKED to toByteOrNull(metadata.titleLocked),
+            bm.SUBTITLE_LOCKED to toByteOrNull(metadata.subtitleLocked),
+            bm.PUBLISHER_LOCKED to toByteOrNull(metadata.publisherLocked),
+            bm.PUBLISHED_DATE_LOCKED to toByteOrNull(metadata.publishedDateLocked),
+            bm.DESCRIPTION_LOCKED to toByteOrNull(metadata.descriptionLocked),
+            bm.ISBN_13_LOCKED to toByteOrNull(metadata.isbn13Locked),
+            bm.ISBN_10_LOCKED to toByteOrNull(metadata.isbn10Locked),
+            bm.ASIN_LOCKED to toByteOrNull(metadata.asinLocked),
+            bm.PAGE_COUNT_LOCKED to toByteOrNull(metadata.pageCountLocked),
+            bm.LANGUAGE_LOCKED to toByteOrNull(metadata.languageLocked),
+            bm.AMAZON_RATING_LOCKED to toByteOrNull(metadata.amazonRatingLocked),
+            bm.AMAZON_REVIEW_COUNT_LOCKED to toByteOrNull(metadata.amazonReviewCountLocked),
+            bm.GOODREADS_RATING_LOCKED to toByteOrNull(metadata.goodreadsRatingLocked),
+            bm.GOODREADS_REVIEW_COUNT_LOCKED to toByteOrNull(metadata.goodreadsReviewCountLocked),
+            bm.HARDCOVER_RATING_LOCKED to toByteOrNull(metadata.hardcoverRatingLocked),
+            bm.HARDCOVER_REVIEW_COUNT_LOCKED to toByteOrNull(metadata.hardcoverReviewCountLocked),
+            bm.COVER_LOCKED to toByteOrNull(metadata.coverLocked),
+            bm.AUDIOBOOK_COVER_LOCKED to toByteOrNull(metadata.audiobookCoverLocked),
+            bm.SERIES_NAME_LOCKED to toByteOrNull(metadata.seriesNameLocked),
+            bm.SERIES_NUMBER_LOCKED to toByteOrNull(metadata.seriesNumberLocked),
+            bm.SERIES_TOTAL_LOCKED to toByteOrNull(metadata.seriesTotalLocked),
+            bm.AUTHORS_LOCKED to toByteOrNull(metadata.authorsLocked),
+            bm.CATEGORIES_LOCKED to toByteOrNull(metadata.categoriesLocked),
+            bm.MOODS_LOCKED to toByteOrNull(metadata.moodsLocked),
+            bm.TAGS_LOCKED to toByteOrNull(metadata.tagsLocked),
+            bm.GOODREADS_ID_LOCKED to toByteOrNull(metadata.goodreadsIdLocked),
+            bm.HARDCOVER_ID_LOCKED to toByteOrNull(metadata.hardcoverIdLocked),
+            bm.HARDCOVER_BOOK_ID_LOCKED to toByteOrNull(metadata.hardcoverBookIdLocked),
+            bm.GOOGLE_ID_LOCKED to toByteOrNull(metadata.googleIdLocked),
+            bm.COMICVINE_ID_LOCKED to toByteOrNull(metadata.comicvineIdLocked),
+            bm.LUBIMYCZYTAC_ID_LOCKED to toByteOrNull(metadata.lubimyczytacIdLocked),
+            bm.LUBIMYCZYTAC_RATING_LOCKED to toByteOrNull(metadata.lubimyczytacRatingLocked),
+            bm.RANOBEDB_ID_LOCKED to toByteOrNull(metadata.ranobedbIdLocked),
+            bm.RANOBEDB_RATING_LOCKED to toByteOrNull(metadata.ranobedbRatingLocked),
+            bm.AUDIBLE_ID_LOCKED to toByteOrNull(metadata.audibleIdLocked),
+            bm.AUDIBLE_RATING_LOCKED to toByteOrNull(metadata.audibleRatingLocked),
+            bm.AUDIBLE_REVIEW_COUNT_LOCKED to toByteOrNull(metadata.audibleReviewCountLocked),
+            bm.REVIEWS_LOCKED to toByteOrNull(metadata.reviewsLocked),
+            bm.NARRATOR_LOCKED to toByteOrNull(metadata.narratorLocked),
+            bm.ABRIDGED_LOCKED to toByteOrNull(metadata.abridgedLocked),
+            bm.AGE_RATING_LOCKED to toByteOrNull(metadata.ageRatingLocked),
+            bm.CONTENT_RATING_LOCKED to toByteOrNull(metadata.contentRatingLocked),
+        )
+        dsl.update(bm).set(values).where(bm.BOOK_ID.eq(bookId)).execute()
+    }
 
     fun updateSeriesName(bookId: Long, seriesName: String?, searchText: String?) {
         dsl.update(bm)

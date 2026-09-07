@@ -45,9 +45,10 @@ import java.util.stream.Collectors;
 public class BookMetadataUpdater {
 
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    private final BookRepository bookRepository;
-    private final ComicMetadataRepository comicMetadataRepository;
+    private final org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
     private final org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
+    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AppProperties appProperties;
     private final FileService fileService;
     private final MetadataMatchService metadataMatchService;
@@ -121,11 +122,15 @@ public class BookMetadataUpdater {
         updateComicMetadataIfNeeded(newMetadata, metadata, replaceMode);
         updateLocks(newMetadata, metadata);
 
-        bookEntity.setMetadataUpdatedAt(Instant.now());
-        bookRepository.save(bookEntity);
+        Instant metadataUpdatedAt = Instant.now();
+        bookEntity.setMetadataUpdatedAt(metadataUpdatedAt);
+        metadata.updateSearchText();
+        jooqBookMetadataRepository.updateFullRow(metadata);
+        jooqBookRepository.updateMetadataUpdatedAt(bookId, metadataUpdatedAt);
         try {
             Float score = metadataMatchService.calculateMatchScore(bookEntity);
             bookEntity.setMetadataMatchScore(score);
+            jooqBookRepository.updateMetadataMatchScore(bookId, score);
         } catch (Exception e) {
             log.warn("Failed to calculate metadata match score for book ID {}: {}", bookId, e.getMessage());
         }
@@ -144,9 +149,11 @@ public class BookMetadataUpdater {
                     String newHash = file.isDirectory()
                             ? FileFingerprint.generateFolderHash(bookEntity.getFullFilePath())
                             : FileFingerprint.generateHash(bookEntity.getFullFilePath());
-                    bookEntity.setMetadataForWriteUpdatedAt(Instant.now());
+                    Instant metadataForWriteUpdatedAt = Instant.now();
+                    bookEntity.setMetadataForWriteUpdatedAt(metadataForWriteUpdatedAt);
                     primaryFile.setCurrentHash(newHash);
-                    bookRepository.save(bookEntity);
+                    jooqBookRepository.updateBookFileHash(primaryFile.getId(), newHash);
+                    jooqBookRepository.updateMetadataForWriteUpdatedAt(bookId, metadataForWriteUpdatedAt);
                 } catch (Exception e) {
                     log.warn("Failed to write metadata for book ID {}: {}", bookId, e.getMessage());
                 }
@@ -171,6 +178,8 @@ public class BookMetadataUpdater {
                     if (bookPrimaryFile != null) {
                         bookPrimaryFile.setFileName(result.getNewFileName());
                         bookPrimaryFile.setFileSubPath(result.getNewFileSubPath());
+                        bookAdditionalFileRepository.updateFileNameAndSubPath(
+                                bookPrimaryFile.getId(), result.getNewFileName(), result.getNewFileSubPath());
                     }
                 }
             } catch (Exception e) {
@@ -463,11 +472,10 @@ public class BookMetadataUpdater {
                     .bookId(e.getBookId())
                     .build();
             e.setComicMetadata(comic);
-            // saveAndFlush (not save): the relationship writes below go through jOOQ on the same
-            // connection, keyed by comic_metadata.book_id - since this id is manually assigned
-            // (not identity-generated), a plain save() may merge() and defer the INSERT past this
-            // point, so the FK on comic_metadata_*_mapping tables could fail.
-            comicMetadataRepository.saveAndFlush(comic);
+            // Unlike JPA's saveAndFlush (needed because comic_metadata.book_id is manually assigned,
+            // not identity-generated, so a plain save() could defer the INSERT past the relation-table
+            // FK writes below), a jOOQ INSERT executes immediately - no flush-timing gotcha.
+            comicRelationsRepository.insertBlankRow(e.getBookId());
             // Brand new row: nothing to snapshot from jOOQ, every relation starts empty.
             comic.setCharacterNames(Collections.emptySet());
             comic.setTeamNames(Collections.emptySet());
@@ -536,7 +544,7 @@ public class BookMetadataUpdater {
         if (comicDto.getTeamsLocked() != null) c.setTeamsLocked(comicDto.getTeamsLocked());
         if (comicDto.getLocationsLocked() != null) c.setLocationsLocked(comicDto.getLocationsLocked());
 
-        e.setComicMetadata(comicMetadataRepository.save(c));
+        comicRelationsRepository.updateFullRow(c);
 
         comicRelationsRepository.deleteOrphanedCharacters();
         comicRelationsRepository.deleteOrphanedTeams();
@@ -758,7 +766,9 @@ public class BookMetadataUpdater {
                 fileService.createThumbnailFromUrl(bookId, m.getThumbnailUrl());
                 bookEntity.getMetadata().setCoverUpdatedOn(Instant.now());
             }
-            bookEntity.setBookCoverHash(BookCoverUtils.generateCoverHash());
+            String coverHash = BookCoverUtils.generateCoverHash();
+            bookEntity.setBookCoverHash(coverHash);
+            jooqBookRepository.updateBookCoverHash(bookId, coverHash);
         } catch (Exception ex) {
             log.warn("Failed to download cover for book {}: {}", bookId, ex.getMessage());
         }
@@ -829,6 +839,7 @@ public class BookMetadataUpdater {
         if (Files.exists(cbzPath)) {
             log.info("File converted from {} to {}, updating book file record", fileName, cbzFileName);
             bookFile.setFileName(cbzFileName);
+            bookAdditionalFileRepository.updateFileNameAndSubPath(bookFile.getId(), cbzFileName, bookFile.getFileSubPath());
         }
     }
 

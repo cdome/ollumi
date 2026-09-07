@@ -9,8 +9,10 @@ import org.booklore.jooq.tables.ComicMetadataCreatorMapping.COMIC_METADATA_CREAT
 import org.booklore.jooq.tables.ComicMetadataLocationMapping.COMIC_METADATA_LOCATION_MAPPING
 import org.booklore.jooq.tables.ComicMetadataTeamMapping.COMIC_METADATA_TEAM_MAPPING
 import org.booklore.jooq.tables.ComicTeam.COMIC_TEAM
+import org.booklore.model.entity.ComicMetadataEntity
 import org.booklore.model.enums.ComicCreatorRole
 import org.jooq.DSLContext
+import org.jooq.Field
 import org.jooq.impl.DSL
 import org.springframework.stereotype.Repository
 
@@ -205,5 +207,66 @@ class JooqComicMetadataRepository(private val dsl: DSLContext) {
             .set(cm.LOCATIONS_LOCKED, value)
             .where(cm.BOOK_ID.`in`(bookIds))
             .execute()
+    }
+
+    // ========================================================================
+    // comic_metadata's own scalar row (replaces ComicMetadataRepository.saveAndFlush/save)
+    // ========================================================================
+
+    /**
+     * Inserts a bare comic_metadata row for a book that has none yet. Unlike JPA's saveAndFlush
+     * (needed there because comic_metadata.book_id is manually assigned, not identity-generated, so
+     * a plain save() could defer the INSERT past the relation-table FK writes that follow), a jOOQ
+     * INSERT executes immediately - no flush-timing gotcha to work around.
+     */
+    fun insertBlankRow(bookId: Long) {
+        dsl.insertInto(cm).set(cm.BOOK_ID, bookId).execute()
+    }
+
+    /** Writes every comic_metadata scalar + lock column from the entity's CURRENT in-memory state. */
+    fun updateFullRow(comic: ComicMetadataEntity) {
+        val bookId = comic.bookId ?: return
+        val value: (Boolean?) -> Byte? = { it?.let { b -> if (b) 1 else 0 } }
+        val values: Map<Field<*>, Any?> = mapOf(
+            cm.ISSUE_NUMBER to comic.issueNumber,
+            cm.VOLUME_NAME to comic.volumeName,
+            cm.VOLUME_NUMBER to comic.volumeNumber,
+            cm.STORY_ARC to comic.storyArc,
+            cm.STORY_ARC_NUMBER to comic.storyArcNumber,
+            cm.ALTERNATE_SERIES to comic.alternateSeries,
+            cm.ALTERNATE_ISSUE to comic.alternateIssue,
+            cm.IMPRINT to comic.imprint,
+            cm.FORMAT to comic.format,
+            cm.BLACK_AND_WHITE to value(comic.blackAndWhite),
+            cm.MANGA to value(comic.manga),
+            cm.READING_DIRECTION to comic.readingDirection,
+            cm.WEB_LINK to comic.webLink,
+            cm.NOTES to comic.notes,
+            cm.ISSUE_NUMBER_LOCKED to value(comic.issueNumberLocked),
+            cm.VOLUME_NAME_LOCKED to value(comic.volumeNameLocked),
+            cm.VOLUME_NUMBER_LOCKED to value(comic.volumeNumberLocked),
+            cm.STORY_ARC_LOCKED to value(comic.storyArcLocked),
+            cm.STORY_ARC_NUMBER_LOCKED to value(comic.storyArcNumberLocked),
+            cm.ALTERNATE_SERIES_LOCKED to value(comic.alternateSeriesLocked),
+            cm.ALTERNATE_ISSUE_LOCKED to value(comic.alternateIssueLocked),
+            cm.IMPRINT_LOCKED to value(comic.imprintLocked),
+            cm.FORMAT_LOCKED to value(comic.formatLocked),
+            cm.BLACK_AND_WHITE_LOCKED to value(comic.blackAndWhiteLocked),
+            cm.MANGA_LOCKED to value(comic.mangaLocked),
+            cm.READING_DIRECTION_LOCKED to value(comic.readingDirectionLocked),
+            cm.WEB_LINK_LOCKED to value(comic.webLinkLocked),
+            cm.NOTES_LOCKED to value(comic.notesLocked),
+            cm.CREATORS_LOCKED to value(comic.creatorsLocked),
+            cm.PENCILLERS_LOCKED to value(comic.pencillersLocked),
+            cm.INKERS_LOCKED to value(comic.inkersLocked),
+            cm.COLORISTS_LOCKED to value(comic.coloristsLocked),
+            cm.LETTERERS_LOCKED to value(comic.letterersLocked),
+            cm.COVER_ARTISTS_LOCKED to value(comic.coverArtistsLocked),
+            cm.EDITORS_LOCKED to value(comic.editorsLocked),
+            cm.CHARACTERS_LOCKED to value(comic.charactersLocked),
+            cm.TEAMS_LOCKED to value(comic.teamsLocked),
+            cm.LOCATIONS_LOCKED to value(comic.locationsLocked),
+        )
+        dsl.update(cm).set(values).where(cm.BOOK_ID.eq(bookId)).execute()
     }
 }

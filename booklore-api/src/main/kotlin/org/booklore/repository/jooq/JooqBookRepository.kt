@@ -214,6 +214,34 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .execute()
     }
 
+    fun updateBookCoverHash(bookId: Long, hash: String) {
+        dsl.update(BOOK)
+            .set(BOOK.BOOK_COVER_HASH, hash)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateMetadataUpdatedAt(bookId: Long, now: Instant) {
+        dsl.update(BOOK)
+            .set(BOOK.METADATA_UPDATED_AT, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateMetadataForWriteUpdatedAt(bookId: Long, now: Instant) {
+        dsl.update(BOOK)
+            .set(BOOK.METADATA_FOR_WRITE_UPDATED_AT, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateMetadataMatchScore(bookId: Long, score: Float?) {
+        dsl.update(BOOK)
+            .set(BOOK.METADATA_MATCH_SCORE, score?.toDouble())
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
     private fun firstBookFileName(): Field<String> {
         val bf2 = BOOK_FILE.`as`("bf2")
         return field(
