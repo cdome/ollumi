@@ -10,6 +10,8 @@ import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.util.BookCoverUtils;
 import org.booklore.util.FileService;
 import lombok.AllArgsConstructor;
@@ -36,6 +38,8 @@ public class PhysicalBookService {
     private final BookRepository bookRepository;
     private final LibraryRepository libraryRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final BookMapper bookMapper;
     private final FileService fileService;
 
@@ -44,17 +48,22 @@ public class PhysicalBookService {
         LibraryEntity library = libraryRepository.findById(request.getLibraryId())
                 .orElseThrow(() -> new APIException("Library not found with id: " + request.getLibraryId(), HttpStatus.NOT_FOUND));
 
+        Instant now = Instant.now();
+        long bookId = jooqBookRepository.insertBook(library.getId(), null, now);
+
         BookEntity bookEntity = BookEntity.builder()
                 .library(library)
                 .libraryPath(null)
                 .isPhysical(true)
-                .addedOn(Instant.now())
-                .scannedOn(Instant.now())
+                .addedOn(now)
+                .scannedOn(now)
                 .bookFiles(new ArrayList<>())
                 .build();
+        bookEntity.setId(bookId);
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .book(bookEntity)
+                .bookId(bookId)
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .publisher(request.getPublisher())
@@ -64,36 +73,39 @@ public class PhysicalBookService {
                 .isbn13(extractIsbn13(request.getIsbn()))
                 .isbn10(extractIsbn10(request.getIsbn()))
                 .build();
-
         bookEntity.setMetadata(metadata);
+        jooqBookMetadataRepository.insertRow(bookId, metadata);
 
-        // saveAndFlush (not save): the authors/categories writes below go through jOOQ on the same
-        // connection, keyed by the book's generated id - the cascaded book_metadata insert must be
-        // physically committed to the DB first, or the FK on book_metadata_author_mapping/
-        // book_metadata_category_mapping fails since a plain save() can defer the child insert.
-        BookEntity savedBook = bookRepository.saveAndFlush(bookEntity);
-        log.info("Created physical book '{}' in library {} with id {}", request.getTitle(), library.getName(), savedBook.getId());
+        log.info("Created physical book '{}' in library {} with id {}", request.getTitle(), library.getName(), bookId);
 
         if (request.getAuthors() != null && !request.getAuthors().isEmpty()) {
-            addAuthorsToBook(new ArrayList<>(request.getAuthors()), savedBook);
+            addAuthorsToBook(new ArrayList<>(request.getAuthors()), bookEntity);
         }
 
         if (request.getCategories() != null && !request.getCategories().isEmpty()) {
-            addCategoriesToBook(new HashSet<>(request.getCategories()), savedBook);
+            addCategoriesToBook(new HashSet<>(request.getCategories()), bookEntity);
         }
 
         if (request.getThumbnailUrl() != null && !request.getThumbnailUrl().isBlank()) {
             try {
-                fileService.createThumbnailFromUrl(savedBook.getId(), request.getThumbnailUrl());
-                savedBook.getMetadata().setCoverUpdatedOn(Instant.now());
-                savedBook.setBookCoverHash(BookCoverUtils.generateCoverHash());
-                savedBook = bookRepository.save(savedBook);
+                fileService.createThumbnailFromUrl(bookId, request.getThumbnailUrl());
+                metadata.setCoverUpdatedOn(Instant.now());
+                bookEntity.setBookCoverHash(BookCoverUtils.generateCoverHash());
             } catch (Exception ex) {
-                log.warn("Failed to download cover for physical book {}: {}", savedBook.getId(), ex.getMessage());
+                log.warn("Failed to download cover for physical book {}: {}", bookId, ex.getMessage());
             }
         }
 
-        return bookMapper.toBook(savedBook);
+        // Comprehensive flush point (mirrors BookCreatorService.saveConnections): writes the final
+        // in-memory state - including whatever addAuthorsToBook/cover download mutated above - since
+        // this entity is never Hibernate-managed and so never auto-flushes on its own.
+        metadata.updateSearchText();
+        jooqBookMetadataRepository.updateFullRow(metadata);
+        if (bookEntity.getBookCoverHash() != null) {
+            jooqBookRepository.updateBookCoverHash(bookId, bookEntity.getBookCoverHash());
+        }
+
+        return bookMapper.toBook(bookEntity);
     }
 
     private LocalDate parsePublishedDate(String publishedDate) {
@@ -142,7 +154,7 @@ public class PhysicalBookService {
         BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
         book.setIsPhysical(physical);
-        bookRepository.save(book);
+        jooqBookRepository.updateIsPhysical(bookId, physical);
         log.info("Book {} physical flag set to {}", bookId, physical);
         return bookMapper.toBook(book);
     }

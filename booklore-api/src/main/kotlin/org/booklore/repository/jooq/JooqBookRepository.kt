@@ -202,12 +202,13 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
     }
 
     /**
-     * Inserts a new book row (e.g. detaching a file into its own book) and returns the generated id.
-     * Only columns BookEntity.builder() would set for a bare new book are written; everything else
-     * (metadata_match_score, cover hashes, timestamps, similar_books_json) takes its DB-level NULL
-     * default, matching what an unenhanced Hibernate INSERT would also leave untouched.
+     * Inserts a new book row (e.g. detaching a file into its own book, or a physical book with no
+     * library path) and returns the generated id. Only columns BookEntity.builder() would set for a
+     * bare new book are written; everything else (metadata_match_score, cover hashes, timestamps,
+     * similar_books_json) takes its DB-level NULL default, matching what an unenhanced Hibernate
+     * INSERT would also leave untouched.
      */
-    fun insertBook(libraryId: Long, libraryPathId: Long, addedOn: Instant): Long =
+    fun insertBook(libraryId: Long, libraryPathId: Long?, addedOn: Instant): Long =
         dsl.insertInto(BOOK)
             .set(BOOK.LIBRARY_ID, libraryId)
             .set(BOOK.LIBRARY_PATH_ID, libraryPathId)
@@ -382,6 +383,13 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
     fun updateMetadataMatchScore(bookId: Long, score: Float?) {
         dsl.update(BOOK)
             .set(BOOK.METADATA_MATCH_SCORE, score?.toDouble())
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateIsPhysical(bookId: Long, physical: Boolean) {
+        dsl.update(BOOK)
+            .set(BOOK.IS_PHYSICAL, if (physical) 1.toByte() else 0.toByte())
             .where(BOOK.ID.eq(bookId))
             .execute()
     }
