@@ -3,6 +3,7 @@ package org.booklore.repository.jooq
 import org.booklore.jooq.tables.Book.BOOK
 import org.booklore.jooq.tables.BookFile.BOOK_FILE
 import org.booklore.jooq.tables.BookMetadata.BOOK_METADATA
+import org.booklore.model.entity.BookFileEntity
 import org.booklore.model.enums.BookFileType
 import org.booklore.repository.jooq.dto.BookCoverUpdate
 import org.jooq.Condition
@@ -10,12 +11,13 @@ import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL.*
 import org.springframework.stereotype.Repository
+import tools.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 @Repository
-class JooqBookRepository(private val dsl: DSLContext) {
+class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: ObjectMapper) {
 
     private val bm = BOOK_METADATA
     private val bf = BOOK_FILE
@@ -278,6 +280,38 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .execute()
     }
 
+    /**
+     * Writes every book_file scalar column (including audio-technical fields and JSON-serialized
+     * chapters) from the entity's CURRENT in-memory state, replacing the cascade flush that used to
+     * carry a processor's mutations (hash, archive type, fixed-layout, audiobook chapters, etc.) to
+     * the DB via BookCreatorService.saveConnections(). No-op if the entity has no id yet.
+     */
+    fun updateBookFileFullRow(bookFile: BookFileEntity) {
+        val id = bookFile.id ?: return
+        dsl.update(bf)
+            .set(bf.FILE_NAME, bookFile.fileName)
+            .set(bf.FILE_SUB_PATH, bookFile.fileSubPath)
+            .set(bf.IS_BOOK, if (bookFile.isBookFormat) 1.toByte() else 0.toByte())
+            .set(bf.IS_FOLDER_BASED, if (bookFile.isFolderBased) 1.toByte() else 0.toByte())
+            .set(bf.BOOK_TYPE, bookFile.bookType?.name)
+            .set(bf.IS_FIXED_LAYOUT, if (bookFile.isFixedLayout) 1.toByte() else 0.toByte())
+            .set(bf.ARCHIVE_TYPE, bookFile.archiveType?.name)
+            .set(bf.FILE_SIZE_KB, bookFile.fileSizeKb)
+            .set(bf.INITIAL_HASH, bookFile.initialHash)
+            .set(bf.CURRENT_HASH, bookFile.currentHash)
+            .set(bf.DESCRIPTION, bookFile.description)
+            .set(bf.ADDED_ON, bookFile.addedOn?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+            .set(bf.DURATION_SECONDS, bookFile.durationSeconds)
+            .set(bf.BITRATE, bookFile.bitrate)
+            .set(bf.SAMPLE_RATE, bookFile.sampleRate)
+            .set(bf.CHANNELS, bookFile.channels)
+            .set(bf.CODEC, bookFile.codec)
+            .set(bf.CHAPTER_COUNT, bookFile.chapterCount)
+            .set(bf.CHAPTERS_JSON, bookFile.chapters?.takeIf { it.isNotEmpty() }?.let { objectMapper.writeValueAsString(it) })
+            .where(bf.ID.eq(id))
+            .execute()
+    }
+
     // ========================================================================
     // Writes: cover updates (book + book_metadata timestamp/hash columns only —
     // no cascade, these rows already exist)
@@ -319,6 +353,14 @@ class JooqBookRepository(private val dsl: DSLContext) {
     fun updateBookCoverHash(bookId: Long, hash: String) {
         dsl.update(BOOK)
             .set(BOOK.BOOK_COVER_HASH, hash)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    /** Narrow counterpart to updateBookCoverHash - book.audiobook_cover_hash only, no metadata write. */
+    fun updateAudiobookCoverHash(bookId: Long, hash: String) {
+        dsl.update(BOOK)
+            .set(BOOK.AUDIOBOOK_COVER_HASH, hash)
             .where(BOOK.ID.eq(bookId))
             .execute()
     }

@@ -223,6 +223,16 @@ class JooqComicMetadataRepository(private val dsl: DSLContext) {
         dsl.insertInto(cm).set(cm.BOOK_ID, bookId).execute()
     }
 
+    /**
+     * Ensures a comic_metadata row exists for this book; no-op if one already exists. Mirrors JPA
+     * save()'s merge-or-insert semantics for a manually-assigned id - CbxProcessor always builds a
+     * fresh ComicMetadataEntity even when reprocessing an already-comic-tagged book (rescans), so the
+     * jOOQ write path can't assume "always new" the way the BookMetadataUpdater call site can.
+     */
+    fun ensureRowExists(bookId: Long) {
+        dsl.insertInto(cm).set(cm.BOOK_ID, bookId).onDuplicateKeyIgnore().execute()
+    }
+
     /** Writes every comic_metadata scalar + lock column from the entity's CURRENT in-memory state. */
     fun updateFullRow(comic: ComicMetadataEntity) {
         val bookId = comic.bookId ?: return

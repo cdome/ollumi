@@ -8,6 +8,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ComicCreatorRole;
 import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.util.FileUtils;
@@ -25,8 +27,8 @@ public class BookCreatorService {
 
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookRepository bookRepository;
-    private final BookMetadataRepository bookMetadataRepository;
-    private final ComicMetadataRepository comicMetadataRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final JooqComicMetadataRepository comicRelationsRepository;
 
     // Temporary storage for comic metadata DTOs during processing
@@ -35,13 +37,13 @@ public class BookCreatorService {
     public BookCreatorService(
                               JooqBookMetadataRelationsRepository relationsRepository,
                               BookRepository bookRepository,
-                              BookMetadataRepository bookMetadataRepository,
-                              ComicMetadataRepository comicMetadataRepository,
+                              JooqBookRepository jooqBookRepository,
+                              JooqBookMetadataRepository jooqBookMetadataRepository,
                               JooqComicMetadataRepository comicRelationsRepository) {
         this.relationsRepository = relationsRepository;
         this.bookRepository = bookRepository;
-        this.bookMetadataRepository = bookMetadataRepository;
-        this.comicMetadataRepository = comicMetadataRepository;
+        this.jooqBookRepository = jooqBookRepository;
+        this.jooqBookMetadataRepository = jooqBookMetadataRepository;
         this.comicRelationsRepository = comicRelationsRepository;
     }
 
@@ -65,6 +67,7 @@ public class BookCreatorService {
             primaryFile.setFileSizeKb(fileSizeKb);
             primaryFile.setFolderBased(libraryFile.isFolderBased());
             existingBook.setDeleted(false);
+            jooqBookRepository.markUndeleted(List.of(existingBook.getId()));
             return existingBook;
         }
 
@@ -72,13 +75,20 @@ public class BookCreatorService {
         String hash = libraryFile.isFolderBased()
                 ? FileFingerprint.generateFolderHash(libraryFile.getFullPath())
                 : FileFingerprint.generateHash(libraryFile.getFullPath());
+        Instant now = Instant.now();
+
+        long bookId = jooqBookRepository.insertBook(
+                libraryFile.getLibraryEntity().getId(),
+                libraryFile.getLibraryPathEntity().getId(),
+                now);
 
         BookEntity bookEntity = BookEntity.builder()
                 .library(libraryFile.getLibraryEntity())
                 .libraryPath(libraryFile.getLibraryPathEntity())
-                .addedOn(Instant.now())
+                .addedOn(now)
                 .bookFiles(new ArrayList<>())
                 .build();
+        bookEntity.setId(bookId);
 
         BookFileEntity bookFileEntity = BookFileEntity.builder()
                 .book(bookEntity)
@@ -90,16 +100,31 @@ public class BookCreatorService {
                 .fileSizeKb(fileSizeKb)
                 .initialHash(hash)
                 .currentHash(hash)
-                .addedOn(Instant.now())
+                .addedOn(now)
                 .build();
+        long fileId = jooqBookRepository.insertBookFile(
+                bookId,
+                bookFileEntity.getFileName(),
+                bookFileEntity.getFileSubPath(),
+                bookFileEntity.isBookFormat(),
+                bookFileEntity.isFolderBased(),
+                bookFileEntity.getBookType(),
+                bookFileEntity.getFileSizeKb(),
+                bookFileEntity.getInitialHash(),
+                bookFileEntity.getCurrentHash(),
+                bookFileEntity.getDescription(),
+                bookFileEntity.getAddedOn());
+        bookFileEntity.setId(fileId);
         bookEntity.getBookFiles().add(bookFileEntity);
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .book(bookEntity)
+                .bookId(bookId)
                 .build();
         bookEntity.setMetadata(metadata);
+        jooqBookMetadataRepository.insertRow(bookId, metadata);
 
-        return bookRepository.saveAndFlush(bookEntity);
+        return bookEntity;
     }
 
     private long calculateFileSize(LibraryFile libraryFile) {
@@ -146,20 +171,33 @@ public class BookCreatorService {
 
     @Transactional
     public void saveConnections(BookEntity bookEntity) {
-        bookRepository.save(bookEntity);
-        bookMetadataRepository.save(bookEntity.getMetadata());
+        Long bookId = bookEntity.getId();
+
+        BookMetadataEntity metadata = bookEntity.getMetadata();
+        metadata.updateSearchText(); // trims fields + recomputes search_text - previously ran via @PrePersist/@PreUpdate
+        jooqBookMetadataRepository.updateFullRow(metadata);
+
+        jooqBookRepository.updateMetadataMatchScore(bookId, bookEntity.getMetadataMatchScore());
+        jooqBookRepository.updateBookFileFullRow(bookEntity.getPrimaryBookFile());
+
+        if (bookEntity.getBookCoverHash() != null) {
+            jooqBookRepository.updateBookCoverHash(bookId, bookEntity.getBookCoverHash());
+        }
+        if (bookEntity.getAudiobookCoverHash() != null) {
+            jooqBookRepository.updateAudiobookCoverHash(bookId, bookEntity.getAudiobookCoverHash());
+        }
 
         // Save comic metadata if present
-        ComicMetadataEntity comicMetadata = bookEntity.getMetadata().getComicMetadata();
+        ComicMetadataEntity comicMetadata = metadata.getComicMetadata();
         if (comicMetadata != null && comicMetadata.getBookId() != null) {
-            // saveAndFlush (not save): the relationship writes below go through jOOQ on the same
-            // connection, keyed by comic_metadata.book_id - since ComicMetadataEntity's id is
-            // manually assigned (not identity-generated), a plain save() may merge() and defer
-            // the INSERT past this point, so the FK on comic_metadata_*_mapping could fail.
-            comicMetadataRepository.saveAndFlush(comicMetadata);
+            // Mirrors JPA save()'s merge-or-insert semantics for comic_metadata's manually-assigned
+            // id: CbxProcessor always builds a fresh ComicMetadataEntity, even on a rescan of a book
+            // that already has a comic_metadata row, so this can't assume "always new".
+            comicRelationsRepository.ensureRowExists(comicMetadata.getBookId());
+            comicRelationsRepository.updateFullRow(comicMetadata);
 
             // Populate relationships from pending DTO
-            ComicMetadata comicDto = pendingComicMetadata.remove(bookEntity.getId());
+            ComicMetadata comicDto = pendingComicMetadata.remove(bookId);
             if (comicDto != null) {
                 populateComicMetadataRelationships(comicMetadata, comicDto);
             }
