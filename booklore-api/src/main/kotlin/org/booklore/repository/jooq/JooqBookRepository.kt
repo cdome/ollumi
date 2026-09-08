@@ -199,6 +199,22 @@ class JooqBookRepository(private val dsl: DSLContext) {
         return dsl.deleteFrom(BOOK).where(BOOK.ID.`in`(bookIds)).execute()
     }
 
+    /**
+     * Inserts a new book row (e.g. detaching a file into its own book) and returns the generated id.
+     * Only columns BookEntity.builder() would set for a bare new book are written; everything else
+     * (metadata_match_score, cover hashes, timestamps, similar_books_json) takes its DB-level NULL
+     * default, matching what an unenhanced Hibernate INSERT would also leave untouched.
+     */
+    fun insertBook(libraryId: Long, libraryPathId: Long, addedOn: Instant): Long =
+        dsl.insertInto(BOOK)
+            .set(BOOK.LIBRARY_ID, libraryId)
+            .set(BOOK.LIBRARY_PATH_ID, libraryPathId)
+            .set(BOOK.ADDED_ON, LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC))
+            .set(BOOK.IS_PHYSICAL, 0.toByte())
+            .set(BOOK.DELETED, 0.toByte())
+            .returning(BOOK.ID)
+            .fetchOne()!!.id!!
+
     // ========================================================================
     // Writes: book_file CRUD (no cascade — book_file's own FK children,
     // e.g. user_book_file_progress, are ON DELETE CASCADE at the DB level)

@@ -105,7 +105,20 @@ class JooqBookMetadataRepository(private val dsl: DSLContext) {
      */
     fun updateFullRow(metadata: BookMetadataEntity) {
         val bookId = metadata.bookId ?: return
-        val values: Map<Field<*>, Any?> = mapOf(
+        dsl.update(bm).set(fullRowValues(metadata)).where(bm.BOOK_ID.eq(bookId)).execute()
+    }
+
+    /**
+     * Inserts a brand-new book_metadata row from the entity's current in-memory state (e.g. when
+     * detaching a file into a new book). Callers must call metadata.updateSearchText() first, same
+     * as updateFullRow - see its doc comment.
+     */
+    fun insertRow(bookId: Long, metadata: BookMetadataEntity) {
+        dsl.insertInto(bm).set(bm.BOOK_ID, bookId).set(fullRowValues(metadata)).execute()
+    }
+
+    private fun fullRowValues(metadata: BookMetadataEntity): Map<Field<*>, Any?> {
+        return mapOf(
             bm.TITLE to metadata.title,
             bm.SUBTITLE to metadata.subtitle,
             bm.PUBLISHER to metadata.publisher,
@@ -187,7 +200,6 @@ class JooqBookMetadataRepository(private val dsl: DSLContext) {
             bm.AGE_RATING_LOCKED to toByteOrNull(metadata.ageRatingLocked),
             bm.CONTENT_RATING_LOCKED to toByteOrNull(metadata.contentRatingLocked),
         )
-        dsl.update(bm).set(values).where(bm.BOOK_ID.eq(bookId)).execute()
     }
 
     fun updateSeriesName(bookId: Long, seriesName: String?, searchText: String?) {
