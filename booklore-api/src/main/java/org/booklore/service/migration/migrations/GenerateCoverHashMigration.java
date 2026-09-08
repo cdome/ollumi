@@ -2,6 +2,7 @@ package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.migration.Migration;
 import org.booklore.util.BookCoverUtils;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.List;
 public class GenerateCoverHashMigration implements Migration {
 
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
 
     @Override
     public String getKey() {
@@ -41,11 +43,12 @@ public class GenerateCoverHashMigration implements Migration {
 
             for (BookEntity book : bookBatch) {
                 if (book.getBookCoverHash() == null) {
-                    book.setBookCoverHash(BookCoverUtils.generateCoverHash());
+                    String hash = BookCoverUtils.generateCoverHash();
+                    book.setBookCoverHash(hash);
+                    jooqBookRepository.updateBookCoverHash(book.getId(), hash);
                 }
             }
 
-            bookRepository.saveAll(bookBatch);
             processedCount += bookBatch.size();
             offset += batchSize;
 

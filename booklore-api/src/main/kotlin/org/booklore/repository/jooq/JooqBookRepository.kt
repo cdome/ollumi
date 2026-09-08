@@ -262,6 +262,22 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .returning(bf.ID)
             .fetchOne()!!.id!!
 
+    /** No-op if the row already has an initial_hash - mirrors "only set if never set before". */
+    fun updateInitialHashIfNull(bookFileId: Long, hash: String) {
+        dsl.update(bf)
+            .set(bf.INITIAL_HASH, hash)
+            .where(bf.ID.eq(bookFileId))
+            .and(bf.INITIAL_HASH.isNull)
+            .execute()
+    }
+
+    fun updateBookFileSizeKb(bookFileId: Long, fileSizeKb: Long) {
+        dsl.update(bf)
+            .set(bf.FILE_SIZE_KB, fileSizeKb)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
     // ========================================================================
     // Writes: cover updates (book + book_metadata timestamp/hash columns only —
     // no cascade, these rows already exist)

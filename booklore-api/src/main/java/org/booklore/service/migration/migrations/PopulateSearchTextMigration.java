@@ -4,6 +4,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.service.migration.Migration;
 import org.booklore.util.BookUtils;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class PopulateSearchTextMigration implements Migration {
 
     private final BookRepository bookRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
 
     @Override
     public String getKey() {
@@ -53,14 +55,15 @@ public class PopulateSearchTextMigration implements Migration {
                 if (m != null) {
                     try {
                         m.setAuthorNames(authorNamesByBookId.getOrDefault(book.getId(), Collections.emptyList()));
-                        m.setSearchText(BookUtils.buildSearchText(m));
+                        String searchText = BookUtils.buildSearchText(m);
+                        m.setSearchText(searchText);
+                        jooqBookMetadataRepository.updateSearchText(book.getId(), searchText);
                     } catch (Exception ex) {
                         log.warn("Failed to build search text for book {}: {}", book.getId(), ex.getMessage());
                     }
                 }
             }
 
-            bookRepository.saveAll(books);
             processedCount += books.size();
             offset += batchSize;
 
