@@ -3,7 +3,9 @@ package org.booklore.service.watcher;
 import org.booklore.mapper.BookMapper;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.LibraryPathRepository;
@@ -35,6 +37,8 @@ class BookFilePersistenceServiceTest {
     @Mock private EntityManager entityManager;
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
+    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private LibraryPathRepository libraryPathRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private NotificationService notificationService;
@@ -51,7 +55,7 @@ class BookFilePersistenceServiceTest {
     @BeforeEach
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
-        service = new BookFilePersistenceService(entityManager, bookRepository, bookFileRepository, libraryPathRepository, jooqLibraryPathRepository, notificationService, bookMapper);
+        service = new BookFilePersistenceService(entityManager, bookRepository, bookFileRepository, bookAdditionalFileRepository, jooqBookRepository, libraryPathRepository, jooqLibraryPathRepository, notificationService, bookMapper);
 
         fileUtilsMock = mockStatic(FileUtils.class);
         fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("sub");
@@ -168,7 +172,9 @@ class BookFilePersistenceServiceTest {
 
             service.updatePathIfChanged(book, library, Path.of("/library/newsub/test.epub"), "hash123");
 
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(100L, "test.epub", "newsub");
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
             assertThat(bookFile.getFileSubPath()).isEqualTo("newsub");
         }
 
@@ -182,7 +188,9 @@ class BookFilePersistenceServiceTest {
 
             service.updatePathIfChanged(book, library, Path.of("/library/sub/new.epub"), "hash123");
 
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(100L, "new.epub", "sub");
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
             assertThat(bookFile.getFileName()).isEqualTo("new.epub");
         }
 
@@ -197,7 +205,9 @@ class BookFilePersistenceServiceTest {
 
             service.updatePathIfChanged(book, library, Path.of("/library/sub/test.epub"), "hash123");
 
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(100L, "test.epub", "sub");
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
             assertThat(book.getDeleted()).isFalse();
             assertThat(book.getDeletedAt()).isNull();
         }
@@ -213,7 +223,7 @@ class BookFilePersistenceServiceTest {
 
             service.updatePathIfChanged(book, library, Path.of("/library/sub/test.epub"), "hash123");
 
-            verify(bookRepository, never()).save(any());
+            verify(jooqBookRepository, never()).updateLibrary(anyLong(), anyLong(), anyLong());
         }
 
         @Test
@@ -231,7 +241,9 @@ class BookFilePersistenceServiceTest {
             // Should update the secondary file, not primary
             assertThat(secondaryFile.getFileSubPath()).isEqualTo("newsub");
             assertThat(secondaryFile.getFileName()).isEqualTo("secondary.pdf");
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(101L, "secondary.pdf", "newsub");
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
         }
 
         @Test
@@ -265,7 +277,7 @@ class BookFilePersistenceServiceTest {
             assertThat(book1.getDeleted()).isTrue();
             assertThat(book1.getDeletedAt()).isNotNull();
             assertThat(book2.getDeleted()).isTrue();
-            verify(bookRepository).saveAll(List.of(book1, book2));
+            verify(jooqBookRepository).markDeleted(List.of(10L, 11L), book1.getDeletedAt());
         }
 
         @Test
@@ -316,7 +328,7 @@ class BookFilePersistenceServiceTest {
 
             service.deleteBookFile(bookFile);
 
-            verify(bookFileRepository).delete(bookFile);
+            verify(jooqBookRepository).deleteBookFileById(100L);
         }
 
         @Test
@@ -327,16 +339,7 @@ class BookFilePersistenceServiceTest {
 
             assertThat(book.getDeleted()).isTrue();
             assertThat(book.getDeletedAt()).isNotNull();
-            verify(bookRepository).save(book);
-        }
-
-        @Test
-        void save_delegates() {
-            BookEntity book = buildBook(10L);
-
-            service.save(book);
-
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).markDeleted(List.of(10L), book.getDeletedAt());
         }
 
         @Test
@@ -375,7 +378,10 @@ class BookFilePersistenceServiceTest {
             assertThat(book.getDeletedAt()).isNull();
             assertThat(bookFile.getFileName()).isEqualTo("new.epub");
             assertThat(bookFile.getFileSubPath()).isEqualTo("newsub");
-            verify(bookRepository).save(book);
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(100L, "new.epub", "newsub");
+            verify(jooqBookRepository).updateBookFileHash(100L, "filehash1");
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
             verify(notificationService).sendMessageToPermissions(any(), any(), any());
         }
 
@@ -386,7 +392,7 @@ class BookFilePersistenceServiceTest {
 
             service.recoverFolderBook(bookSnap, libraryPath, Path.of("/library"), Map.of());
 
-            verify(bookRepository, never()).save(any());
+            verify(jooqBookRepository, never()).updateLibrary(anyLong(), anyLong(), anyLong());
         }
 
         @Test
@@ -415,7 +421,12 @@ class BookFilePersistenceServiceTest {
             service.recoverFolderBook(bookSnap, libraryPath, Path.of("/new"), fileHashes);
 
             assertThat(book.getDeleted()).isFalse();
-            verify(bookRepository).save(book);
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(100L, "a.epub", "newsub1");
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash1");
+            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(101L, "b.epub", "newsub2");
+            verify(jooqBookRepository).updateBookFileHash(101L, "hash2");
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
         }
 
         @Test
@@ -437,7 +448,10 @@ class BookFilePersistenceServiceTest {
 
             // File name should remain unchanged since hash didn't match
             assertThat(bookFile.getFileName()).isEqualTo("old.epub");
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateLibrary(10L, 1L, 1L);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
+            verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+            verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
         }
     }
 }

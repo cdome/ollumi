@@ -8,9 +8,11 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
+import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
@@ -37,6 +39,8 @@ public class BookFilePersistenceService {
     private final EntityManager entityManager;
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
+    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
@@ -66,7 +70,9 @@ public class BookFilePersistenceService {
             matchedFile.setFileName(newFileName);
             book.setDeleted(Boolean.FALSE);
             book.setDeletedAt(null);
-            bookRepository.save(book);
+            jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), newLibraryPath.getId());
+            bookAdditionalFileRepository.updateFileNameAndSubPath(matchedFile.getId(), newFileName, newSubPath);
+            jooqBookRepository.markUndeleted(List.of(book.getId()));
             log.info("[FILE_CREATE] Updated path / undeleted existing book with hash '{}': '{}'", currentHash, path);
         } else {
             log.info("[FILE_CREATE] Book with hash '{}' already exists at same path. Skipping update.", currentHash);
@@ -107,12 +113,13 @@ public class BookFilePersistenceService {
             throw new IllegalArgumentException("relativeFolderPath cannot be null");
         }
         List<BookEntity> books = bookRepository.findAllByLibraryPathIdAndFileSubPathStartingWith(libraryPathId, relativeFolderPath);
+        Instant now = Instant.now();
         books.forEach(book -> {
             book.setDeleted(true);
-            book.setDeletedAt(Instant.now());
+            book.setDeletedAt(now);
         });
 
-        bookRepository.saveAll(books);
+        jooqBookRepository.markDeleted(books.stream().map(BookEntity::getId).toList(), now);
         return books.size();
     }
 
@@ -128,19 +135,15 @@ public class BookFilePersistenceService {
 
     @Transactional
     public void deleteBookFile(BookFileEntity bookFile) {
-        bookFileRepository.delete(bookFile);
+        jooqBookRepository.deleteBookFileById(bookFile.getId());
     }
 
     @Transactional
     public void markBookAsDeleted(BookEntity book) {
+        Instant now = Instant.now();
         book.setDeleted(true);
-        book.setDeletedAt(Instant.now());
-        bookRepository.save(book);
-    }
-
-    @Transactional
-    public void save(BookEntity book) {
-        bookRepository.save(book);
+        book.setDeletedAt(now);
+        jooqBookRepository.markDeleted(List.of(book.getId()), now);
     }
 
     @Transactional(readOnly = true)
@@ -164,16 +167,20 @@ public class BookFilePersistenceService {
                     if (entry.getValue().equals(fs.currentHash())) {
                         Path filePath = entry.getKey();
                         String newSubPath = FileUtils.getRelativeSubPath(newLibraryPath.getPath(), filePath);
+                        String newFileName = filePath.getFileName().toString();
                         bf.setFileSubPath(newSubPath);
-                        bf.setFileName(filePath.getFileName().toString());
+                        bf.setFileName(newFileName);
                         bf.setCurrentHash(entry.getValue());
+                        bookAdditionalFileRepository.updateFileNameAndSubPath(bf.getId(), newFileName, newSubPath);
+                        jooqBookRepository.updateBookFileHash(bf.getId(), entry.getValue());
                         break;
                     }
                 }
             });
         }
 
-        bookRepository.save(book);
+        jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), book.getLibraryPath().getId());
+        jooqBookRepository.markUndeleted(List.of(book.getId()));
         notificationService.sendMessageToPermissions(Topic.BOOK_ADD,
                 bookMapper.toBookWithDescription(book, false), Set.of(PermissionType.ADMIN, PermissionType.MANAGE_LIBRARY));
         log.info("[RECOVERED] Book id={} recovered from folder move", book.getId());

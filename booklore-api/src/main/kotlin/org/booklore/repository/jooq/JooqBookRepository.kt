@@ -176,6 +176,76 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .execute()
     }
 
+    fun markDeleted(bookIds: Collection<Long>, deletedAt: Instant) {
+        if (bookIds.isEmpty()) return
+        dsl.update(BOOK)
+            .set(BOOK.DELETED, 1.toByte())
+            .set(BOOK.DELETED_AT, LocalDateTime.ofInstant(deletedAt, ZoneOffset.UTC))
+            .where(BOOK.ID.`in`(bookIds))
+            .execute()
+    }
+
+    fun markUndeleted(bookIds: Collection<Long>) {
+        if (bookIds.isEmpty()) return
+        dsl.update(BOOK)
+            .set(BOOK.DELETED, 0.toByte())
+            .setNull(BOOK.DELETED_AT)
+            .where(BOOK.ID.`in`(bookIds))
+            .execute()
+    }
+
+    fun deleteByIds(bookIds: Collection<Long>): Int {
+        if (bookIds.isEmpty()) return 0
+        return dsl.deleteFrom(BOOK).where(BOOK.ID.`in`(bookIds)).execute()
+    }
+
+    // ========================================================================
+    // Writes: book_file CRUD (no cascade — book_file's own FK children,
+    // e.g. user_book_file_progress, are ON DELETE CASCADE at the DB level)
+    // ========================================================================
+
+    fun deleteBookFileById(bookFileId: Long) {
+        dsl.deleteFrom(bf).where(bf.ID.eq(bookFileId)).execute()
+    }
+
+    /** Reassigns a file to a different book, also updating its path/name (e.g. after a physical file move). */
+    fun reassignFileWithNewNameAndPath(bookFileId: Long, targetBookId: Long, newFileSubPath: String, newFileName: String) {
+        dsl.update(bf)
+            .set(bf.BOOK_ID, targetBookId)
+            .set(bf.FILE_SUB_PATH, newFileSubPath)
+            .set(bf.FILE_NAME, newFileName)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
+    fun insertBookFile(
+        bookId: Long,
+        fileName: String,
+        fileSubPath: String,
+        isBookFormat: Boolean,
+        folderBased: Boolean,
+        bookType: BookFileType?,
+        fileSizeKb: Long?,
+        initialHash: String?,
+        currentHash: String?,
+        description: String?,
+        addedOn: Instant
+    ): Long =
+        dsl.insertInto(bf)
+            .set(bf.BOOK_ID, bookId)
+            .set(bf.FILE_NAME, fileName)
+            .set(bf.FILE_SUB_PATH, fileSubPath)
+            .set(bf.IS_BOOK, if (isBookFormat) 1.toByte() else 0.toByte())
+            .set(bf.IS_FOLDER_BASED, if (folderBased) 1.toByte() else 0.toByte())
+            .set(bf.BOOK_TYPE, bookType?.name)
+            .set(bf.FILE_SIZE_KB, fileSizeKb)
+            .set(bf.INITIAL_HASH, initialHash)
+            .set(bf.CURRENT_HASH, currentHash)
+            .set(bf.DESCRIPTION, description)
+            .set(bf.ADDED_ON, LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC))
+            .returning(bf.ID)
+            .fetchOne()!!.id!!
+
     // ========================================================================
     // Writes: cover updates (book + book_metadata timestamp/hash columns only —
     // no cascade, these rows already exist)

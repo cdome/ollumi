@@ -4,9 +4,9 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.library.LibraryProcessingService;
@@ -39,7 +39,7 @@ class BookFileTransactionalHandlerTest {
     @Mock private NotificationService notificationService;
     @Mock private LibraryRepository libraryRepository;
     @Mock private BookRepository bookRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private PendingDeletionPool pendingDeletionPool;
 
     private BookFileTransactionalHandler handler;
@@ -57,7 +57,7 @@ class BookFileTransactionalHandlerTest {
         mocks = MockitoAnnotations.openMocks(this);
         handler = new BookFileTransactionalHandler(
                 bookFilePersistenceService, libraryProcessingService, notificationService,
-                libraryRepository, bookRepository, bookAdditionalFileRepository, pendingDeletionPool);
+                libraryRepository, bookRepository, jooqBookRepository, pendingDeletionPool);
 
         fingerprintMock = mockStatic(FileFingerprint.class);
         fileUtilsMock = mockStatic(FileUtils.class);
@@ -156,7 +156,8 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookFilePersistenceService).save(book);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash123");
             org.assertj.core.api.Assertions.assertThat(book.getDeleted()).isFalse();
             org.assertj.core.api.Assertions.assertThat(book.getDeletedAt()).isNull();
         }
@@ -172,7 +173,8 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookFilePersistenceService, never()).save(any());
+            verify(jooqBookRepository, never()).markUndeleted(any());
+            verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
             verify(pendingDeletionPool).cancelByPath(any());
         }
 
@@ -188,7 +190,7 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
             verify(pendingDeletionPool).cancelByPath(any());
-            verify(bookFilePersistenceService).save(book);
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash123");
             org.assertj.core.api.Assertions.assertThat(bookFile.getCurrentHash()).isEqualTo("hash123");
         }
 
@@ -243,7 +245,7 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -265,7 +267,7 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.pdf"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -315,7 +317,7 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/new.pdf"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
             verify(libraryProcessingService, never()).processLibraryFiles(any(), any());
         }
 
@@ -355,7 +357,7 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/author/book/audio/chapter1.m4b"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -431,7 +433,7 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/mybook.pdf"));
 
             // Should attach to book1 via exact grouping key match
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(eq(20L), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -474,7 +476,7 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/new.mobi"));
 
             // Should attach to bigBook (more files)
-            verify(bookAdditionalFileRepository).save(argThat(bf -> bf.getBook().equals(bigBook)));
+            verify(jooqBookRepository).insertBookFile(eq(bigBook.getId()), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -490,7 +492,8 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
             verify(pendingDeletionPool).matchByHash("oldhash");
-            verify(bookFilePersistenceService).save(book);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash123");
         }
 
         @Test
@@ -546,8 +549,8 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookRepository).save(argThat(b -> b.getLibraryPath() != null));
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).updateLibrary(10L, 1L, libraryPath.getId());
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
     }
 
@@ -590,8 +593,7 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewFolderAudiobook(1L, Path.of("/library/sub/audiobook"));
 
-            verify(bookAdditionalFileRepository).save(argThat(bf ->
-                    bf.isFolderBased() && bf.getBookType() == BookFileType.AUDIOBOOK));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), eq(true), eq(BookFileType.AUDIOBOOK), any(), any(), any(), any(), any());
         }
 
         @Test

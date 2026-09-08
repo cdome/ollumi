@@ -3,10 +3,13 @@ package org.booklore.service.watcher;
 import org.booklore.mapper.BookMapper;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
+import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,8 @@ class PendingDeletionPoolTest {
 
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
+    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private NotificationService notificationService;
     @Mock private BookMapper bookMapper;
 
@@ -48,6 +53,7 @@ class PendingDeletionPoolTest {
 
         book = BookEntity.builder()
                 .id(10L)
+                .library(LibraryEntity.builder().id(5L).build())
                 .libraryPath(libraryPath)
                 .deleted(false)
                 .build();
@@ -159,7 +165,7 @@ class PendingDeletionPoolTest {
 
         assertThat(book.getDeleted()).isTrue();
         assertThat(book.getDeletedAt()).isNotNull();
-        verify(bookRepository).save(book);
+        verify(jooqBookRepository).markDeleted(List.of(10L), book.getDeletedAt());
     }
 
     @Test
@@ -173,7 +179,7 @@ class PendingDeletionPoolTest {
 
         pool.expireFileDeletion(Path.of("/library/subfolder/test.epub"));
 
-        verify(bookFileRepository).delete(bookFile);
+        verify(jooqBookRepository).deleteBookFileById(100L);
         assertThat(book.getDeleted()).isFalse();
     }
 
@@ -189,7 +195,7 @@ class PendingDeletionPoolTest {
         pool.expireFolderDeletion(Path.of("/library/subfolder"));
 
         assertThat(book.getDeleted()).isTrue();
-        verify(bookRepository).save(book);
+        verify(jooqBookRepository).markDeleted(List.of(10L), book.getDeletedAt());
     }
 
     @Test
@@ -221,6 +227,9 @@ class PendingDeletionPoolTest {
         assertThat(book.getLibraryPath()).isEqualTo(newPath);
         assertThat(bookFile.getFileSubPath()).isEqualTo("newSub");
         assertThat(bookFile.getFileName()).isEqualTo("renamed.epub");
-        verify(bookRepository).save(book);
+        verify(jooqBookRepository).updateLibrary(10L, 5L, 2L);
+        verify(jooqBookRepository).markUndeleted(List.of(10L));
+        verify(bookAdditionalFileRepository).updateFileNameAndSubPath(100L, "renamed.epub", "newSub");
+        verify(jooqBookRepository).updateBookFileHash(100L, "abc123");
     }
 }

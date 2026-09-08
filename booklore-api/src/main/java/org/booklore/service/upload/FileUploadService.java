@@ -18,6 +18,7 @@ import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
@@ -58,6 +59,7 @@ public class FileUploadService {
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookRepository bookRepository;
     private final BookAdditionalFileRepository additionalFileRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final AppSettingService appSettingService;
     private final AppProperties appProperties;
     private final MetadataExtractorFactory metadataExtractorFactory;
@@ -176,9 +178,18 @@ public class FileUploadService {
             log.info("Additional file uploaded to final location: {}", finalPath);
 
             final BookFileEntity entity = createAdditionalFileEntityWithSubPath(book, finalFileName, fileSubPath, isBook, effectiveBookType, file.getSize(), fileHash, description);
-            final BookFileEntity savedEntity = additionalFileRepository.save(entity);
+            // Hibernate bytecode enhancement (enableAssociationManagement) auto-adds entity to
+            // book.getBookFiles() the moment .book(book) is set, making it reachable by that
+            // collection's cascade=ALL at commit-time flush - since it's never persist()'d, Hibernate
+            // then rejects it as a "detached entity" once it has an id. Remove it from the collection
+            // (entity.getBook() still returns book, needed below) so it's never swept into the cascade.
+            book.getBookFiles().remove(entity);
+            final long fileId = jooqBookRepository.insertBookFile(book.getId(), entity.getFileName(), entity.getFileSubPath(),
+                    entity.isBookFormat(), entity.isFolderBased(), entity.getBookType(), entity.getFileSizeKb(),
+                    entity.getInitialHash(), entity.getCurrentHash(), entity.getDescription(), entity.getAddedOn());
+            entity.setId(fileId);
 
-            return additionalFileMapper.toAdditionalFile(savedEntity);
+            return additionalFileMapper.toAdditionalFile(entity);
 
         } catch (IOException e) {
             log.error("Failed to upload additional file for book {}: {}", bookId, sanitizedFileName, e);

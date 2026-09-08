@@ -8,8 +8,10 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
+import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,8 @@ public class PendingDeletionPool {
 
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
+    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final NotificationService notificationService;
     private final BookMapper bookMapper;
 
@@ -195,16 +199,17 @@ public class PendingDeletionPool {
 
             long remainingFiles = bookFileRepository.countByBookId(book.getId());
             if (remainingFiles <= 1) {
+                Instant now = Instant.now();
                 book.setDeleted(true);
-                book.setDeletedAt(Instant.now());
-                bookRepository.save(book);
+                book.setDeletedAt(now);
+                jooqBookRepository.markDeleted(List.of(book.getId()), now);
                 notificationService.sendMessageToPermissions(Topic.BOOKS_REMOVE, Set.of(book.getId()),
                         Set.of(PermissionType.ADMIN, PermissionType.MANAGE_LIBRARY));
                 log.info("[EXPIRED] Book id={} marked as deleted (last file removed)", book.getId());
             } else {
                 for (FileSnapshot fs : bookSnap.files()) {
                     bookFileRepository.findById(fs.bookFileId()).ifPresent(bf -> {
-                        bookFileRepository.delete(bf);
+                        jooqBookRepository.deleteBookFileById(bf.getId());
                         log.info("[EXPIRED] BookFile id={} removed from book id={}", fs.bookFileId(), book.getId());
                     });
                 }
@@ -227,9 +232,10 @@ public class PendingDeletionPool {
             Optional<BookEntity> bookOpt = bookRepository.findById(bookSnap.bookId());
             if (bookOpt.isEmpty()) continue;
             BookEntity book = bookOpt.get();
+            Instant now = Instant.now();
             book.setDeleted(true);
-            book.setDeletedAt(Instant.now());
-            bookRepository.save(book);
+            book.setDeletedAt(now);
+            jooqBookRepository.markDeleted(List.of(book.getId()), now);
             log.info("[EXPIRED] Book id={} marked as deleted (folder deletion expired)", book.getId());
         }
 
@@ -254,7 +260,11 @@ public class PendingDeletionPool {
         bookFile.setFileSubPath(newFileSubPath);
         bookFile.setFileName(newFileName);
         bookFile.setCurrentHash(hash);
-        bookRepository.save(book);
+
+        jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), newLibraryPath.getId());
+        jooqBookRepository.markUndeleted(List.of(book.getId()));
+        bookAdditionalFileRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
+        jooqBookRepository.updateBookFileHash(bookFile.getId(), hash);
 
         notificationService.sendMessageToPermissions(Topic.BOOK_ADD,
                 bookMapper.toBookWithDescription(book, false), Set.of(PermissionType.ADMIN, PermissionType.MANAGE_LIBRARY));

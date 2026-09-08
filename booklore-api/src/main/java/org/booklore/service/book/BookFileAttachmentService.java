@@ -11,9 +11,11 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
+import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -21,7 +23,6 @@ import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
 import org.booklore.util.PathPatternResolver;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,8 @@ public class BookFileAttachmentService {
 
     private final BookRepository bookRepository;
     private final BookFileRepository bookFileRepository;
+    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
@@ -50,7 +53,6 @@ public class BookFileAttachmentService {
     private final FileMoveHelper fileMoveHelper;
     private final BookMapper bookMapper;
     private final BookService bookService;
-    private final EntityManager entityManager;
 
     @Transactional
     public AttachBookFileResponse attachBookFiles(Long targetBookId, List<Long> sourceBookIds, boolean moveFiles) {
@@ -145,12 +147,8 @@ public class BookFileAttachmentService {
             }
         }
 
-        entityManager.flush();
-        entityManager.clear();
-
         if (!sourceBooksToDeleteIds.isEmpty()) {
-            List<BookEntity> booksToDelete = bookRepository.findAllById(sourceBooksToDeleteIds);
-            bookRepository.deleteAll(booksToDelete);
+            jooqBookRepository.deleteByIds(sourceBooksToDeleteIds);
         }
 
         return sourceBooksToDeleteIds;
@@ -246,6 +244,7 @@ public class BookFileAttachmentService {
                             log.info("Organized file from {} to {}", currentPath, destinationPath);
                             existingFile.setFileSubPath(targetFileSubPath);
                             existingFile.setFileName(newFileName);
+                            bookAdditionalFileRepository.updateFileNameAndSubPath(existingFile.getId(), newFileName, targetFileSubPath);
                         } catch (IOException e) {
                             throw ApiError.INTERNAL_SERVER_ERROR.createException(
                                     "Failed to organize file " + currentPath + ": " + e.getMessage());
@@ -313,6 +312,7 @@ public class BookFileAttachmentService {
                     sourceBook.getBookFiles().remove(fileToMove);
                     fileToMove.setBook(targetBook);
                     targetBook.getBookFiles().add(fileToMove);
+                    jooqBookRepository.reassignFileWithNewNameAndPath(fileToMove.getId(), targetBook.getId(), targetFileSubPath, newFileName);
                 }
 
                 sourceDirectoriesToCleanup.addAll(sourceDirectories);
@@ -330,7 +330,7 @@ public class BookFileAttachmentService {
                     .toList();
 
             if (!sourceBooksToDelete.isEmpty()) {
-                bookRepository.deleteAll(sourceBooksToDelete);
+                jooqBookRepository.deleteByIds(deletedSourceBookIds);
             }
 
             Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(targetBook.getLibrary().getId()).stream()

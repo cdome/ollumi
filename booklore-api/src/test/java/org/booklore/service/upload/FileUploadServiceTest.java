@@ -17,6 +17,7 @@ import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
@@ -70,6 +71,8 @@ class FileUploadServiceTest {
     @Mock
     BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock
+    JooqBookRepository jooqBookRepository;
+    @Mock
     AppSettingService appSettingService;
     @Mock
     MetadataExtractorFactory metadataExtractorFactory;
@@ -98,7 +101,7 @@ class FileUploadServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(settings);
 
         service = new FileUploadService(
-                libraryRepository, libraryPathRepository, jooqLibraryPathRepository, relationsRepository, bookRepository, bookAdditionalFileRepository,
+                libraryRepository, libraryPathRepository, jooqLibraryPathRepository, relationsRepository, bookRepository, bookAdditionalFileRepository, jooqBookRepository,
                 appSettingService, appProperties, metadataExtractorFactory, additionalFileMapper, fileMovingHelper, monitoringRegistrationService, auditService
         );
     }
@@ -249,11 +252,8 @@ class FileUploadServiceTest {
 
             when(bookAdditionalFileRepository.findByAltFormatCurrentHash("hash-123")).thenReturn(Optional.empty());
 
-            when(bookAdditionalFileRepository.save(any(BookFileEntity.class))).thenAnswer(inv -> {
-                BookFileEntity e = inv.getArgument(0);
-                e.setId(99L);
-                return e;
-            });
+            when(jooqBookRepository.insertBookFile(eq(bookId), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(99L);
 
             BookFile dto = mock(BookFile.class);
             when(additionalFileMapper.toAdditionalFile(any(BookFileEntity.class))).thenReturn(dto);
@@ -261,8 +261,8 @@ class FileUploadServiceTest {
             BookFile result = service.uploadAdditionalFile(bookId, file, true, BookFileType.PDF, "desc");
 
             assertThat(result).isEqualTo(dto);
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
-            verify(additionalFileMapper).toAdditionalFile(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(eq(bookId), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
+            verify(additionalFileMapper).toAdditionalFile(argThat(e -> e.getId() != null && e.getId() == 99L));
         }
     }
 
@@ -359,7 +359,6 @@ class FileUploadServiceTest {
         book.getPrimaryBookFile().setFileSubPath(".");
 
         when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
-        when(bookAdditionalFileRepository.save(any(BookFileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(additionalFileMapper.toAdditionalFile(any(BookFileEntity.class))).thenReturn(mock(BookFile.class));
 
         try (MockedStatic<FileFingerprint> fp = mockStatic(FileFingerprint.class)) {

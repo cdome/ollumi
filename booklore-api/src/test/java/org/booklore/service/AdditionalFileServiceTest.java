@@ -6,7 +6,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.file.AdditionalFileService;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +40,7 @@ class AdditionalFileServiceTest {
     private BookAdditionalFileRepository additionalFileRepository;
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookRepository jooqBookRepository;
 
     @Mock
     private AdditionalFileMapper additionalFileMapper;
@@ -159,7 +159,7 @@ class AdditionalFileServiceTest {
 
         assertEquals("Additional file not found with id: 1", exception.getMessage());
         verify(additionalFileRepository).findById(fileId);
-        verify(additionalFileRepository, never()).delete(any());
+        verify(jooqBookRepository, never()).deleteBookFileById(anyLong());
         verify(monitoringRegistrationService, never()).unregisterSpecificPath(any());
     }
 
@@ -178,8 +178,7 @@ class AdditionalFileServiceTest {
             verify(additionalFileRepository).findById(fileId);
             verify(monitoringRegistrationService).unregisterSpecificPath(parentPath);
             filesMock.verify(() -> Files.deleteIfExists(fileEntity.getFullFilePath()));
-            verify(additionalFileRepository).delete(fileEntity);
-            verify(bookRepository, never()).save(any());
+            verify(jooqBookRepository).deleteBookFileById(fileId);
         }
     }
 
@@ -198,8 +197,7 @@ class AdditionalFileServiceTest {
             verify(additionalFileRepository).findById(fileId);
             verify(monitoringRegistrationService).unregisterSpecificPath(parentPath);
             filesMock.verify(() -> Files.deleteIfExists(fileEntity.getFullFilePath()));
-            verify(additionalFileRepository).delete(fileEntity);
-            verify(bookRepository, never()).save(any());
+            verify(jooqBookRepository).deleteBookFileById(fileId);
         }
     }
 
@@ -217,7 +215,7 @@ class AdditionalFileServiceTest {
         );
 
         verify(additionalFileRepository).findById(fileId);
-        verify(additionalFileRepository, never()).delete(any());
+        verify(jooqBookRepository, never()).deleteBookFileById(anyLong());
         verify(monitoringRegistrationService, never()).unregisterSpecificPath(any());
     }
 

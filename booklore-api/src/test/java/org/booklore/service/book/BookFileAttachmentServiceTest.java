@@ -1,6 +1,5 @@
 package org.booklore.service.book;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.mapper.BookMapper;
@@ -9,8 +8,10 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.AttachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -38,6 +39,8 @@ class BookFileAttachmentServiceTest {
 
     @Mock private BookRepository bookRepository;
     @Mock private BookFileRepository bookFileRepository;
+    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
@@ -47,7 +50,6 @@ class BookFileAttachmentServiceTest {
     @Mock private FileMoveHelper fileMoveHelper;
     @Mock private BookMapper bookMapper;
     @Mock private BookService bookService;
-    @Mock private EntityManager entityManager;
 
     @InjectMocks
     private BookFileAttachmentService service;
@@ -314,7 +316,6 @@ class BookFileAttachmentServiceTest {
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
             when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
             setupGetUpdatedBookMocks(1L, target);
 
             AttachBookFileResponse result = service.attachBookFiles(1L, List.of(2L), false);
@@ -323,9 +324,7 @@ class BookFileAttachmentServiceTest {
             assertNotNull(result.updatedBook());
             assertEquals(List.of(2L), result.deletedSourceBookIds());
             verify(bookFileRepository).reassignFilesToBook(eq(1L), anyList());
-            verify(entityManager).flush();
-            verify(entityManager).clear();
-            verify(bookRepository).deleteAll(List.of(source));
+            verify(jooqBookRepository).deleteByIds(List.of(2L));
         }
 
         @Test
@@ -344,13 +343,12 @@ class BookFileAttachmentServiceTest {
             when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source1));
             when(bookRepository.findByIdWithBookFiles(3L)).thenReturn(Optional.of(source2));
 
-            when(bookRepository.findAllById(anyList())).thenReturn(List.of(source1, source2));
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L, 3L), false);
 
             verify(bookFileRepository, times(2)).reassignFilesToBook(eq(1L), anyList());
-            verify(bookRepository).deleteAll(anyList());
+            verify(jooqBookRepository).deleteByIds(anyList());
         }
 
         @Test
@@ -370,7 +368,7 @@ class BookFileAttachmentServiceTest {
 
             service.attachBookFiles(1L, List.of(2L), false);
 
-            verify(bookRepository, never()).deleteAll(anyList());
+            verify(jooqBookRepository, never()).deleteByIds(anyList());
         }
 
         @Test
@@ -386,7 +384,6 @@ class BookFileAttachmentServiceTest {
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
             when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L), false);
@@ -509,7 +506,7 @@ class BookFileAttachmentServiceTest {
 
             service.attachBookFiles(1L, List.of(2L), true);
 
-            verify(bookRepository).deleteAll(anyList());
+            verify(jooqBookRepository).deleteByIds(anyList());
         }
 
         @Test
@@ -660,8 +657,6 @@ class BookFileAttachmentServiceTest {
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
             when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
-
             BookLoreUser user = BookLoreUser.builder().id(1L).username("testuser").build();
             when(authenticationService.getAuthenticatedUser()).thenReturn(user);
             when(userBookProgressRepository.findByUserIdAndBookId(1L, 1L))
@@ -706,7 +701,7 @@ class BookFileAttachmentServiceTest {
             AttachBookFileResponse result = service.attachBookFiles(1L, List.of(2L), false);
 
             // Should not delete source since it has remaining non-book files
-            verify(bookRepository, never()).deleteAll(anyList());
+            verify(jooqBookRepository, never()).deleteByIds(anyList());
             assertTrue(result.deletedSourceBookIds().isEmpty());
         }
 
@@ -723,13 +718,12 @@ class BookFileAttachmentServiceTest {
             when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
             when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L), false);
 
             verify(bookFileRepository).reassignFilesToBook(eq(1L), anyList());
-            verify(bookRepository).deleteAll(List.of(source));
+            verify(jooqBookRepository).deleteByIds(List.of(2L));
         }
 
         @Test
