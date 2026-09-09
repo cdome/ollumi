@@ -151,12 +151,20 @@ class JooqBookEntityRepository(private val dsl: DSLContext, private val objectMa
         return books.values.toList()
     }
 
-    /** Mirrors findAllFullBooks: metadata + metadata.comicMetadata only - confirmed sufficient for
-     * every known consumer (MetadataMatchService, BookRecommendationUpdaterTask,
-     * BookRecommendationService all only ever read book.getMetadata()/book.getId()). */
+    /** Mirrors findAllFullBooks. Declared JPA graph was metadata + metadata.comicMetadata only, and
+     * that's genuinely sufficient for MetadataMatchService/BookVectorService/BookSimilarityService/
+     * PopulateMetadataScoresMigration (verified: all only read book.getMetadata()/book.getId()) - but
+     * this method is reached via the SHARED BookQueryService.getAllFullBookEntities() wrapper, which
+     * has 5 callers total, not just those. BookRecommendationService.findSimilarBooks passes its
+     * candidates through bookMapper.toBookWithDescription (needs bookFiles+library+libraryPath), and
+     * BookCoverService.regenerateCovers filters on book.getPrimaryBookFile() (needs
+     * bookFiles+library.formatPriority) - full graph, not the narrower one originally shipped. */
     fun findAllFullBooks(): List<BookEntity> {
         val books = fetchBase(BookConditions.notDeleted())
         attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
         return books.values.toList()
     }
 

@@ -202,14 +202,18 @@ class JooqBookEntityRepositoryTest : AbstractIntegrationTest() {
     // =============================================================
 
     @Test
-    fun `findAllFullBooks returns metadata and comicMetadata without touching bookFiles`() {
+    fun `findAllFullBooks returns full graph - shared wrapper needs more than its declared JPA EntityGraph`() {
+        // Regression: the declared JPA graph was metadata-only, but BookQueryService.getAllFullBookEntities()
+        // is a shared entry point - BookRecommendationService.findSimilarBooks maps candidates through
+        // BookMapper (needs bookFiles+library+libraryPath) and BookCoverService.regenerateCovers filters
+        // on getPrimaryBookFile() (needs bookFiles+library.formatPriority).
         val books = repository.findAllFullBooks()
 
         assertThat(books.map { it.id }).containsExactlyInAnyOrder(fullBookId, filelessBookId)
         val full = books.first { it.id == fullBookId }
         assertThat(full.metadata.comicMetadata.volumeName).isEqualTo("Volume One")
-        // bookFiles deliberately not populated for this method - matches the JPA EntityGraph it replaces
-        assertThat(full.bookFiles).isEmpty()
+        assertThat(full.primaryBookFile.fileName).isEqualTo("book.epub")
+        assertThat(full.fullFilePath.toString()).isEqualTo("/books/fantasy/book.epub")
     }
 
     // =============================================================
