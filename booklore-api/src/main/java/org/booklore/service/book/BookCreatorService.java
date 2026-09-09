@@ -7,6 +7,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ComicCreatorRole;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -26,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BookCreatorService {
 
     private final JooqBookMetadataRelationsRepository relationsRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final JooqComicMetadataRepository comicRelationsRepository;
@@ -36,31 +37,30 @@ public class BookCreatorService {
 
     public BookCreatorService(
                               JooqBookMetadataRelationsRepository relationsRepository,
-                              BookRepository bookRepository,
+                              JooqBookEntityRepository jooqBookEntityRepository,
                               JooqBookRepository jooqBookRepository,
                               JooqBookMetadataRepository jooqBookMetadataRepository,
                               JooqComicMetadataRepository comicRelationsRepository) {
         this.relationsRepository = relationsRepository;
-        this.bookRepository = bookRepository;
+        this.jooqBookEntityRepository = jooqBookEntityRepository;
         this.jooqBookRepository = jooqBookRepository;
         this.jooqBookMetadataRepository = jooqBookMetadataRepository;
         this.comicRelationsRepository = comicRelationsRepository;
     }
 
     public BookEntity createShellBook(LibraryFile libraryFile, BookFileType bookFileType) {
-        Optional<BookEntity> existingBookOpt = bookRepository.findByLibraryIdAndLibraryPathIdAndFileSubPathAndFileName(
+        BookEntity existingBook = jooqBookEntityRepository.findByLibraryIdAndLibraryPathIdAndFileSubPathAndFileName(
                 libraryFile.getLibraryEntity().getId(),
                 libraryFile.getLibraryPathEntity().getId(),
                 libraryFile.getFileSubPath(),
                 libraryFile.getFileName());
 
-        if (existingBookOpt.isPresent()) {
+        if (existingBook != null) {
             log.warn("Book already exists for file: {}", libraryFile.getFileName());
             long fileSizeKb = calculateFileSize(libraryFile);
             String newHash = libraryFile.isFolderBased()
                     ? FileFingerprint.generateFolderHash(libraryFile.getFullPath())
                     : FileFingerprint.generateHash(libraryFile.getFullPath());
-            BookEntity existingBook = existingBookOpt.get();
             BookFileEntity primaryFile = existingBook.getPrimaryBookFile();
             primaryFile.setCurrentHash(newHash);
             primaryFile.setInitialHash(newHash);

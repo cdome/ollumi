@@ -8,7 +8,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.junit.jupiter.api.Test;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookRestorationServiceTest {
 
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private BookMapper bookMapper;
     @Mock private NotificationService notificationService;
@@ -40,7 +40,7 @@ class BookRestorationServiceTest {
     void restoreDeletedBooks_emptyLibraryFiles_doesNothing() {
         bookRestorationService.restoreDeletedBooks(List.of());
 
-        verifyNoInteractions(bookRepository, jooqBookRepository, notificationService);
+        verifyNoInteractions(jooqBookEntityRepository, jooqBookRepository, notificationService);
     }
 
     @Test
@@ -55,7 +55,7 @@ class BookRestorationServiceTest {
                 .fileName("book.epub")
                 .build();
 
-        when(bookRepository.findDeletedByLibraryId(1L)).thenReturn(List.of());
+        when(jooqBookEntityRepository.findDeletedByLibraryId(1L)).thenReturn(List.of());
 
         bookRestorationService.restoreDeletedBooks(List.of(libraryFile));
 
@@ -86,7 +86,7 @@ class BookRestorationServiceTest {
                 .bookFiles(new ArrayList<>(List.of(primaryFile)))
                 .build();
 
-        when(bookRepository.findDeletedByLibraryId(1L)).thenReturn(List.of(deletedBook));
+        when(jooqBookEntityRepository.findDeletedByLibraryId(1L)).thenReturn(List.of(deletedBook));
         when(bookMapper.toBookWithDescription(deletedBook, false)).thenReturn(Book.builder().id(5L).build());
 
         bookRestorationService.restoreDeletedBooks(List.of(libraryFile));
@@ -111,7 +111,7 @@ class BookRestorationServiceTest {
                 .build();
 
         BookEntity fileless = BookEntity.builder().id(6L).libraryPath(libraryPath).deleted(true).bookFiles(new ArrayList<>()).build();
-        when(bookRepository.findDeletedByLibraryId(1L)).thenReturn(List.of(fileless));
+        when(jooqBookEntityRepository.findDeletedByLibraryId(1L)).thenReturn(List.of(fileless));
 
         bookRestorationService.restoreDeletedBooks(List.of(libraryFile));
 

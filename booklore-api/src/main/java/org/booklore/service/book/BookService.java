@@ -254,8 +254,11 @@ public class BookService {
     }
 
     public Resource getBookCover(String coverHash) {
-        BookEntity bookEntity = bookRepository.findByBookCoverHash(coverHash).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(coverHash));
-        return getBookCover(bookEntity.getId());
+        Long bookId = jooqBookRepository.findBookIdByCoverHash(coverHash);
+        if (bookId == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(coverHash);
+        }
+        return getBookCover(bookId);
     }
 
     public Resource getAudiobookThumbnail(long bookId) {

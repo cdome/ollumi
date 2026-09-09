@@ -44,6 +44,7 @@ public class LibraryFileEventProcessor {
     private final LibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final BookRepository bookRepository;
+    private final org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     private final BookFileTransactionalHandler bookFileTransactionalHandler;
     private final BookFilePersistenceService bookFilePersistenceService;
     private final LibraryProcessingService libraryProcessingService;
@@ -471,7 +472,7 @@ public class LibraryFileEventProcessor {
             LibraryPathEntity libPathEntity = bookFilePersistenceService.getLibraryPathEntityForFile(library, libPath);
 
             String relativePrefix = Path.of(libPathEntity.getPath()).relativize(folderPath).toString().replace("\\", "/");
-            List<BookEntity> booksWithFiles = bookRepository.findBooksWithFilesUnderPath(libPathEntity.getId(), relativePrefix);
+            List<BookEntity> booksWithFiles = jooqBookEntityRepository.findBooksWithFilesUnderPath(libPathEntity.getId(), relativePrefix);
 
             if (booksWithFiles.isEmpty()) {
                 log.debug("[FOLDER_DELETE] No books found under '{}'", folderPath);

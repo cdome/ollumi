@@ -18,6 +18,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.*;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.NotificationService;
@@ -52,6 +53,7 @@ import java.util.stream.Stream;
 public class BookMetadataService {
 
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookMapper bookMapper;
     private final BookMetadataMapper bookMetadataMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
@@ -214,8 +216,10 @@ public class BookMetadataService {
 
     @Transactional
     public BookMetadata updateMetadata(long bookId, MetadataUpdateWrapper wrapper, boolean mergeCategories) {
-        BookEntity bookEntity = bookRepository.findByIdFull(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         MetadataUpdateContext context = MetadataUpdateContext.builder()
                 .bookEntity(bookEntity)
@@ -263,7 +267,7 @@ public class BookMetadataService {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         transactionTemplate.execute(status -> {
-            BookEntity book = bookRepository.findByIdFull(bookId).orElse(null);
+            BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
             if (book == null) {
                 log.warn("Book not found for metadata update: {}", bookId);
                 return null;

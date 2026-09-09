@@ -6,6 +6,7 @@ import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ComicMetadata;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.service.restriction.ContentRestrictionService;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class BookQueryService {
 
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookReadRepository jooqBookReadRepository;
     private final ContentRestrictionService contentRestrictionService;
 
@@ -40,7 +42,7 @@ public class BookQueryService {
     }
 
     public List<BookEntity> getAllFullBookEntities() {
-        return bookRepository.findAllFullBooks();
+        return jooqBookEntityRepository.findAllFullBooks();
     }
 
     private List<Book> mapBooksToDto(List<Book> books, boolean includeDescription, Long userId, boolean stripForListView) {

@@ -8,6 +8,7 @@ import org.booklore.model.dto.progress.KoreaderProgress;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -34,6 +35,7 @@ public class KoreaderService {
     private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final JooqKoreaderUserRepository koreaderUserRepository;
     private final HardcoverSyncService hardcoverSyncService;
@@ -220,8 +222,11 @@ public class KoreaderService {
     }
 
     private BookEntity findBookByHash(String bookHash) {
-        return bookRepository.findByCurrentHash(bookHash)
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book not found for hash " + bookHash));
+        BookEntity book = jooqBookEntityRepository.findByCurrentHash(bookHash);
+        if (book == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("Book not found for hash " + bookHash);
+        }
+        return book;
     }
 
     private BookLoreUserEntity findBookLoreUser(long userId) {

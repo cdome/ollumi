@@ -37,6 +37,7 @@ class LibraryFileEventProcessorTest {
 
     @Mock private LibraryRepository libraryRepository;
     @Mock private BookRepository bookRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookFileTransactionalHandler bookFileTransactionalHandler;
     @Mock private BookFilePersistenceService bookFilePersistenceService;
     @Mock private LibraryProcessingService libraryProcessingService;
@@ -57,7 +58,7 @@ class LibraryFileEventProcessorTest {
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
         processor = new LibraryFileEventProcessor(
-                libraryRepository, jooqLibraryPathRepository, bookRepository, bookFileTransactionalHandler,
+                libraryRepository, jooqLibraryPathRepository, bookRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
                 bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
 
         libraryPath = new LibraryPathEntity();
@@ -284,7 +285,7 @@ class LibraryFileEventProcessorTest {
                             .build())))
                     .build();
 
-            when(bookRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
+            when(jooqBookEntityRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
                     .thenReturn(List.of(book));
 
             Path folder = tempDir.resolve("books");
@@ -298,7 +299,7 @@ class LibraryFileEventProcessorTest {
 
         @Test
         void folderWithNoBooks_doesNotAddToPool() throws Exception {
-            when(bookRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
+            when(jooqBookEntityRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
                     .thenReturn(List.of());
 
             Path folder = tempDir.resolve("emptybooks");
@@ -403,7 +404,7 @@ class LibraryFileEventProcessorTest {
 
             // Reinitialize so tearDown's shutdown doesn't fail
             processor = new LibraryFileEventProcessor(
-                    libraryRepository, jooqLibraryPathRepository, bookRepository, bookFileTransactionalHandler,
+                    libraryRepository, jooqLibraryPathRepository, bookRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
                     bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
         }
     }

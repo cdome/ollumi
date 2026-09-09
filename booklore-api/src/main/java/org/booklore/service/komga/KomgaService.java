@@ -11,6 +11,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
 import org.booklore.service.appsettings.AppSettingService;
@@ -39,6 +40,7 @@ public class KomgaService {
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final LibraryRepository libraryRepository;
     private final KomgaMapper komgaMapper;
     private final MagicShelfService magicShelfService;
@@ -112,7 +114,7 @@ public class KomgaService {
                     seriesBooks = loadBooksPreservingOrder(seriesBookIds);
                 } else {
                     // For all libraries, need to load all books and filter (less common case)
-                    List<BookEntity> allBooks = bookRepository.findAllWithMetadata();
+                    List<BookEntity> allBooks = jooqBookEntityRepository.findAllWithMetadata();
                     seriesBooks = allBooks.stream()
                             .filter(book -> komgaMapper.getBookSeriesName(book).equals(seriesName))
                             .collect(Collectors.toList());
@@ -251,7 +253,7 @@ public class KomgaService {
         if (libraryId != null) {
             books = bookRepository.findAllWithMetadataByLibraryId(libraryId);
         } else {
-            books = bookRepository.findAllWithMetadata();
+            books = jooqBookEntityRepository.findAllWithMetadata();
         }
         
         // Manual pagination

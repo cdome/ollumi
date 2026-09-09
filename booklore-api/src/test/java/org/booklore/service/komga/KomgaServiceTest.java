@@ -44,6 +44,9 @@ class KomgaServiceTest {
     private JooqBookRepository jooqBookRepository;
 
     @Mock
+    private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
+
+    @Mock
     private LibraryRepository libraryRepository;
 
     @Mock
@@ -251,6 +254,6 @@ class KomgaServiceTest {
         
         // Verify that only books for Series A and B were loaded (optimization check)
         verify(bookRepository, never()).findAllWithMetadataByLibraryId(anyLong());
-        verify(bookRepository, never()).findAllWithMetadata();
+        verify(jooqBookEntityRepository, never()).findAllWithMetadata();
     }
 }

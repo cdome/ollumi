@@ -41,6 +41,24 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
             .and(BOOK.LIBRARY_PATH_ID.`in`(libraryPathIds))
             .fetch(BOOK.ID)
 
+    fun findBookIdByCoverHash(coverHash: String): Long? =
+        dsl.select(BOOK.ID)
+            .from(BOOK)
+            .where(BOOK.BOOK_COVER_HASH.eq(coverHash))
+            .fetchOne(BOOK.ID)
+
+    fun findBookIdsByLibraryPathIdAndFileSubPathStartingWith(libraryPathId: Long, fileSubPathPrefix: String): List<Long> {
+        val prefix = "$fileSubPathPrefix/%"
+        return dsl.selectDistinct(bf.BOOK_ID)
+            .from(bf)
+            .join(BOOK).on(BOOK.ID.eq(bf.BOOK_ID))
+            .where(BOOK.LIBRARY_PATH_ID.eq(libraryPathId))
+            .and(bf.FILE_SUB_PATH.eq(fileSubPathPrefix).or(bf.FILE_SUB_PATH.like(prefix)))
+            .and(bf.IS_BOOK.eq(1))
+            .and(BookConditions.notDeleted())
+            .fetch(bf.BOOK_ID)
+    }
+
     // ========================================================================
     // Counts
     // ========================================================================

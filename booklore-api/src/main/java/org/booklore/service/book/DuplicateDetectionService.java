@@ -9,7 +9,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.util.BookUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,13 +27,13 @@ public class DuplicateDetectionService {
             BookFileType.MOBI, BookFileType.FB2, BookFileType.CBX, BookFileType.AUDIOBOOK
     );
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final BookMapper bookMapper;
 
     @Transactional(readOnly = true)
     public List<DuplicateGroup> findDuplicates(DuplicateDetectionRequest request) {
-        List<BookEntity> books = bookRepository.findAllForDuplicateDetection(request.libraryId());
+        List<BookEntity> books = jooqBookEntityRepository.findAllForDuplicateDetection(request.libraryId());
         if (books.size() < 2) {
             return List.of();
         }

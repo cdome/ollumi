@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 class BookCreatorServiceTest {
 
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    @Mock private BookRepository bookRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock private org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;

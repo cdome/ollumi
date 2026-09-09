@@ -55,6 +55,7 @@ import static org.mockito.Mockito.*;
 class BookMetadataServiceTest {
 
     @Mock private BookRepository bookRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookMapper bookMapper;
     @Mock private BookMetadataMapper bookMetadataMapper;
     @Mock private BookMetadataUpdater bookMetadataUpdater;
@@ -76,7 +77,7 @@ class BookMetadataServiceTest {
     void setUp() {
         parserMap = new HashMap<>();
         service = new BookMetadataService(
-                bookRepository, bookMapper, bookMetadataMapper, bookMetadataUpdater,
+                bookRepository, jooqBookEntityRepository, bookMapper, bookMetadataMapper, bookMetadataUpdater,
                 notificationService, jooqBookMetadataRepository, jooqComicMetadataRepository, bookQueryService,
                 auditService, parserMap, cbxMetadataExtractor, metadataExtractorFactory,
                 metadataClearFlagsMapper, transactionManager, appSettingService
@@ -521,8 +522,8 @@ class BookMetadataServiceTest {
 
             BookEntity book1 = BookEntity.builder().id(1L).build();
             BookEntity book2 = BookEntity.builder().id(2L).build();
-            when(bookRepository.findByIdFull(1L)).thenReturn(Optional.of(book1));
-            when(bookRepository.findByIdFull(2L)).thenReturn(Optional.of(book2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book1);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(book2);
 
             var txStatus = mock(org.springframework.transaction.TransactionStatus.class);
             when(transactionManager.getTransaction(any())).thenReturn(txStatus);
@@ -549,8 +550,8 @@ class BookMetadataServiceTest {
             when(transactionManager.getTransaction(any())).thenReturn(txStatus);
 
             BookEntity book2 = BookEntity.builder().id(2L).build();
-            when(bookRepository.findByIdFull(1L)).thenReturn(Optional.empty());
-            when(bookRepository.findByIdFull(2L)).thenReturn(Optional.of(book2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(book2);
 
             service.bulkUpdateMetadata(request, false, false, false);
 
@@ -572,7 +573,7 @@ class BookMetadataServiceTest {
             when(transactionManager.getTransaction(any())).thenReturn(txStatus);
 
             BookEntity book = BookEntity.builder().id(1L).build();
-            when(bookRepository.findByIdFull(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             service.bulkUpdateMetadata(request, false, false, false);
 

@@ -6,7 +6,7 @@ import org.booklore.model.dto.request.DuplicateDetectionRequest;
 import org.booklore.model.dto.response.DuplicateGroup;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 class DuplicateDetectionServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private BookMapper bookMapper;
@@ -121,7 +121,7 @@ class DuplicateDetectionServiceTest {
     }
 
     private void stubBooks(BookEntity... books) {
-        when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of(books));
+        when(jooqBookEntityRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of(books));
         // Author names now come from the jOOQ relations reader; derive them from the fixtures' entity authors.
         Map<Long, List<String>> authorsByBook = new HashMap<>();
         for (BookEntity b : books) {
@@ -158,7 +158,7 @@ class DuplicateDetectionServiceTest {
 
         @Test
         void returnsEmptyWhenNoBooksInLibrary() {
-            when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of());
 
             List<DuplicateGroup> result = service.findDuplicates(allSignals());
 
@@ -914,7 +914,7 @@ class DuplicateDetectionServiceTest {
                         "9781234567890", null);
                 books.add(book);
             }
-            when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(books);
+            when(jooqBookEntityRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(books);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyIsbn());
 

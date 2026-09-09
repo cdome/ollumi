@@ -266,23 +266,18 @@ class BookFilePersistenceServiceTest {
 
         @Test
         void marksAllBooksAsDeleted() {
-            BookEntity book1 = buildBook(10L);
-            BookEntity book2 = buildBook(11L);
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPathStartingWith(1L, "sub"))
-                    .thenReturn(List.of(book1, book2));
+            when(jooqBookRepository.findBookIdsByLibraryPathIdAndFileSubPathStartingWith(1L, "sub"))
+                    .thenReturn(List.of(10L, 11L));
 
             int count = service.markAllBooksUnderPathAsDeleted(1L, "sub");
 
             assertThat(count).isEqualTo(2);
-            assertThat(book1.getDeleted()).isTrue();
-            assertThat(book1.getDeletedAt()).isNotNull();
-            assertThat(book2.getDeleted()).isTrue();
-            verify(jooqBookRepository).markDeleted(List.of(10L, 11L), book1.getDeletedAt());
+            verify(jooqBookRepository).markDeleted(eq(List.of(10L, 11L)), any());
         }
 
         @Test
         void returnsZeroWhenNoBooksFound() {
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPathStartingWith(1L, "empty"))
+            when(jooqBookRepository.findBookIdsByLibraryPathIdAndFileSubPathStartingWith(1L, "empty"))
                     .thenReturn(List.of());
 
             int count = service.markAllBooksUnderPathAsDeleted(1L, "empty");

@@ -13,6 +13,7 @@ import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.enums.SidecarSyncStatus;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.metadata.BookMetadataUpdater;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ import java.util.Optional;
 public class SidecarService {
 
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final LibraryRepository libraryRepository;
     private final SidecarMetadataReader sidecarReader;
     private final SidecarMetadataWriter sidecarWriter;
@@ -105,7 +107,7 @@ public class SidecarService {
         LibraryEntity library = libraryRepository.findById(libraryId)
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
 
-        List<BookEntity> books = bookRepository.findAllByLibraryIdWithFiles(libraryId);
+        List<BookEntity> books = jooqBookEntityRepository.findAllByLibraryIdWithFiles(libraryId);
         int exported = 0;
 
         for (BookEntity book : books) {
@@ -126,7 +128,7 @@ public class SidecarService {
         LibraryEntity library = libraryRepository.findById(libraryId)
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
 
-        List<BookEntity> books = bookRepository.findAllByLibraryIdWithFiles(libraryId);
+        List<BookEntity> books = jooqBookEntityRepository.findAllByLibraryIdWithFiles(libraryId);
         int imported = 0;
 
         for (BookEntity book : books) {

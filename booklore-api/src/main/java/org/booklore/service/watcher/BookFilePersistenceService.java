@@ -112,15 +112,9 @@ public class BookFilePersistenceService {
         if (relativeFolderPath == null) {
             throw new IllegalArgumentException("relativeFolderPath cannot be null");
         }
-        List<BookEntity> books = bookRepository.findAllByLibraryPathIdAndFileSubPathStartingWith(libraryPathId, relativeFolderPath);
-        Instant now = Instant.now();
-        books.forEach(book -> {
-            book.setDeleted(true);
-            book.setDeletedAt(now);
-        });
-
-        jooqBookRepository.markDeleted(books.stream().map(BookEntity::getId).toList(), now);
-        return books.size();
+        List<Long> bookIds = jooqBookRepository.findBookIdsByLibraryPathIdAndFileSubPathStartingWith(libraryPathId, relativeFolderPath);
+        jooqBookRepository.markDeleted(bookIds, Instant.now());
+        return bookIds.size();
     }
 
     @Transactional(readOnly = true)
