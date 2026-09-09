@@ -9,7 +9,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -40,7 +40,7 @@ class LibraryProcessingServiceTest {
     @Mock
     private LibraryRepository libraryRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
@@ -68,7 +68,7 @@ class LibraryProcessingServiceTest {
     void setUp() {
         libraryProcessingService = new LibraryProcessingService(
                 libraryRepository,
-                bookRepository,
+                jooqBookEntityRepository,
                 jooqBookRepository,
                 jooqLibraryPathRepository,
                 notificationService,
@@ -102,7 +102,7 @@ class LibraryProcessingServiceTest {
         existingBook.getPrimaryBookFile().setFileName("book1.epub");
 
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
 
         LibraryFile existingFile = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -163,7 +163,7 @@ class LibraryProcessingServiceTest {
         existingBook.getPrimaryBookFile().setFileName("book1.epub");
 
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
 
         LibraryFile existingFile = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -196,7 +196,7 @@ class LibraryProcessingServiceTest {
         pathEntity.setPath("/library");
 
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         LibraryFile newFile1 = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -243,7 +243,7 @@ class LibraryProcessingServiceTest {
         pathEntity.setPath("/library");
 
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         LibraryFile newFileInSub = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -287,7 +287,7 @@ class LibraryProcessingServiceTest {
         pathEntity.setPath("/library");
 
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         LibraryFile additionalFileAsLibraryFile = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -362,7 +362,7 @@ class LibraryProcessingServiceTest {
         when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
                 .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
         when(jooqBookRepository.countByLibraryId(libraryId)).thenReturn(1L);
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(book));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(book));
 
         // Only epub exists on disk, pdf was removed
         LibraryFile epubOnDisk = LibraryFile.builder()
@@ -485,7 +485,7 @@ class LibraryProcessingServiceTest {
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
         when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
                 .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(List.of(fileOnDisk));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
         when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
@@ -517,7 +517,7 @@ class LibraryProcessingServiceTest {
         when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
                 .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
         when(jooqBookRepository.countByLibraryId(libraryId)).thenReturn(0L);
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(Collections.emptyList());
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
         when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
@@ -572,7 +572,7 @@ class LibraryProcessingServiceTest {
                 .thenReturn(Optional.of(freshLibraryEntity)); // Second call returns fresh entity
         when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
                 .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
         when(libraryFileHelper.getAllLibraryFiles(any(LibraryEntity.class))).thenReturn(List.of(fileOnDisk));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
         when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());

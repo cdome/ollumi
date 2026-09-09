@@ -8,7 +8,6 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.file.FileFingerprint;
@@ -43,7 +42,6 @@ public class LibraryFileEventProcessor {
     private final BlockingQueue<FileEvent> eventQueue = new LinkedBlockingQueue<>();
     private final LibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
-    private final BookRepository bookRepository;
     private final org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     private final BookFileTransactionalHandler bookFileTransactionalHandler;
     private final BookFilePersistenceService bookFilePersistenceService;
@@ -345,10 +343,10 @@ public class LibraryFileEventProcessor {
                     continue;
                 }
 
-                Optional<BookEntity> existing = bookRepository.findByCurrentHashIncludingRecentlyDeleted(
+                BookEntity existing = jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(
                         hash, Instant.now().minus(60, ChronoUnit.SECONDS));
-                if (existing.isPresent()) {
-                    bookFilePersistenceService.updatePathIfChanged(existing.get(), library, p, hash);
+                if (existing != null) {
+                    bookFilePersistenceService.updatePathIfChanged(existing, library, p, hash);
                     log.info("[FOLDER_CREATE] File '{}' recognized as moved file, updated existing book's path", p);
                 } else {
                     unmatched.add(p);

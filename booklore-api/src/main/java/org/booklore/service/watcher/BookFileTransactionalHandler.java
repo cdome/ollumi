@@ -11,8 +11,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileFingerprint;
@@ -46,7 +46,7 @@ public class BookFileTransactionalHandler {
     private final LibraryProcessingService libraryProcessingService;
     private final NotificationService notificationService;
     private final LibraryRepository libraryRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final PendingDeletionPool pendingDeletionPool;
 
@@ -109,9 +109,9 @@ public class BookFileTransactionalHandler {
             return;
         }
 
-        Optional<BookEntity> existingByHash = bookRepository.findByCurrentHashIncludingRecentlyDeleted(currentHash, Instant.now().minus(60, ChronoUnit.SECONDS));
-        if (existingByHash.isPresent()) {
-            bookFilePersistenceService.updatePathIfChanged(existingByHash.get(), libraryEntity, path, currentHash);
+        BookEntity existingByHash = jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(currentHash, Instant.now().minus(60, ChronoUnit.SECONDS));
+        if (existingByHash != null) {
+            bookFilePersistenceService.updatePathIfChanged(existingByHash, libraryEntity, path, currentHash);
             log.info("[CREATE] File '{}' recognized as moved file, updated existing book's path", filePath);
             notificationService.sendMessageToPermissions(Topic.LOG, LogNotification.info("Finished processing file: " + filePath), Set.of(ADMIN, MANAGE_LIBRARY));
             return;
@@ -226,7 +226,7 @@ public class BookFileTransactionalHandler {
     private static final double FUZZY_MATCH_THRESHOLD = 0.85;
 
     private BookEntity findMatchingFilelessBook(LibraryEntity library, String fileName, LibraryPathEntity fileLibraryPath) {
-        List<BookEntity> filelessBooks = bookRepository.findFilelessBooksByLibraryId(library.getId());
+        List<BookEntity> filelessBooks = jooqBookEntityRepository.findFilelessBooksByLibraryId(library.getId());
         String fileBaseName = BookFileGroupingUtils.extractGroupingKey(fileName);
 
         for (BookEntity book : filelessBooks) {
@@ -246,7 +246,7 @@ public class BookFileTransactionalHandler {
     }
 
     private BookEntity findExactFilelessBook(LibraryEntity library, String fileName, LibraryPathEntity fileLibraryPath) {
-        List<BookEntity> filelessBooks = bookRepository.findFilelessBooksByLibraryId(library.getId());
+        List<BookEntity> filelessBooks = jooqBookEntityRepository.findFilelessBooksByLibraryId(library.getId());
         String fileBaseName = BookFileGroupingUtils.extractGroupingKey(fileName);
 
         for (BookEntity book : filelessBooks) {
@@ -269,7 +269,7 @@ public class BookFileTransactionalHandler {
             return null;
         }
 
-        List<BookEntity> booksInDirectory = bookRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, fileSubPath);
+        List<BookEntity> booksInDirectory = jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, fileSubPath);
         List<BookEntity> activeBooks = booksInDirectory.stream()
                 .filter(book -> book.getDeleted() == null || !book.getDeleted())
                 .filter(BookEntity::hasFiles)
@@ -300,7 +300,7 @@ public class BookFileTransactionalHandler {
             }
             current = current.substring(0, lastSep);
 
-            List<BookEntity> booksAtLevel = bookRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, current);
+            List<BookEntity> booksAtLevel = jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, current);
             for (BookEntity book : booksAtLevel) {
                 if (book.getDeleted() != null && book.getDeleted()) {
                     continue;
@@ -323,7 +323,7 @@ public class BookFileTransactionalHandler {
 
         String fileGroupingKey = BookFileGroupingUtils.extractGroupingKey(fileName);
 
-        List<BookEntity> booksInDirectory = bookRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, fileSubPath);
+        List<BookEntity> booksInDirectory = jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, fileSubPath);
 
         BookEntity fuzzyMatch = null;
         double bestSimilarity = 0;
@@ -370,7 +370,7 @@ public class BookFileTransactionalHandler {
 
         String folderGroupingKey = BookFileGroupingUtils.extractGroupingKey(folderName);
 
-        List<BookEntity> booksInParent = bookRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, parentPath);
+        List<BookEntity> booksInParent = jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, parentPath);
 
         BookEntity fuzzyMatch = null;
         double bestSimilarity = 0;

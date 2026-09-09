@@ -296,16 +296,6 @@ class BookFilePersistenceServiceTest {
     class DelegationMethods {
 
         @Test
-        void findByLibraryPathSubPathAndFileName_delegates() {
-            when(bookRepository.findByLibraryPath_IdAndFileSubPathAndFileName(1L, "sub", "test.epub"))
-                    .thenReturn(Optional.of(buildBook(10L)));
-
-            Optional<BookEntity> result = service.findByLibraryPathSubPathAndFileName(1L, "sub", "test.epub");
-
-            assertThat(result).isPresent();
-        }
-
-        @Test
         void findBookFileByLibraryPathSubPathAndFileName_delegates() {
             BookFileEntity bookFile = buildBookFile(100L, buildBook(10L), "test.epub", "hash");
             when(bookFileRepository.findByLibraryPathIdAndFileSubPathAndFileName(1L, "sub", "test.epub"))

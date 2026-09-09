@@ -9,7 +9,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.websocket.TaskProgressPayload;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.fileprocessor.AudiobookProcessor;
 import org.booklore.service.metadata.BookMetadataUpdater;
@@ -35,16 +35,16 @@ public class LibraryRescanHelper {
     private final BookMetadataUpdater bookMetadataUpdater;
     private final NotificationService notificationService;
     private final TaskCancellationManager cancellationManager;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final AudiobookProcessor audiobookProcessor;
 
-    public LibraryRescanHelper(LibraryRepository libraryRepository, MetadataExtractorFactory metadataExtractorFactory, @Lazy BookMetadataUpdater bookMetadataUpdater, NotificationService notificationService, TaskCancellationManager cancellationManager, BookRepository bookRepository, AudiobookProcessor audiobookProcessor) {
+    public LibraryRescanHelper(LibraryRepository libraryRepository, MetadataExtractorFactory metadataExtractorFactory, @Lazy BookMetadataUpdater bookMetadataUpdater, NotificationService notificationService, TaskCancellationManager cancellationManager, JooqBookEntityRepository jooqBookEntityRepository, AudiobookProcessor audiobookProcessor) {
         this.libraryRepository = libraryRepository;
         this.metadataExtractorFactory = metadataExtractorFactory;
         this.bookMetadataUpdater = bookMetadataUpdater;
         this.notificationService = notificationService;
         this.cancellationManager = cancellationManager;
-        this.bookRepository = bookRepository;
+        this.jooqBookEntityRepository = jooqBookEntityRepository;
         this.audiobookProcessor = audiobookProcessor;
     }
 
@@ -53,7 +53,7 @@ public class LibraryRescanHelper {
 
         LibraryEntity library = libraryRepository.findById(context.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
 
-        List<BookEntity> bookEntities = bookRepository.findAllWithMetadataByLibraryId(library.getId());
+        List<BookEntity> bookEntities = jooqBookEntityRepository.findAllWithMetadataByLibraryId(library.getId());
 
         log.info("Found {} book(s) to process in library id={}", bookEntities.size(), library.getId());
 

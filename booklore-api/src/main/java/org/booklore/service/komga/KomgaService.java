@@ -158,7 +158,7 @@ public class KomgaService {
         String seriesSlug = parts[1];
         
         // Get books matching the series - optimized to query by series name
-        List<BookEntity> allSeriesBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> allSeriesBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         
         // Find the series name that matches this slug
         List<BookEntity> seriesBooks = allSeriesBooks.stream()
@@ -189,7 +189,7 @@ public class KomgaService {
         String seriesSlug = parts[1];
         
         // Get all books for the library once
-        List<BookEntity> allBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> allBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         
         // Filter and sort books for this series
         List<BookEntity> seriesBooks = allBooks.stream()
@@ -251,7 +251,7 @@ public class KomgaService {
         List<BookEntity> books;
         
         if (libraryId != null) {
-            books = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+            books = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         } else {
             books = jooqBookEntityRepository.findAllWithMetadata();
         }

@@ -12,8 +12,8 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 public class LibraryProcessingService {
 
     private final LibraryRepository libraryRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
@@ -59,7 +59,7 @@ public class LibraryProcessingService {
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started processing library: " + libraryEntity.getName()));
         try {
             List<LibraryFile> libraryFiles = libraryFileHelper.getLibraryFiles(libraryEntity);
-            List<BookEntity> existingBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+            List<BookEntity> existingBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
             List<LibraryFile> newFiles = detectNewBookPaths(libraryFiles, existingBooks, libraryId);
 
             // Use BookGroupingService for consistent grouping based on organization mode
@@ -95,7 +95,7 @@ public class LibraryProcessingService {
             throw ApiError.LIBRARY_PATH_NOT_ACCESSIBLE.createException(paths);
         }
 
-        List<BookEntity> existingBooks = bookRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
+        List<BookEntity> existingBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
 
         List<Long> additionalFileIds = detectDeletedAdditionalFiles(allLibraryFiles, libraryEntity);
         if (!additionalFileIds.isEmpty()) {
@@ -113,7 +113,7 @@ public class LibraryProcessingService {
         // Re-fetch library entity to get fresh state after entity manager was cleared
         libraryEntity = libraryRepository.findById(context.getLibraryId())
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
-        List<BookEntity> refreshedBooks = bookRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
+        List<BookEntity> refreshedBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
 
         List<LibraryFile> newFiles = detectNewBookPaths(filteredFiles, refreshedBooks, libraryEntity.getId());
 

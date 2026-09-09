@@ -6,7 +6,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -36,7 +35,6 @@ import static org.mockito.Mockito.*;
 class LibraryFileEventProcessorTest {
 
     @Mock private LibraryRepository libraryRepository;
-    @Mock private BookRepository bookRepository;
     @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookFileTransactionalHandler bookFileTransactionalHandler;
     @Mock private BookFilePersistenceService bookFilePersistenceService;
@@ -58,7 +56,7 @@ class LibraryFileEventProcessorTest {
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
         processor = new LibraryFileEventProcessor(
-                libraryRepository, jooqLibraryPathRepository, bookRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
+                libraryRepository, jooqLibraryPathRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
                 bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
 
         libraryPath = new LibraryPathEntity();
@@ -404,7 +402,7 @@ class LibraryFileEventProcessorTest {
 
             // Reinitialize so tearDown's shutdown doesn't fail
             processor = new LibraryFileEventProcessor(
-                    libraryRepository, jooqLibraryPathRepository, bookRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
+                    libraryRepository, jooqLibraryPathRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
                     bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
         }
     }

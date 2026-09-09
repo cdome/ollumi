@@ -5,7 +5,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BookGroupingServiceTest {
 
     @Mock
-    BookRepository bookRepository;
+    JooqBookEntityRepository jooqBookEntityRepository;
 
     @InjectMocks
     BookGroupingService bookGroupingService;

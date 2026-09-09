@@ -79,6 +79,97 @@ class JooqBookEntityRepository(private val dsl: DSLContext, private val objectMa
         return books[id]
     }
 
+    /** Mirrors findByIdWithMetadata: declared graph is metadata + metadata.comicMetadata + library, but
+     * BookReviewService.getByBookId/refreshReviews route the result through
+     * MetadataRefreshService.fetchMetadataForBook(BookEntity), which calls bookMapper.toBook(entity)
+     * directly - needs the full graph (bookFiles + libraryPath too). */
+    fun findByIdWithMetadata(id: Long): BookEntity? {
+        val books = fetchBase(BOOK.ID.eq(id).and(BookConditions.notDeleted()))
+        attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
+        return books[id]
+    }
+
+    /** Mirrors findByCurrentHashIncludingRecentlyDeleted: declared graph is bookFiles only (JOIN FETCH),
+     * but both consumers (LibraryFileEventProcessor, BookFileTransactionalHandler) pass the result into
+     * BookFilePersistenceService.updatePathIfChanged, which reads book.getLibraryPath()/book.getLibrary()
+     * directly and finishes with bookMapper.toBookWithDescription(book, false) - full graph. */
+    fun findByCurrentHashIncludingRecentlyDeleted(currentHash: String, cutoff: Instant): BookEntity? {
+        val cutoffLocal = LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC)
+        val bookId = dsl.select(bf.BOOK_ID)
+            .from(bf)
+            .join(BOOK).on(BOOK.ID.eq(bf.BOOK_ID))
+            .where(
+                bf.CURRENT_HASH.eq(currentHash)
+                    .and(bf.IS_BOOK.eq(1))
+                    .and(BookConditions.notDeleted().or(BOOK.DELETED_AT.gt(cutoffLocal)))
+            )
+            .fetchOne(bf.BOOK_ID) ?: return null
+        val books = fetchBase(BOOK.ID.eq(bookId))
+        attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
+        return books[bookId]
+    }
+
+    /** Mirrors findAllByLibraryPathIdAndFileSubPath: no declared graph at all (plain JPQL), but both
+     * consumers (BookFileTransactionalHandler, BookGroupingService) read metadata.title, bookFiles,
+     * library and libraryPath while fuzzy-matching candidate books - full graph. */
+    fun findAllByLibraryPathIdAndFileSubPath(libraryPathId: Long, fileSubPath: String): List<BookEntity> {
+        val bookIds = dsl.selectDistinct(bf.BOOK_ID)
+            .from(bf)
+            .join(BOOK).on(BOOK.ID.eq(bf.BOOK_ID))
+            .where(
+                BOOK.LIBRARY_PATH_ID.eq(libraryPathId)
+                    .and(bf.FILE_SUB_PATH.eq(fileSubPath))
+                    .and(bf.IS_BOOK.eq(1))
+                    .and(BookConditions.notDeleted())
+            )
+            .fetch(bf.BOOK_ID)
+        val books = fetchBase(BOOK.ID.`in`(bookIds))
+        attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
+        return books.values.toList()
+    }
+
+    /** Mirrors findFilelessBooksByLibraryId (JPQL: LEFT JOIN b.bookFiles GROUP BY b HAVING COUNT(bf) = 0).
+     * Full graph - consumers read metadata.title, library and libraryPath while matching a file to a
+     * fileless book (bookFiles is always empty by construction here, but attached for shape consistency). */
+    fun findFilelessBooksByLibraryId(libraryId: Long): List<BookEntity> {
+        val books = fetchBase(
+            BOOK.LIBRARY_ID.eq(libraryId)
+                .and(BookConditions.notDeleted())
+                .and(org.jooq.impl.DSL.notExists(dsl.selectOne().from(bf).where(bf.BOOK_ID.eq(BOOK.ID))))
+        )
+        attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
+        return books.values.toList()
+    }
+
+    /** Mirrors findAllWithMetadataByLibraryId: same query/graph shape as findAllByLibraryIdWithFiles
+     * (both declared the identical full JPA @EntityGraph over the identical WHERE clause). */
+    fun findAllWithMetadataByLibraryId(libraryId: Long): List<BookEntity> = findAllByLibraryIdWithFiles(libraryId)
+
+    /** Mirrors findBooksForMigrationBatch: base scalars only. Both consumers
+     * (GenerateCoverHashMigration, PopulateSearchTextMigration) only read id/bookCoverHash off the
+     * batch itself - PopulateSearchTextMigration re-fetches full entities via a separate findAllById
+     * call for the metadata it actually needs. */
+    fun findBooksForMigrationBatch(offset: Int, limit: Int): List<BookEntity> =
+        dsl.selectFrom(BOOK)
+            .where(BookConditions.notDeleted())
+            .orderBy(BOOK.ID.asc())
+            .limit(limit)
+            .offset(offset)
+            .fetch()
+            .map { toBookEntity(it) }
+
     /** Mirrors findByCurrentHash: bookFiles + metadata + library + libraryPath (+ comicMetadata, safe superset). */
     fun findByCurrentHash(currentHash: String): BookEntity? {
         val bookId = dsl.select(bf.BOOK_ID)

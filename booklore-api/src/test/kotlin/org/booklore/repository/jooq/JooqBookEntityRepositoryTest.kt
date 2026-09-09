@@ -261,6 +261,137 @@ class JooqBookEntityRepositoryTest : AbstractIntegrationTest() {
     }
 
     // =============================================================
+    // findByIdWithMetadata
+    // =============================================================
+
+    @Test
+    fun `findByIdWithMetadata returns full graph so BookReviewService's bookMapper#toBook path works`() {
+        // Regression: declared JPA graph was metadata+library only, but BookReviewService routes the
+        // result through MetadataRefreshService#fetchMetadataForBook(BookEntity), which calls
+        // bookMapper.toBook(entity) directly - needs bookFiles + libraryPath too.
+        val book = repository.findByIdWithMetadata(fullBookId)!!
+
+        assertThat(book.metadata.title).isEqualTo("Full Book")
+        assertThat(book.bookFiles).hasSize(3)
+        assertThat(book.library.id).isEqualTo(libraryId)
+        assertThat(book.libraryPath.path).isEqualTo("/books/fantasy")
+    }
+
+    @Test
+    fun `findByIdWithMetadata returns null for missing or deleted book`() {
+        assertThat(repository.findByIdWithMetadata(999_999L)).isNull()
+        assertThat(repository.findByIdWithMetadata(deletedBookId)).isNull()
+    }
+
+    // =============================================================
+    // findByCurrentHashIncludingRecentlyDeleted
+    // =============================================================
+
+    @Test
+    fun `findByCurrentHashIncludingRecentlyDeleted resolves an active book by its file hash`() {
+        val book = repository.findByCurrentHashIncludingRecentlyDeleted("epubhash", java.time.Instant.now().minusSeconds(60))!!
+
+        assertThat(book.id).isEqualTo(fullBookId)
+        assertThat(book.library.id).isEqualTo(libraryId)
+        assertThat(book.libraryPath.path).isEqualTo("/books/fantasy")
+    }
+
+    @Test
+    fun `findByCurrentHashIncludingRecentlyDeleted includes a book deleted within the cutoff window`() {
+        val recentlyDeletedId = insertBook(
+            deleted = true,
+            deletedAt = LocalDateTime.ofInstant(java.time.Instant.now().minusSeconds(10), java.time.ZoneOffset.UTC)
+        )
+        insertBookFile(recentlyDeletedId, "moved.epub", "EPUB", isBook = true, hash = "movedhash")
+
+        val book = repository.findByCurrentHashIncludingRecentlyDeleted("movedhash", java.time.Instant.now().minusSeconds(60))!!
+
+        assertThat(book.id).isEqualTo(recentlyDeletedId)
+    }
+
+    @Test
+    fun `findByCurrentHashIncludingRecentlyDeleted excludes a book deleted before the cutoff window`() {
+        val longDeletedId = insertBook(
+            deleted = true,
+            deletedAt = LocalDateTime.ofInstant(java.time.Instant.now().minusSeconds(120), java.time.ZoneOffset.UTC)
+        )
+        insertBookFile(longDeletedId, "old.epub", "EPUB", isBook = true, hash = "oldhash")
+
+        assertThat(repository.findByCurrentHashIncludingRecentlyDeleted("oldhash", java.time.Instant.now().minusSeconds(60))).isNull()
+    }
+
+    // =============================================================
+    // findAllByLibraryPathIdAndFileSubPath
+    // =============================================================
+
+    @Test
+    fun `findAllByLibraryPathIdAndFileSubPath matches book-format files at the given subPath with full graph`() {
+        val books = repository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, "")
+
+        assertThat(books.map { it.id }).containsExactly(fullBookId)
+        val full = books.first()
+        assertThat(full.metadata.title).isEqualTo("Full Book")
+        assertThat(full.bookFiles).hasSize(3)
+        assertThat(full.library.id).isEqualTo(libraryId)
+        assertThat(full.libraryPath.path).isEqualTo("/books/fantasy")
+    }
+
+    @Test
+    fun `findAllByLibraryPathIdAndFileSubPath returns empty for a subPath with no matches`() {
+        assertThat(repository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, "nowhere")).isEmpty()
+    }
+
+    // =============================================================
+    // findFilelessBooksByLibraryId
+    // =============================================================
+
+    @Test
+    fun `findFilelessBooksByLibraryId returns only books with zero bookFiles`() {
+        val books = repository.findFilelessBooksByLibraryId(libraryId)
+
+        assertThat(books.map { it.id }).containsExactly(filelessBookId)
+        assertThat(books.first().metadata.title).isEqualTo("Fileless")
+    }
+
+    // =============================================================
+    // findAllWithMetadataByLibraryId
+    // =============================================================
+
+    @Test
+    fun `findAllWithMetadataByLibraryId scopes to the library with full graph`() {
+        val books = repository.findAllWithMetadataByLibraryId(libraryId)
+
+        assertThat(books.map { it.id }).containsExactlyInAnyOrder(fullBookId, filelessBookId)
+        val full = books.first { it.id == fullBookId }
+        assertThat(full.bookFiles).hasSize(3)
+        assertThat(full.libraryPath.path).isEqualTo("/books/fantasy")
+    }
+
+    // =============================================================
+    // findBooksForMigrationBatch
+    // =============================================================
+
+    @Test
+    fun `findBooksForMigrationBatch returns base scalars only, ordered and paginated`() {
+        val firstPage = repository.findBooksForMigrationBatch(0, 1)
+
+        assertThat(firstPage).hasSize(1)
+        assertThat(firstPage.first().id).isEqualTo(fullBookId)
+        assertThat(firstPage.first().bookCoverHash).isEqualTo("coverhash1")
+        assertThat(firstPage.first().metadata).isNull()
+        assertThat(firstPage.first().bookFiles).isEmpty()
+
+        val secondPage = repository.findBooksForMigrationBatch(1, 1)
+        assertThat(secondPage.map { it.id }).containsExactly(filelessBookId)
+    }
+
+    @Test
+    fun `findBooksForMigrationBatch excludes deleted books`() {
+        val allIds = repository.findBooksForMigrationBatch(0, 100).map { it.id }
+        assertThat(allIds).doesNotContain(deletedBookId)
+    }
+
+    // =============================================================
     // Chapters / audio technical fields round-trip
     // =============================================================
 
@@ -281,7 +412,7 @@ class JooqBookEntityRepositoryTest : AbstractIntegrationTest() {
     // Helpers
     // =============================================================
 
-    private fun insertBook(deleted: Boolean, coverHash: String? = null, audiobookCoverHash: String? = null, matchScore: Double? = null): Long {
+    private fun insertBook(deleted: Boolean, coverHash: String? = null, audiobookCoverHash: String? = null, matchScore: Double? = null, deletedAt: LocalDateTime? = null): Long {
         val insert = dsl.insertInto(BOOK)
             .set(BOOK.LIBRARY_ID, libraryId)
             .set(BOOK.LIBRARY_PATH_ID, libraryPathId)
@@ -290,6 +421,7 @@ class JooqBookEntityRepositoryTest : AbstractIntegrationTest() {
             .set(BOOK.AUDIOBOOK_COVER_HASH, audiobookCoverHash)
             .set(BOOK.METADATA_MATCH_SCORE, matchScore)
         if (deleted) insert.set(BOOK.DELETED, 1.toByte())
+        if (deletedAt != null) insert.set(BOOK.DELETED_AT, deletedAt)
         return insert.returningResult(BOOK.ID).fetchOne()!!.get(BOOK.ID)!!
     }
 
@@ -328,14 +460,16 @@ class JooqBookEntityRepositoryTest : AbstractIntegrationTest() {
             .execute()
     }
 
-    private fun insertBookFile(bookId: Long, fileName: String, bookType: String?, isBook: Boolean) {
+    private fun insertBookFile(bookId: Long, fileName: String, bookType: String?, isBook: Boolean, fileSubPath: String = "", hash: String? = null) {
+        val resolvedHash = hash
+            ?: if (fileName == "book.epub") "epubhash" else if (fileName == "cover-scan.jpg") "coverscanhash" else null
         dsl.insertInto(BOOK_FILE)
             .set(BOOK_FILE.BOOK_ID, bookId)
             .set(BOOK_FILE.FILE_NAME, fileName)
-            .set(BOOK_FILE.FILE_SUB_PATH, "")
+            .set(BOOK_FILE.FILE_SUB_PATH, fileSubPath)
             .set(BOOK_FILE.BOOK_TYPE, bookType)
             .set(BOOK_FILE.IS_BOOK, if (isBook) 1.toByte() else 0.toByte())
-            .set(BOOK_FILE.CURRENT_HASH, if (fileName == "book.epub") "epubhash" else if (fileName == "cover-scan.jpg") "coverscanhash" else null)
+            .set(BOOK_FILE.CURRENT_HASH, resolvedHash)
             .execute()
     }
 

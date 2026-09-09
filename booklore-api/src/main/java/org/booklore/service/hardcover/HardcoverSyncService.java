@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.HardcoverSyncSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.metadata.parser.hardcover.GraphQLRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -35,15 +35,15 @@ public class HardcoverSyncService {
 
     private final RestClient restClient;
     private final HardcoverSyncSettingsService hardcoverSyncSettingsService;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
 
     // Thread-local to hold the current API token for GraphQL requests
     private final ThreadLocal<String> currentApiToken = new ThreadLocal<>();
 
     @Autowired
-    public HardcoverSyncService(HardcoverSyncSettingsService hardcoverSyncSettingsService, BookRepository bookRepository) {
+    public HardcoverSyncService(HardcoverSyncSettingsService hardcoverSyncSettingsService, JooqBookEntityRepository jooqBookEntityRepository) {
         this.hardcoverSyncSettingsService = hardcoverSyncSettingsService;
-        this.bookRepository = bookRepository;
+        this.jooqBookEntityRepository = jooqBookEntityRepository;
         this.restClient = RestClient.builder()
                 .baseUrl(HARDCOVER_API_URL)
                 .build();
@@ -80,7 +80,7 @@ public class HardcoverSyncService {
                 }
 
                 // Fetch book fresh within the async context to avoid lazy loading issues
-                BookEntity book = bookRepository.findByIdWithMetadata(bookId).orElse(null);
+                BookEntity book = jooqBookEntityRepository.findByIdWithMetadata(bookId);
                 if (book == null) {
                     log.debug("Hardcover sync skipped: book {} not found", bookId);
                     return;

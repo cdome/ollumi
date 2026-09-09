@@ -7,7 +7,7 @@ import org.booklore.model.dto.BookRecommendation;
 import org.booklore.model.dto.BookRecommendationLite;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.book.BookQueryService;
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.*;
 class BookRecommendationServiceTest {
 
     @Mock private BookSimilarityService similarityService;
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private BookQueryService bookQueryService;
     @Mock private BookMapper bookMapper;
@@ -53,7 +53,7 @@ class BookRecommendationServiceTest {
                 .metadata(metadata)
                 .similarBooksJson(Set.of(new BookRecommendationLite(2L, 0.9)))
                 .build();
-        when(bookRepository.findByIdWithMetadata(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdWithMetadata(1L)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(adminUser());
         when(bookQueryService.findAllWithMetadataByIds(Set.of(2L))).thenReturn(Collections.emptyList());
 
@@ -61,14 +61,13 @@ class BookRecommendationServiceTest {
 
         assertThat(result).isEmpty();
         verifyNoInteractions(jooqBookRepository);
-        verify(bookRepository, never()).save(any());
     }
 
     @Test
     void getRecommendations_noExistingRecommendations_computesAndPersistsViaJooq() {
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(1L).build();
         BookEntity book = BookEntity.builder().id(1L).metadata(metadata).similarBooksJson(null).build();
-        when(bookRepository.findByIdWithMetadata(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdWithMetadata(1L)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(adminUser());
         // No candidates at all - findSimilarBooks returns an empty recommendation list
         when(bookQueryService.getAllFullBookEntities()).thenReturn(Collections.emptyList());
@@ -79,6 +78,5 @@ class BookRecommendationServiceTest {
         assertThat(result).isEmpty();
         assertThat(book.getSimilarBooksJson()).isEmpty();
         verify(jooqBookRepository).updateSimilarBooksJson(1L, Collections.emptySet());
-        verify(bookRepository, never()).save(any());
     }
 }

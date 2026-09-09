@@ -6,7 +6,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -36,7 +36,7 @@ class LibraryProcessingServiceRegressionTest {
     @Mock
     private LibraryRepository libraryRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
@@ -64,7 +64,7 @@ class LibraryProcessingServiceRegressionTest {
     void setUp() {
         libraryProcessingService = new LibraryProcessingService(
                 libraryRepository,
-                bookRepository,
+                jooqBookEntityRepository,
                 jooqBookRepository,
                 jooqLibraryPathRepository,
                 notificationService,
@@ -101,7 +101,7 @@ class LibraryProcessingServiceRegressionTest {
         when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
         when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
                 .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
-        when(bookRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(filelessBook));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(filelessBook));
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(List.of(
             LibraryFile.builder()
                 .libraryPathEntity(pathEntity)

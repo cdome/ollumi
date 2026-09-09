@@ -22,6 +22,7 @@ import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
@@ -73,6 +74,7 @@ public class LibraryService {
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryProcessingService libraryProcessingService;
     private final BookMapper bookMapper;
@@ -278,7 +280,7 @@ public class LibraryService {
     @Transactional(readOnly = true)
     public List<Book> getBooks(long libraryId) {
         libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
-        List<BookEntity> bookEntities = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> bookEntities = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         return bookEntities.stream().map(bookMapper::toBook).toList();
     }
 

@@ -12,6 +12,7 @@ import org.booklore.model.dto.settings.MetadataPublicReviewsSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReviewRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.BookReviewUpdateService;
@@ -32,12 +33,16 @@ public class BookReviewService {
     private final JooqBookReviewRepository bookReviewRepository;
     private final BookReviewUpdateService bookReviewUpdateService;
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final AppSettingService appSettingService;
     private final MetadataRefreshService metadataRefreshService;
     private final AuthenticationService authenticationService;
 
     public List<BookReview> getByBookId(Long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         List<BookReview> existingReviews = bookReviewRepository.findByBookId(bookId);
 
@@ -99,8 +104,10 @@ public class BookReviewService {
 
     @Transactional
     public List<BookReview> refreshReviews(Long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithMetadata(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         bookReviewRepository.deleteByBookId(bookId);
 

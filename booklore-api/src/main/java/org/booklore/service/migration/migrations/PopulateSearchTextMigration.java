@@ -3,6 +3,7 @@ package org.booklore.service.migration.migrations;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.service.migration.Migration;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class PopulateSearchTextMigration implements Migration {
 
     private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
 
@@ -43,7 +45,7 @@ public class PopulateSearchTextMigration implements Migration {
         int offset = 0;
 
         while (true) {
-            List<BookEntity> bookBatch = bookRepository.findBooksForMigrationBatch(offset, batchSize);
+            List<BookEntity> bookBatch = jooqBookEntityRepository.findBooksForMigrationBatch(offset, batchSize);
             if (bookBatch.isEmpty()) break;
 
             List<Long> bookIds = bookBatch.stream().map(BookEntity::getId).toList();

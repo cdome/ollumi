@@ -110,7 +110,7 @@ class KomgaServiceTest {
     @Test
     void shouldReturnAllBooksWhenUnpagedIsTrue() {
         // Given
-        when(bookRepository.findAllWithMetadataByLibraryId(anyLong())).thenReturn(seriesBooks);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(anyLong())).thenReturn(seriesBooks);
         
         // Mock mapper.getBookSeriesName to return "test-series" for all books
         for (BookEntity book : seriesBooks) {
@@ -141,7 +141,7 @@ class KomgaServiceTest {
     @Test
     void shouldReturnPagedBooksWhenUnpagedIsFalse() {
         // Given
-        when(bookRepository.findAllWithMetadataByLibraryId(anyLong())).thenReturn(seriesBooks);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(anyLong())).thenReturn(seriesBooks);
         
         // Mock mapper.getBookSeriesName to return "test-series" for all books
         for (BookEntity book : seriesBooks) {
@@ -253,7 +253,7 @@ class KomgaServiceTest {
         assertThat(result.getLast()).isFalse();
         
         // Verify that only books for Series A and B were loaded (optimization check)
-        verify(bookRepository, never()).findAllWithMetadataByLibraryId(anyLong());
+        verify(jooqBookEntityRepository, never()).findAllWithMetadataByLibraryId(anyLong());
         verify(jooqBookEntityRepository, never()).findAllWithMetadata();
     }
 }
