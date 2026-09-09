@@ -182,7 +182,7 @@ public class LibraryProcessingService {
                 .collect(Collectors.toList());
     }
 
-    private void autoAttachFile(BookEntity book, LibraryFile file) {
+    void autoAttachFile(BookEntity book, LibraryFile file) {
         // Check if file already exists to prevent duplicates during concurrent rescans
         var existing = bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(
                 file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
@@ -194,6 +194,7 @@ public class LibraryProcessingService {
         // Set libraryPath if not set (fileless books like physical books don't have one)
         if (book.getLibraryPath() == null) {
             book.setLibraryPath(file.getLibraryPathEntity());
+            jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), file.getLibraryPathEntity().getId());
         } else if (!book.getLibraryPath().getId().equals(file.getLibraryPathEntity().getId())) {
             // Book already has a different libraryPath - cannot attach files from different paths
             log.warn("Cannot attach file '{}' to book id={}: file is in libraryPath {} but book is in libraryPath {}",
@@ -207,21 +208,20 @@ public class LibraryProcessingService {
         Long fileSizeKb = file.isFolderBased()
                 ? FileUtils.getFolderSizeInKb(file.getFullPath())
                 : FileUtils.getFileSizeInKb(file.getFullPath());
-        BookFileEntity additionalFile = BookFileEntity.builder()
-                .book(book)
-                .fileName(file.getFileName())
-                .fileSubPath(file.getFileSubPath())
-                .isBookFormat(true)
-                .bookType(file.getBookFileType())
-                .folderBased(file.isFolderBased())
-                .fileSizeKb(fileSizeKb)
-                .initialHash(hash)
-                .currentHash(hash)
-                .addedOn(Instant.now())
-                .build();
 
         try {
-            bookAdditionalFileRepository.save(additionalFile);
+            jooqBookRepository.insertBookFile(
+                    book.getId(),
+                    file.getFileName(),
+                    file.getFileSubPath(),
+                    true,
+                    file.isFolderBased(),
+                    file.getBookFileType(),
+                    fileSizeKb,
+                    hash,
+                    hash,
+                    null,
+                    Instant.now());
             String primaryFileName = book.hasFiles() ? book.getPrimaryBookFile().getFileName() : "book#" + book.getId();
             log.info("Auto-attached new format {} to existing book: {}", file.getFileName(), primaryFileName);
             fileAsBookProcessor.generateCoverFromAdditionalFile(book, file);

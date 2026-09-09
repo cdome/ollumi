@@ -3,6 +3,7 @@ package org.booklore.repository.jooq
 import org.booklore.jooq.tables.Book.BOOK
 import org.booklore.jooq.tables.BookFile.BOOK_FILE
 import org.booklore.jooq.tables.BookMetadata.BOOK_METADATA
+import org.booklore.model.dto.BookRecommendationLite
 import org.booklore.model.entity.BookFileEntity
 import org.booklore.model.enums.BookFileType
 import org.booklore.repository.jooq.dto.BookCoverUpdate
@@ -403,6 +404,18 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
     fun updateMetadataMatchScore(bookId: Long, score: Float?) {
         dsl.update(BOOK)
             .set(BOOK.METADATA_MATCH_SCORE, score?.toDouble())
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    /**
+     * Writes book.similar_books_json, mirroring BookRecommendationIdsListConverter exactly: a null
+     * set writes NULL, a non-null set (even empty) writes its JSON serialization - not the same as
+     * "empty or null -> NULL" (that's AudioFileChapterListConverter's rule, a different converter).
+     */
+    fun updateSimilarBooksJson(bookId: Long, recommendations: Set<BookRecommendationLite>?) {
+        dsl.update(BOOK)
+            .set(BOOK.SIMILAR_BOOKS_JSON, recommendations?.let { objectMapper.writeValueAsString(it) })
             .where(BOOK.ID.eq(bookId))
             .execute()
     }

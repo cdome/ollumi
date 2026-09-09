@@ -4,6 +4,7 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataMatchWeights;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class MetadataMatchService {
 
     private final AppSettingService appSettingsService;
     private final BookQueryService bookQueryService;
+    private final JooqBookRepository jooqBookRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     public void recalculateAllMatchScores() {
@@ -24,8 +26,8 @@ public class MetadataMatchService {
         for (BookEntity book : allBooks) {
             Float score = calculateMatchScore(book);
             book.setMetadataMatchScore(score);
+            jooqBookRepository.updateMetadataMatchScore(book.getId(), score);
         }
-        bookQueryService.saveAll(allBooks);
     }
 
     public Float calculateMatchScore(BookEntity book) {

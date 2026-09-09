@@ -11,6 +11,8 @@ import org.booklore.model.enums.TaskType;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.model.websocket.TaskProgressPayload;
 import org.booklore.model.websocket.Topic;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.recommender.BookVectorService;
@@ -29,6 +31,8 @@ import java.util.stream.Collectors;
 public class BookRecommendationUpdaterTask implements Task {
 
     private final BookQueryService bookQueryService;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final BookVectorService vectorService;
     private final NotificationService notificationService;
 
@@ -73,8 +77,10 @@ public class BookRecommendationUpdaterTask implements Task {
             if (book.getMetadata() != null) {
                 String embeddingJson = vectorService.serializeVector(embedding);
                 if (!Objects.equals(book.getMetadata().getEmbeddingVector(), embeddingJson)) {
+                    Instant embeddingUpdatedAt = Instant.now();
                     book.getMetadata().setEmbeddingVector(embeddingJson);
-                    book.getMetadata().setEmbeddingUpdatedAt(Instant.now());
+                    book.getMetadata().setEmbeddingUpdatedAt(embeddingUpdatedAt);
+                    jooqBookMetadataRepository.updateEmbedding(book.getId(), embeddingJson, embeddingUpdatedAt);
                 }
             }
 
@@ -145,7 +151,9 @@ public class BookRecommendationUpdaterTask implements Task {
 
         lastNotificationTime = sendTaskProgressNotification(taskId, 85, String.format("Saving recommendations for %d books...", booksToUpdate.size()), TaskStatus.IN_PROGRESS, lastNotificationTime, false);
 
-        bookQueryService.saveAll(booksToUpdate);
+        for (BookEntity book : booksToUpdate) {
+            jooqBookRepository.updateSimilarBooksJson(book.getId(), book.getSimilarBooksJson());
+        }
 
         long endTime = System.currentTimeMillis();
         log.info("{}: Task completed. Duration: {} ms", getTaskType(), endTime - startTime);

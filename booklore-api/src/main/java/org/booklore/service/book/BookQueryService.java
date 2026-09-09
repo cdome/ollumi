@@ -43,11 +43,6 @@ public class BookQueryService {
         return bookRepository.findAllFullBooks();
     }
 
-    @Transactional
-    public void saveAll(List<BookEntity> books) {
-        bookRepository.saveAll(books);
-    }
-
     private List<Book> mapBooksToDto(List<Book> books, boolean includeDescription, Long userId, boolean stripForListView) {
         return books.stream()
                 .map(book -> mapBookToDto(book, includeDescription, userId, stripForListView))

@@ -7,6 +7,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
+import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
@@ -585,5 +586,107 @@ class LibraryProcessingServiceTest {
         verify(libraryRepository, times(2)).findById(libraryId);
 
         verify(bookGroupingService).groupForRescan(eq(Collections.emptyList()), any(LibraryEntity.class));
+    }
+
+    // ========== autoAttachFile ==========
+
+    @Test
+    void autoAttachFile_fileAlreadyExists_skipsInsert(@TempDir Path tempDir) {
+        LibraryPathEntity libraryPath = new LibraryPathEntity();
+        libraryPath.setId(1L);
+        libraryPath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(libraryPath)
+                .fileSubPath("books")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .build();
+        BookEntity book = BookEntity.builder().id(5L).libraryPath(libraryPath).build();
+
+        when(bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(1L, "books", "book.epub"))
+                .thenReturn(Optional.of(new BookFileEntity()));
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        verifyNoInteractions(jooqBookRepository, fileAsBookProcessor);
+    }
+
+    @Test
+    void autoAttachFile_filelessBook_setsLibraryPathAndInsertsFile(@TempDir Path tempDir) throws IOException {
+        Files.createFile(tempDir.resolve("book.epub"));
+        LibraryPathEntity libraryPath = new LibraryPathEntity();
+        libraryPath.setId(1L);
+        libraryPath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(libraryPath)
+                .fileSubPath("")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .folderBased(false)
+                .build();
+        LibraryEntity library = LibraryEntity.builder().id(9L).build();
+        BookEntity book = BookEntity.builder().id(5L).library(library).libraryPath(null).build();
+
+        when(bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(1L, "", "book.epub"))
+                .thenReturn(Optional.empty());
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        assertThat(book.getLibraryPath()).isEqualTo(libraryPath);
+        verify(jooqBookRepository).updateLibrary(5L, 9L, 1L);
+        verify(jooqBookRepository).insertBookFile(
+                eq(5L), eq("book.epub"), eq(""), eq(true), eq(false), eq(BookFileType.EPUB),
+                anyLong(), anyString(), anyString(), isNull(), any());
+        verify(fileAsBookProcessor).generateCoverFromAdditionalFile(book, file);
+    }
+
+    @Test
+    void autoAttachFile_differentLibraryPath_warnsAndSkips(@TempDir Path tempDir) {
+        LibraryPathEntity bookPath = new LibraryPathEntity();
+        bookPath.setId(1L);
+        LibraryPathEntity filePath = new LibraryPathEntity();
+        filePath.setId(2L);
+        filePath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(filePath)
+                .fileSubPath("books")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .build();
+        BookEntity book = BookEntity.builder().id(5L).libraryPath(bookPath).build();
+
+        when(bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(2L, "books", "book.epub"))
+                .thenReturn(Optional.empty());
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        assertThat(book.getLibraryPath()).isEqualTo(bookPath);
+        verifyNoInteractions(jooqBookRepository, fileAsBookProcessor);
+    }
+
+    @Test
+    void autoAttachFile_sameLibraryPath_insertsWithoutUpdatingLibrary(@TempDir Path tempDir) throws IOException {
+        Files.createFile(tempDir.resolve("book.epub"));
+        LibraryPathEntity libraryPath = new LibraryPathEntity();
+        libraryPath.setId(1L);
+        libraryPath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(libraryPath)
+                .fileSubPath("")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .folderBased(false)
+                .build();
+        BookEntity book = BookEntity.builder().id(5L).libraryPath(libraryPath).build();
+
+        when(bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(1L, "", "book.epub"))
+                .thenReturn(Optional.empty());
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        verify(jooqBookRepository, never()).updateLibrary(anyLong(), anyLong(), anyLong());
+        verify(jooqBookRepository).insertBookFile(
+                eq(5L), eq("book.epub"), eq(""), eq(true), eq(false), eq(BookFileType.EPUB),
+                anyLong(), anyString(), anyString(), isNull(), any());
     }
 }

@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
@@ -61,6 +62,7 @@ import java.util.stream.Collectors;
 public class BookService {
 
     private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookFileRepository bookFileRepository;
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
@@ -412,7 +414,7 @@ public class BookService {
             }
         }
 
-        bookRepository.deleteAllInBatch(books);
+        jooqBookRepository.deleteByIds(books.stream().map(BookEntity::getId).toList());
         auditService.log(AuditAction.BOOK_DELETED, "Deleted " + ids.size() + " book(s)");
         BookDeletionResponse response = new BookDeletionResponse(ids, failedFileDeletions);
         return failedFileDeletions.isEmpty()

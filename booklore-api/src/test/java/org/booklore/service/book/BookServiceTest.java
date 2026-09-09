@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
@@ -55,6 +56,8 @@ class BookServiceTest {
 
     @Mock
     private BookRepository bookRepository;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
     @Mock
     private JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     @Mock
@@ -356,7 +359,6 @@ class BookServiceTest {
         Files.createDirectories(filePath.getParent());
         Files.write(filePath, "abc".getBytes());
 
-        doNothing().when(bookRepository).deleteAllInBatch(anyList());
         when(bookQueryService.findAllWithMetadataByIds(Set.of(11L))).thenReturn(List.of(entity));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
         when(jooqLibraryPathRepository.findPathsByLibraryId(42L)).thenReturn(List.of(new LibraryPathRow(1L, "/tmp")));
@@ -366,6 +368,7 @@ class BookServiceTest {
         assertNotNull(response);
         assertTrue(response.getFailedFileDeletions().isEmpty());
         assertEquals(Set.of(11L), response.getDeleted());
+        verify(jooqBookRepository).deleteByIds(List.of(11L));
         Files.deleteIfExists(filePath);
     }
 
@@ -387,13 +390,13 @@ class BookServiceTest {
 
         when(bookQueryService.findAllWithMetadataByIds(Set.of(13L))).thenReturn(List.of(entity));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
-        doNothing().when(bookRepository).deleteAllInBatch(anyList());
 
         BookDeletionResponse response = bookService.deleteBooks(Set.of(13L)).getBody();
 
         assertNotNull(response);
         assertTrue(response.getFailedFileDeletions().isEmpty());
         assertEquals(Set.of(13L), response.getDeleted());
+        verify(jooqBookRepository).deleteByIds(List.of(13L));
     }
 
     @Test

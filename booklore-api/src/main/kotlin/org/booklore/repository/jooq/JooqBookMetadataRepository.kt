@@ -7,6 +7,7 @@ import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.TableField
 import org.springframework.stereotype.Repository
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
@@ -200,6 +201,15 @@ class JooqBookMetadataRepository(private val dsl: DSLContext) {
             bm.AGE_RATING_LOCKED to toByteOrNull(metadata.ageRatingLocked),
             bm.CONTENT_RATING_LOCKED to toByteOrNull(metadata.contentRatingLocked),
         )
+    }
+
+    /** Was dropped by updateFullRow deliberately (see class doc) - written only by the recommendation-embedding task. */
+    fun updateEmbedding(bookId: Long, embeddingVector: String, embeddingUpdatedAt: Instant) {
+        dsl.update(bm)
+            .set(bm.EMBEDDING_VECTOR, embeddingVector)
+            .set(bm.EMBEDDING_UPDATED_AT, LocalDateTime.ofInstant(embeddingUpdatedAt, ZoneOffset.UTC))
+            .where(bm.BOOK_ID.eq(bookId))
+            .execute()
     }
 
     fun updateSeriesName(bookId: Long, seriesName: String?, searchText: String?) {

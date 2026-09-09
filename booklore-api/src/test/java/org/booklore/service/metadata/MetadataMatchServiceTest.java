@@ -35,6 +35,9 @@ class MetadataMatchServiceTest {
     private BookQueryService bookQueryService;
 
     @Mock
+    private org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
+
+    @Mock
     private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @InjectMocks
@@ -392,7 +395,9 @@ class MetadataMatchServiceTest {
             stubWeights(defaultWeights);
 
             BookEntity book1 = bookWith(BookMetadataEntity.builder().title("Book 1").build());
+            book1.setId(1L);
             BookEntity book2 = bookWith(BookMetadataEntity.builder().build());
+            book2.setId(2L);
 
             when(bookQueryService.getAllFullBookEntities()).thenReturn(List.of(book1, book2));
 
@@ -400,7 +405,8 @@ class MetadataMatchServiceTest {
 
             assertThat(book1.getMetadataMatchScore()).isGreaterThan(0f);
             assertThat(book2.getMetadataMatchScore()).isEqualTo(0f);
-            verify(bookQueryService).saveAll(List.of(book1, book2));
+            verify(jooqBookRepository).updateMetadataMatchScore(1L, book1.getMetadataMatchScore());
+            verify(jooqBookRepository).updateMetadataMatchScore(2L, book2.getMetadataMatchScore());
         }
     }
 }
