@@ -23,7 +23,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.BookdropFileStatus;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.repository.jooq.dto.BookdropFileRow;
@@ -66,7 +66,7 @@ public class BookDropService {
     private final LibraryRepository libraryRepository;
     private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
     private final org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookdropMonitoringService bookdropMonitoringService;
     private final NotificationService notificationService;
     private final MetadataRefreshService metadataRefreshService;
@@ -470,8 +470,10 @@ public class BookDropService {
                         .orElseThrow(() -> ApiError.INVALID_FILE_FORMAT.createException("Unsupported file extension"))
                         .getType());
 
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(fileProcessResult.getBook().getId())
-                .orElseThrow(() -> ApiError.FILE_NOT_FOUND.createException("Book ID missing after import"));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(fileProcessResult.getBook().getId());
+        if (bookEntity == null) {
+            throw ApiError.FILE_NOT_FOUND.createException("Book ID missing after import");
+        }
 
         notificationService.sendMessage(Topic.BOOK_ADD, fileProcessResult.getBook());
         MetadataUpdateContext context = MetadataUpdateContext.builder()

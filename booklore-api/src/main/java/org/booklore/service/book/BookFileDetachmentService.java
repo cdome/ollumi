@@ -14,7 +14,7 @@ import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -40,7 +40,7 @@ import java.util.Set;
 @Service
 public class BookFileDetachmentService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookFileRepository bookFileRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
@@ -56,8 +56,10 @@ public class BookFileDetachmentService {
 
     @Transactional
     public DetachBookFileResponse detachBookFile(Long bookId, Long fileId, boolean copyMetadata) {
-        BookEntity sourceBook = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity sourceBook = jooqBookEntityRepository.findByIdFull(bookId);
+        if (sourceBook == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         BookFileEntity targetFile = sourceBook.getBookFiles().stream()
                 .filter(f -> f.getId().equals(fileId))
@@ -225,8 +227,10 @@ public class BookFileDetachmentService {
 
     private Book getUpdatedBook(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity refreshedBook = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity refreshedBook = jooqBookEntityRepository.findByIdFull(bookId);
+        if (refreshedBook == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
                 .orElse(new UserBookProgressRow());

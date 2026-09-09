@@ -13,10 +13,10 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookdropFileStatus;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileMovingHelper;
@@ -69,7 +69,7 @@ class BookDropServiceTest {
     @Mock
     private org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private BookdropMonitoringService bookdropMonitoringService;
     @Mock
@@ -270,7 +270,7 @@ class BookDropServiceTest {
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(1L);
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
         try (MockedStatic<Files> filesMock = mockStatic(Files.class, withSettings().lenient())) {
             filesMock.when(() -> Files.exists(any(Path.class))).thenReturn(true);
@@ -495,10 +495,8 @@ class BookDropServiceTest {
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(1L);
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
         
-        when(bookRepository.save(any())).thenAnswer(i -> i.getArguments()[0]);
-
         doNothing().when(bookdropFileRepository).deleteById(anyLong());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();
         doNothing().when(notificationService).sendMessage(any(), any());
@@ -622,7 +620,7 @@ class BookDropServiceTest {
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(1L);
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
         doNothing().when(bookdropFileRepository).deleteById(anyLong());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();

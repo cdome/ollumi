@@ -242,6 +242,19 @@ class JooqBookEntityRepository(private val dsl: DSLContext, private val objectMa
         return books.values.toList()
     }
 
+    /** Mirrors findAllWithMetadataByIds: full graph (identical declared JPA @EntityGraph). Order isn't
+     * contractually guaranteed by the original JPQL `WHERE id IN :bookIds` either - callers that need a
+     * specific order already re-sort/re-key by id downstream. */
+    fun findAllWithMetadataByIds(bookIds: Set<Long>): List<BookEntity> {
+        if (bookIds.isEmpty()) return emptyList()
+        val books = fetchBase(BOOK.ID.`in`(bookIds).and(BookConditions.notDeleted()))
+        attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
+        return books.values.toList()
+    }
+
     /** Mirrors findAllFullBooks. Declared JPA graph was metadata + metadata.comicMetadata only, and
      * that's genuinely sufficient for MetadataMatchService/BookVectorService/BookSimilarityService/
      * PopulateMetadataScoresMigration (verified: all only read book.getMetadata()/book.getId()) - but

@@ -6,7 +6,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.ShelfRepository;
@@ -27,7 +27,7 @@ public class KoboAutoShelfService {
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final KoboCompatibilityService koboCompatibilityService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -37,7 +37,7 @@ public class KoboAutoShelfService {
             return;
         }
 
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId).orElse(null);
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
         if (!isBookEligible(book)) {
             return;
         }

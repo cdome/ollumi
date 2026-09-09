@@ -72,7 +72,10 @@ public class BookMetadataService {
 
     @Transactional(readOnly = true)
     public Flux<BookMetadata> getProspectiveMetadataListForBookId(long bookId, FetchMetadataRequest request) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         Book book = bookMapper.toBook(bookEntity);
 
         return Flux.fromIterable(request.getProviders())
@@ -195,7 +198,10 @@ public class BookMetadataService {
 
     public BookMetadata getComicInfoMetadata(long bookId) {
         log.info("Extracting ComicInfo metadata for book ID: {}", bookId);
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         var primaryFile = bookEntity.getPrimaryBookFile();
         if (primaryFile == null || primaryFile.getBookType() != BookFileType.CBX) {
             log.info("Unsupported operation for book ID {} - no file or not CBX type", bookId);

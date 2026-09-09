@@ -13,7 +13,7 @@ import org.booklore.model.dto.response.EpubTocItem;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.util.FileUtils;
 import org.booklore.util.SecureXmlUtils;
 import org.springframework.stereotype.Service;
@@ -94,7 +94,7 @@ public class EpubReaderService {
         return Collections.unmodifiableMap(map);
     }
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final Map<String, CachedEpubMetadata> metadataCache = new ConcurrentHashMap<>();
 
     private static class CachedEpubMetadata {
@@ -207,8 +207,10 @@ public class EpubReaderService {
     }
 
     private Path getBookPath(Long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
             BookFileEntity bookFile = bookEntity.getBookFiles().stream()

@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
@@ -61,7 +62,7 @@ import java.util.stream.Collectors;
 @Service
 public class BookService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final BookFileRepository bookFileRepository;
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
@@ -179,7 +180,10 @@ public class BookService {
 
     @Transactional(readOnly = true)
     public BookViewerSettings getBookViewerSetting(long bookId, long bookFileId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
 
         BookViewerSettings.BookViewerSettingsBuilder settingsBuilder = BookViewerSettings.builder();
@@ -309,7 +313,10 @@ public class BookService {
     }
 
     public ResponseEntity<Resource> getBookContent(long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -333,7 +340,10 @@ public class BookService {
     }
 
     public void streamBookContent(long bookId, String bookType, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());

@@ -3,7 +3,7 @@ package org.booklore.service;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.kobo.CbxConversionService;
 import org.booklore.service.metadata.extractor.CbxMetadataExtractor;
@@ -21,7 +21,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -70,8 +69,8 @@ class Rar5FallbackIntegrationTest {
 
         BookEntity book = new BookEntity();
         book.setId(99L);
-        BookRepository mockRepo = org.mockito.Mockito.mock(BookRepository.class);
-        when(mockRepo.findByIdWithBookFiles(99L)).thenReturn(Optional.of(book));
+        JooqBookEntityRepository mockRepo = org.mockito.Mockito.mock(JooqBookEntityRepository.class);
+        when(mockRepo.findByIdFull(99L)).thenReturn(book);
 
         try (var fileUtilsStatic = org.mockito.Mockito.mockStatic(org.booklore.util.FileUtils.class)) {
             fileUtilsStatic.when(() -> org.booklore.util.FileUtils.getBookFullPath(book))
@@ -92,8 +91,8 @@ class Rar5FallbackIntegrationTest {
 
         BookEntity book = new BookEntity();
         book.setId(99L);
-        BookRepository mockRepo = org.mockito.Mockito.mock(BookRepository.class);
-        when(mockRepo.findByIdWithBookFiles(99L)).thenReturn(Optional.of(book));
+        JooqBookEntityRepository mockRepo = org.mockito.Mockito.mock(JooqBookEntityRepository.class);
+        when(mockRepo.findByIdFull(99L)).thenReturn(book);
 
         try (var fileUtilsStatic = org.mockito.Mockito.mockStatic(org.booklore.util.FileUtils.class)) {
             fileUtilsStatic.when(() -> org.booklore.util.FileUtils.getBookFullPath(book))

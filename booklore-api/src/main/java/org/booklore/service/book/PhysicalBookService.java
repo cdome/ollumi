@@ -8,7 +8,7 @@ import org.booklore.model.dto.request.CreatePhysicalBookRequest;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -35,7 +35,7 @@ import java.util.Set;
 @AllArgsConstructor
 public class PhysicalBookService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final LibraryRepository libraryRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookRepository jooqBookRepository;
@@ -151,8 +151,10 @@ public class PhysicalBookService {
 
     @Transactional
     public Book togglePhysicalFlag(long bookId, boolean physical) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         book.setIsPhysical(physical);
         jooqBookRepository.updateIsPhysical(bookId, physical);
         log.info("Book {} physical flag set to {}", bookId, physical);

@@ -11,7 +11,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
@@ -38,13 +38,10 @@ import static org.mockito.Mockito.*;
 class KomgaServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private JooqBookRepository jooqBookRepository;
-
-    @Mock
-    private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private LibraryRepository libraryRepository;
@@ -182,7 +179,7 @@ class KomgaServiceTest {
         book.setId(100L);
         book.setMetadata(metadata);
 
-        when(bookRepository.findByIdWithBookFiles(100L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
 
         // When: Get book pages
         List<KomgaPageDto> pages = komgaService.getBookPages(100L);
@@ -204,7 +201,7 @@ class KomgaServiceTest {
         book.setId(100L);
         book.setMetadata(metadata);
 
-        when(bookRepository.findByIdWithBookFiles(100L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
 
         // When: Get book pages
         List<KomgaPageDto> pages = komgaService.getBookPages(100L);
@@ -231,8 +228,8 @@ class KomgaServiceTest {
                 .thenReturn(List.of(1L, 2L));
         when(jooqBookRepository.findBookIdsBySeriesNameGrouped("Series B", 1L))
                 .thenReturn(List.of(3L, 4L));
-        when(bookRepository.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(seriesABooks);
-        when(bookRepository.findAllWithMetadataByIds(Set.of(3L, 4L))).thenReturn(seriesBBooks);
+        when(jooqBookEntityRepository.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(seriesABooks);
+        when(jooqBookEntityRepository.findAllWithMetadataByIds(Set.of(3L, 4L))).thenReturn(seriesBBooks);
         
         when(komgaMapper.getUnknownSeriesName()).thenReturn("Unknown Series");
         when(komgaMapper.toKomgaSeriesDto(eq("Series A"), anyLong(), any()))

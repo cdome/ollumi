@@ -15,7 +15,7 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -57,7 +57,7 @@ public class FileUploadService {
     private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookAdditionalFileRepository additionalFileRepository;
     private final JooqBookRepository jooqBookRepository;
     private final AppSettingService appSettingService;
@@ -284,8 +284,11 @@ public class FileUploadService {
     }
 
     private BookEntity findBookById(Long bookId) {
-        return bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new IllegalArgumentException("Book not found with id: " + bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new IllegalArgumentException("Book not found with id: " + bookId);
+        }
+        return book;
     }
 
     private String getValidatedFileName(MultipartFile file) {

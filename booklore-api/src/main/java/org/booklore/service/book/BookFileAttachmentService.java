@@ -13,7 +13,7 @@ import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 @Service
 public class BookFileAttachmentService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookFileRepository bookFileRepository;
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final JooqBookRepository jooqBookRepository;
@@ -56,8 +56,10 @@ public class BookFileAttachmentService {
 
     @Transactional
     public AttachBookFileResponse attachBookFiles(Long targetBookId, List<Long> sourceBookIds, boolean moveFiles) {
-        BookEntity targetBook = bookRepository.findByIdWithBookFiles(targetBookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(targetBookId));
+        BookEntity targetBook = jooqBookEntityRepository.findByIdFull(targetBookId);
+        if (targetBook == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(targetBookId);
+        }
 
         Set<Long> uniqueSourceBookIds = new LinkedHashSet<>(sourceBookIds);
         if (uniqueSourceBookIds.contains(targetBookId)) {
@@ -66,8 +68,10 @@ public class BookFileAttachmentService {
 
         List<BookEntity> sourceBooks = new ArrayList<>();
         for (Long sourceBookId : uniqueSourceBookIds) {
-            BookEntity sourceBook = bookRepository.findByIdWithBookFiles(sourceBookId)
-                    .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(sourceBookId));
+            BookEntity sourceBook = jooqBookEntityRepository.findByIdFull(sourceBookId);
+            if (sourceBook == null) {
+                throw ApiError.BOOK_NOT_FOUND.createException(sourceBookId);
+            }
             sourceBooks.add(sourceBook);
         }
 
@@ -359,8 +363,10 @@ public class BookFileAttachmentService {
 
     private Book getUpdatedBook(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity refreshedTarget = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity refreshedTarget = jooqBookEntityRepository.findByIdFull(bookId);
+        if (refreshedTarget == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
                 .orElse(new UserBookProgressRow());

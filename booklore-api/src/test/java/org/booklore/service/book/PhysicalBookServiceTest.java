@@ -7,7 +7,7 @@ import org.booklore.model.dto.request.CreatePhysicalBookRequest;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
@@ -32,7 +32,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PhysicalBookServiceTest {
 
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private LibraryRepository libraryRepository;
     @Mock private JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private JooqBookRepository jooqBookRepository;
@@ -108,7 +108,7 @@ class PhysicalBookServiceTest {
     void togglePhysicalFlag_updatesJooqAndReturnsMappedBook() {
         BookEntity book = new BookEntity();
         book.setId(5L);
-        when(bookRepository.findByIdWithBookFiles(5L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(5L)).thenReturn(book);
         when(bookMapper.toBook(book)).thenReturn(Book.builder().build());
 
         Book result = physicalBookService.togglePhysicalFlag(5L, true);
@@ -120,7 +120,7 @@ class PhysicalBookServiceTest {
 
     @Test
     void togglePhysicalFlag_bookNotFound_throws() {
-        when(bookRepository.findByIdWithBookFiles(404L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(404L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> physicalBookService.togglePhysicalFlag(404L, false));
 

@@ -14,9 +14,9 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -41,7 +41,7 @@ public class FileMoveService {
     private static final long EVENT_DRAIN_TIMEOUT_MS = 300;
 
     private final AppProperties appProperties;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final BookAdditionalFileRepository bookFileRepository;
     private final LibraryRepository libraryRepository;
@@ -88,8 +88,10 @@ public class FileMoveService {
         
         for (FileMoveRequest.Move move : moves) {
             libraryIds.add(move.getTargetLibraryId());
-            bookRepository.findByIdWithBookFiles(move.getBookId())
-                    .ifPresent(book -> libraryIds.add(book.getLibrary().getId()));
+            BookEntity moveBook = jooqBookEntityRepository.findByIdFull(move.getBookId());
+            if (moveBook != null) {
+                libraryIds.add(moveBook.getLibrary().getId());
+            }
         }
         
         return libraryIds;
@@ -106,9 +108,9 @@ public class FileMoveService {
         Set<Path> sourceParentsToCleanup = new HashSet<>();
 
         try {
-            Optional<BookEntity> optionalBook = bookRepository.findByIdWithBookFiles(bookId);
+            BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
             Optional<LibraryEntity> optionalLibrary = libraryRepository.findById(targetLibraryId);
-            if (optionalBook.isEmpty()) {
+            if (bookEntity == null) {
                 log.warn("Book not found for move operation: bookId={}", bookId);
                 return;
             }
@@ -116,7 +118,6 @@ public class FileMoveService {
                 log.warn("Target library not found for move operation: libraryId={}", targetLibraryId);
                 return;
             }
-            BookEntity bookEntity = optionalBook.get();
             LibraryEntity targetLibrary = optionalLibrary.get();
             List<LibraryPathEntity> targetLibraryPaths = libraryPathRepository.findByLibraryId(targetLibrary.getId());
 
@@ -240,7 +241,10 @@ public class FileMoveService {
 
             entityManager.clear();
 
-            BookEntity fresh = bookRepository.findByIdWithBookFiles(bookId).orElseThrow();
+            BookEntity fresh = jooqBookEntityRepository.findByIdFull(bookId);
+            if (fresh == null) {
+                throw new NoSuchElementException();
+            }
 
             notificationService.sendMessage(Topic.BOOK_UPDATE, bookMapper.toBookWithDescription(fresh, false));
 
@@ -271,12 +275,12 @@ public class FileMoveService {
             // Ensure bookFiles are loaded
             BookEntity bookWithFiles = bookEntity;
             if (bookEntity.getBookFiles() == null || bookEntity.getBookFiles().isEmpty()) {
-                Optional<BookEntity> optionalBook = bookRepository.findByIdWithBookFiles(bookEntity.getId());
-                if (optionalBook.isEmpty()) {
+                BookEntity refreshedBook = jooqBookEntityRepository.findByIdFull(bookEntity.getId());
+                if (refreshedBook == null) {
                     log.warn("Book not found for move operation: bookId={}", bookEntity.getId());
                     return FileMoveResult.builder().moved(false).build();
                 }
-                bookWithFiles = optionalBook.get();
+                bookWithFiles = refreshedBook;
             }
 
             if (bookWithFiles.getBookFiles() == null || bookWithFiles.getBookFiles().isEmpty()) {

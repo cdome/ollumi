@@ -19,6 +19,7 @@ import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -46,7 +47,7 @@ public class ReadingProgressService {
 
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final BookFileRepository bookFileRepository;
     private final UserRepository userRepository;
@@ -203,8 +204,10 @@ public class ReadingProgressService {
 
     @Transactional
     public void updateReadProgress(ReadProgressRequest request) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(request.getBookId())
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(request.getBookId()));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(request.getBookId());
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(request.getBookId());
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         BookLoreUserEntity userEntity = findUserOrThrow(user.getId());
         Instant now = Instant.now();

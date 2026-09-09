@@ -17,7 +17,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.BookMetadataService;
 import org.booklore.service.metadata.BookMetadataUpdater;
@@ -42,7 +42,7 @@ public class MetadataController {
     private final BookMetadataUpdater bookMetadataUpdater;
     private final BookMetadataMapper bookMetadataMapper;
     private final MetadataMatchService metadataMatchService;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final MetadataManagementService metadataManagementService;
     private final AuditService auditService;
 
@@ -67,7 +67,7 @@ public class MetadataController {
             @Parameter(description = "ID of the book") @PathVariable long bookId,
             @Parameter(description = "Merge categories") @RequestParam(defaultValue = "false") boolean mergeCategories,
             @Parameter(description = "Replace mode") @RequestParam(defaultValue = "REPLACE_ALL") MetadataReplaceMode replaceMode) {
-        BookEntity bookEntity = bookRepository.findAllWithMetadataByIds(java.util.Collections.singleton(bookId)).stream()
+        BookEntity bookEntity = jooqBookEntityRepository.findAllWithMetadataByIds(java.util.Collections.singleton(bookId)).stream()
                 .findFirst()
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 

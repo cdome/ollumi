@@ -9,7 +9,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.BookCoverUpdate;
@@ -46,7 +46,7 @@ public class BookCoverService {
     private static final int BATCH_SIZE = 100;
 
     private final AppProperties appProperties;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookRepository jooqBookRepository;
     private final NotificationService notificationService;
@@ -72,7 +72,10 @@ public class BookCoverService {
      * Generate a custom cover for a single book.
      */
     public void generateCustomCover(long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (isCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
@@ -93,7 +96,10 @@ public class BookCoverService {
      */
     @Transactional
     public void updateCoverFromFile(Long bookId, MultipartFile file) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (isCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
@@ -110,7 +116,10 @@ public class BookCoverService {
      */
     @Transactional
     public void updateCoverFromUrl(Long bookId, String url) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (isCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
@@ -131,7 +140,10 @@ public class BookCoverService {
      */
     @Transactional
     public void updateAudiobookCoverFromFile(Long bookId, MultipartFile file) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (isAudiobookCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
@@ -148,7 +160,10 @@ public class BookCoverService {
      */
     @Transactional
     public void updateAudiobookCoverFromUrl(Long bookId, String url) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (isAudiobookCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
@@ -164,7 +179,10 @@ public class BookCoverService {
      * Regenerate audiobook cover for a single book by extracting from the audiobook file.
      */
     public void regenerateAudiobookCover(long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         if (isAudiobookCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
         }
@@ -189,7 +207,10 @@ public class BookCoverService {
      * Uses square cover format appropriate for audiobooks.
      */
     public void generateCustomAudiobookCover(long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (isAudiobookCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
@@ -225,7 +246,10 @@ public class BookCoverService {
      * respecting the library's format priority setting.
      */
     public void regenerateCover(long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         if (isCoverLocked(bookEntity)) {
             throw ApiError.METADATA_LOCKED.createException();
         }
@@ -315,23 +339,24 @@ public class BookCoverService {
                         notificationService.sendMessage(Topic.LOG, LogNotification.info(progress + "Regenerating cover for: " + bookInfo.title()));
 
                         transactionTemplate.execute(status -> {
-                            bookRepository.findByIdWithBookFiles(bookInfo.id()).ifPresent(book -> {
+                            BookEntity book = jooqBookEntityRepository.findByIdFull(bookInfo.id());
+                            if (book != null) {
                                 var primaryFile = book.getPrimaryBookFile();
                                 if (primaryFile == null) {
                                     log.warn("{}Skipping physical book ID {} ({}) - no file to regenerate cover from", progress, book.getId(), bookInfo.title());
-                                    return;
-                                }
-                                BookFileProcessor processor = processorRegistry.getProcessorOrThrow(primaryFile.getBookType());
-                                boolean success = processor.generateCover(book);
-
-                                if (success) {
-                                    updateBookCoverMetadata(book);
-                                    refreshedIds.add(book.getId());
-                                    log.info("{}Successfully regenerated cover for book ID {} ({})", progress, book.getId(), bookInfo.title());
                                 } else {
-                                    log.warn("{}Failed to regenerate cover for book ID {} ({})", progress, book.getId(), bookInfo.title());
+                                    BookFileProcessor processor = processorRegistry.getProcessorOrThrow(primaryFile.getBookType());
+                                    boolean success = processor.generateCover(book);
+
+                                    if (success) {
+                                        updateBookCoverMetadata(book);
+                                        refreshedIds.add(book.getId());
+                                        log.info("{}Successfully regenerated cover for book ID {} ({})", progress, book.getId(), bookInfo.title());
+                                    } else {
+                                        log.warn("{}Failed to regenerate cover for book ID {} ({})", progress, book.getId(), bookInfo.title());
+                                    }
                                 }
-                            });
+                            }
                             return null;
                         });
                     } catch (Exception e) {
@@ -367,12 +392,13 @@ public class BookCoverService {
                     notificationService.sendMessage(Topic.LOG, LogNotification.info(progress + "Updating cover for: " + bookInfo.title()));
 
                     transactionTemplate.execute(status -> {
-                        bookRepository.findByIdWithBookFiles(bookInfo.id()).ifPresent(book -> {
+                        BookEntity book = jooqBookEntityRepository.findByIdFull(bookInfo.id());
+                        if (book != null) {
                             fileService.createThumbnailFromBytes(bookInfo.id(), coverImageBytes);
                             writeCoverToBookFile(book, (writer, b) -> writer.replaceCoverImageFromBytes(b, coverImageBytes));
                             updateBookCoverMetadata(book);
                             refreshedIds.add(book.getId());
-                        });
+                        }
                         return null;
                     });
 
@@ -405,7 +431,8 @@ public class BookCoverService {
                     notificationService.sendMessage(Topic.LOG, LogNotification.info(progress + "Regenerating cover for: " + bookInfo.title()));
 
                     transactionTemplate.execute(status -> {
-                        bookRepository.findByIdWithBookFiles(bookInfo.id()).ifPresent(book -> {
+                        BookEntity book = jooqBookEntityRepository.findByIdFull(bookInfo.id());
+                        if (book != null) {
                             BookFileProcessor processor = processorRegistry.getProcessorOrThrow(bookInfo.bookType());
                             boolean success = processor.generateCover(book);
 
@@ -413,7 +440,7 @@ public class BookCoverService {
                                 updateBookCoverMetadata(book);
                                 refreshedIds.add(book.getId());
                             }
-                        });
+                        }
                         return null;
                     });
 
@@ -446,7 +473,8 @@ public class BookCoverService {
                     notificationService.sendMessage(Topic.LOG, LogNotification.info(progress + "Generating custom cover for: " + bookInfo.title()));
 
                     transactionTemplate.execute(status -> {
-                        bookRepository.findByIdWithBookFiles(bookInfo.id()).ifPresent(book -> {
+                        BookEntity book = jooqBookEntityRepository.findByIdFull(bookInfo.id());
+                        if (book != null) {
                             String title = book.getMetadata().getTitle();
                             String author = getAuthorNames(book);
                             byte[] coverBytes = coverImageGenerator.generateCover(title, author);
@@ -455,7 +483,7 @@ public class BookCoverService {
                             writeCoverToBookFile(book, (writer, b) -> writer.replaceCoverImageFromBytes(b, coverBytes));
                             updateBookCoverMetadata(book);
                             refreshedIds.add(book.getId());
-                        });
+                        }
                         return null;
                     });
 

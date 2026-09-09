@@ -8,8 +8,8 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
@@ -41,7 +41,7 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AppBookServiceFilterOptionsTest {
 
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqAppBookRepository jooqAppBookRepository;
     @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     @Mock private JooqAppBookDetailRepository jooqAppBookDetailRepository;
@@ -57,7 +57,7 @@ class AppBookServiceFilterOptionsTest {
     @BeforeEach
     void setUp() {
         service = new AppBookService(
-                bookRepository, jooqAppBookRepository, jooqAppBookSummaryRepository, jooqAppBookDetailRepository,
+                jooqBookEntityRepository, jooqAppBookRepository, jooqAppBookSummaryRepository, jooqAppBookDetailRepository,
                 userBookProgressRepository, shelfRepository, authenticationService,
                 magicShelfBookService
         );

@@ -9,7 +9,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.kobo.CbxConversionService;
 import org.booklore.service.kobo.KepubConversionService;
@@ -44,7 +44,7 @@ public class BookDownloadService {
 
     private static final Pattern NON_ASCII_PATTERN = Pattern.compile("[^\\x00-\\x7F]");
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookFileRepository bookFileRepository;
     private final KepubConversionService kepubConversionService;
     private final CbxConversionService cbxConversionService;
@@ -52,8 +52,10 @@ public class BookDownloadService {
 
     public ResponseEntity<Resource> downloadBook(Long bookId) {
         try {
-            BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
-                    .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+            BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+            if (bookEntity == null) {
+                throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+            }
 
             BookFileEntity primaryFile = bookEntity.getPrimaryBookFile();
             if (primaryFile == null) {
@@ -138,8 +140,10 @@ public class BookDownloadService {
     }
 
     public void downloadAllBookFiles(Long bookId, HttpServletResponse response) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         List<BookFileEntity> allFiles = bookEntity.getBookFiles();
         if (allFiles == null || allFiles.isEmpty()) {
@@ -234,7 +238,10 @@ public class BookDownloadService {
     }
 
     public void downloadKoboBook(Long bookId, HttpServletResponse response) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         var primaryFile = bookEntity.getPrimaryBookFile();
         if (primaryFile == null) {

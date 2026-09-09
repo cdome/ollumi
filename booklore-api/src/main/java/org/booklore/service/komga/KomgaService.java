@@ -9,7 +9,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -38,7 +37,6 @@ import java.util.stream.Collectors;
 public class KomgaService {
 
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
-    private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final LibraryRepository libraryRepository;
@@ -283,15 +281,19 @@ public class KomgaService {
     }
 
     public KomgaBookDto getBookById(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found");
+        }
         return komgaMapper.toKomgaBookDto(book);
     }
 
     public List<KomgaPageDto> getBookPages(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
-        
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found");
+        }
+
         BookMetadataEntity metadata = book.getMetadata();
         Integer pageCount = metadata != null && metadata.getPageCount() != null ? metadata.getPageCount() : 0;
         
@@ -313,7 +315,7 @@ public class KomgaService {
         if (bookIds.isEmpty()) {
             return List.of();
         }
-        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+        Map<Long, BookEntity> booksById = jooqBookEntityRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
                 .collect(Collectors.toMap(BookEntity::getId, book -> book));
         return bookIds.stream()
                 .map(booksById::get)
@@ -386,8 +388,10 @@ public class KomgaService {
     public Resource getBookPageImage(Long bookId, Integer pageNumber, boolean convertToPng) throws IOException {
         log.debug("Getting page {} from book {} (convert to PNG: {})", pageNumber, bookId, convertToPng);
         
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found: " + bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found: " + bookId);
+        }
 
         boolean isPDF = book.getPrimaryBookFile().getBookType() == BookFileType.PDF;
      

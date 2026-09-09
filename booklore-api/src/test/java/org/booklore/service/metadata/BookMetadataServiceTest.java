@@ -457,7 +457,7 @@ class BookMetadataServiceTest {
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.getComicInfoMetadata(1L))
                     .isInstanceOf(APIException.class);
@@ -466,7 +466,7 @@ class BookMetadataServiceTest {
         @Test
         void returnsNullWhenPrimaryFileIsNull() {
             BookEntity bookEntity = BookEntity.builder().id(1L).bookFiles(new ArrayList<>()).build();
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
             BookMetadata result = service.getComicInfoMetadata(1L);
 
@@ -477,7 +477,7 @@ class BookMetadataServiceTest {
         void returnsNullWhenFileTypeIsNotCbx() {
             BookFileEntity file = BookFileEntity.builder().bookType(BookFileType.PDF).isBookFormat(true).build();
             BookEntity bookEntity = BookEntity.builder().id(1L).bookFiles(List.of(file)).build();
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
             BookMetadata result = service.getComicInfoMetadata(1L);
 
@@ -589,7 +589,7 @@ class BookMetadataServiceTest {
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(99L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(99L)).thenReturn(null);
             FetchMetadataRequest request = FetchMetadataRequest.builder()
                     .providers(List.of(MetadataProvider.Google))
                     .build();

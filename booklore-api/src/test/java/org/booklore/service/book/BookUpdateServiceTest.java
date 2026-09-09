@@ -10,6 +10,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.*;
 class BookUpdateServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
@@ -67,7 +68,7 @@ class BookUpdateServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         bookUpdateService = new BookUpdateService(
-                bookRepository,
+                jooqBookEntityRepository,
                 jooqBookRepository,
                 pdfViewerPreferencesRepository,
                 cbxViewerPreferencesRepository,
@@ -94,7 +95,7 @@ class BookUpdateServiceTest {
         primaryFile.setBookType(BookFileType.PDF);
         book.setBookFiles(List.of(primaryFile));
         BookLoreUser user = mock(BookLoreUser.class);
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
@@ -120,7 +121,7 @@ class BookUpdateServiceTest {
         primaryFile.setBookType(BookFileType.EPUB);
         book.setBookFiles(List.of(primaryFile));
         BookLoreUser user = mock(BookLoreUser.class);
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
@@ -156,7 +157,7 @@ class BookUpdateServiceTest {
         primaryFile.setBook(book);
         primaryFile.setBookType(null);
         book.setBookFiles(List.of(primaryFile));
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(mock(BookLoreUser.class));
         BookViewerSettings settings = BookViewerSettings.builder().build();
 

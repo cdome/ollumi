@@ -7,7 +7,7 @@ import org.booklore.model.MetadataUpdateWrapper;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.audit.AuditService;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.service.metadata.*;
@@ -37,7 +37,7 @@ class MetadataControllerTest {
     @Mock
     private DuckDuckGoCoverService duckDuckGoCoverService;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private MetadataManagementService metadataManagementService;
     @Mock
@@ -53,7 +53,7 @@ class MetadataControllerTest {
         bookEntity.setId(bookId);
         bookEntity.setMetadata(new BookMetadataEntity());
 
-        when(bookRepository.findAllWithMetadataByIds(java.util.Collections.singleton(bookId))).thenReturn(java.util.List.of(bookEntity));
+        when(jooqBookEntityRepository.findAllWithMetadataByIds(java.util.Collections.singleton(bookId))).thenReturn(java.util.List.of(bookEntity));
         when(bookMetadataMapper.toBookMetadata(any(), anyBoolean())).thenReturn(new BookMetadata());
 
         metadataController.updateMetadata(wrapper, bookId, true, replaceMode);

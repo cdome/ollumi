@@ -9,7 +9,7 @@ import org.booklore.model.dto.response.DetachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookFileDetachmentServiceTest {
 
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookFileRepository bookFileRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
@@ -117,11 +117,11 @@ class BookFileDetachmentServiceTest {
         BookFileEntity primaryFile = createBookFile(10L, book, true, BookFileType.EPUB);
         BookFileEntity altFile = createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
         when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         DetachBookFileResponse response = service.detachBookFile(1L, 11L, true);
 
@@ -140,11 +140,11 @@ class BookFileDetachmentServiceTest {
         createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
         when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         service.detachBookFile(1L, 11L, false);
 
@@ -161,11 +161,11 @@ class BookFileDetachmentServiceTest {
         BookFileEntity suppFile = createBookFile(11L, book, false, BookFileType.PDF);
         suppFile.setFileName("notes.txt");
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
         when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         service.detachBookFile(1L, 11L, false);
 
@@ -184,11 +184,11 @@ class BookFileDetachmentServiceTest {
         BookFileEntity primaryFile = createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
         when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         service.detachBookFile(1L, 10L, false);
 
@@ -206,7 +206,7 @@ class BookFileDetachmentServiceTest {
         assertThat(book.getBookFiles()).hasSize(1);
         assertThat(file.isBookFormat()).isTrue();
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 10L, false))
                 .isInstanceOf(APIException.class)
@@ -219,7 +219,7 @@ class BookFileDetachmentServiceTest {
         createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 99L, false))
                 .isInstanceOf(APIException.class)
@@ -228,7 +228,7 @@ class BookFileDetachmentServiceTest {
 
     @Test
     void rejectDetach_bookNotFound() {
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 10L, false))
                 .isInstanceOf(APIException.class)
@@ -241,7 +241,7 @@ class BookFileDetachmentServiceTest {
         createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, false, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 10L, false))
                 .isInstanceOf(APIException.class)
@@ -262,11 +262,11 @@ class BookFileDetachmentServiceTest {
         BookFileEntity altFile = createBookFile(11L, book, true, BookFileType.PDF);
         altFile.setFileSubPath("folder-2");
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
         when(jooqBookRepository.insertBook(eq(1L), eq(2L), any())).thenReturn(3L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(3L)).thenReturn(Optional.of(createBook(3L)));
+        when(jooqBookEntityRepository.findByIdFull(3L)).thenReturn(createBook(3L));
 
         service.detachBookFile(1L, 11L, false);
 

@@ -18,7 +18,6 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
@@ -73,7 +72,6 @@ public class LibraryService {
     private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryProcessingService libraryProcessingService;
@@ -273,7 +271,10 @@ public class LibraryService {
     @Transactional(readOnly = true)
     public Book getBook(long libraryId, long bookId) {
         libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).filter(b -> b.getLibrary().getId() == libraryId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null || bookEntity.getLibrary().getId() != libraryId) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         return bookMapper.toBook(bookEntity);
     }
 

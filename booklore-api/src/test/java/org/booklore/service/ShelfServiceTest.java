@@ -9,7 +9,7 @@ import org.booklore.model.dto.request.ShelfCreateRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.IconType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +32,7 @@ class ShelfServiceTest {
     @Mock
     private ShelfRepository shelfRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private ShelfMapper shelfMapper;
     @Mock

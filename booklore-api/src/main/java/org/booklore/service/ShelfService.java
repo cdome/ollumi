@@ -12,7 +12,7 @@ import org.booklore.model.dto.request.ShelfCreateRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
@@ -35,7 +35,7 @@ public class ShelfService {
 
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final ShelfMapper shelfMapper;
     private final BookMapper bookMapper;
     private final AuthenticationService authenticationService;
@@ -104,7 +104,7 @@ public class ShelfService {
     public List<Book> getShelfBooks(Long shelfId) {
         findShelfByIdOrThrow(shelfId);
         Set<Long> bookIds = jooqShelfRepository.findBookIdsByShelfId(shelfId);
-        return bookRepository.findAllWithMetadataByIds(bookIds).stream()
+        return jooqBookEntityRepository.findAllWithMetadataByIds(bookIds).stream()
                 .map(bookMapper::toBook)
                 .toList();
     }

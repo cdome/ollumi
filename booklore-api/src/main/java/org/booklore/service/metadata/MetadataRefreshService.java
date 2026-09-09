@@ -19,7 +19,7 @@ import org.booklore.model.enums.MetadataFetchTaskStatus;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
@@ -55,7 +55,7 @@ public class MetadataRefreshService {
     private final AppSettingService appSettingService;
     private final Map<MetadataProvider, BookParser> parserMap;
     private final ObjectMapper objectMapper;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final PlatformTransactionManager transactionManager;
     private final AuthenticationService authenticationService;
@@ -105,7 +105,7 @@ public class MetadataRefreshService {
 
                 int finalCompletedCount = completedCount;
                 txTemplate.execute(status -> {
-                    BookEntity book = bookRepository.findAllWithMetadataByIds(Collections.singleton(bookId))
+                    BookEntity book = jooqBookEntityRepository.findAllWithMetadataByIds(Collections.singleton(bookId))
                             .stream().findFirst()
                             .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
                     try {

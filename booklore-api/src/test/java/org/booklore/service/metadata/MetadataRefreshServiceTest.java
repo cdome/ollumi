@@ -15,7 +15,7 @@ import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
@@ -50,7 +50,7 @@ class MetadataRefreshServiceTest {
     @Mock private AppSettingService appSettingService;
     @Mock private Map<MetadataProvider, BookParser> parserMap;
     @Mock private ObjectMapper objectMapper;
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private AuthenticationService authenticationService;

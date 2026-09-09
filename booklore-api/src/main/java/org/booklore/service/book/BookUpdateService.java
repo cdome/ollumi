@@ -10,6 +10,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
@@ -36,7 +37,7 @@ import java.util.stream.Collectors;
 @Service
 public class BookUpdateService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
@@ -52,7 +53,10 @@ public class BookUpdateService {
     private final JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository;
 
     public void updateBookViewerSetting(long bookId, BookViewerSettings bookViewerSettings) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         var primaryFile = book.getPrimaryBookFile();
         if (primaryFile == null || primaryFile.getBookType() == null) {

@@ -11,7 +11,7 @@ import org.booklore.model.dto.GroupRule;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookRuleEvaluator;
 import org.booklore.repository.jooq.JooqMagicShelfBookRepository;
@@ -43,7 +43,7 @@ import static org.booklore.jooq.tables.Book.BOOK;
 public class MagicShelfBookService {
 
     private final JooqMagicShelfRepository magicShelfRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqMagicShelfBookRepository jooqMagicShelfBookRepository;
     private final BookMapper bookMapper;
     private final UserRepository userRepository;
@@ -156,7 +156,7 @@ public class MagicShelfBookService {
         if (bookIds.isEmpty()) {
             return List.of();
         }
-        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+        Map<Long, BookEntity> booksById = jooqBookEntityRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
                 .collect(Collectors.toMap(BookEntity::getId, book -> book));
         return bookIds.stream()
                 .map(booksById::get)
