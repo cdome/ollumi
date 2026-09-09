@@ -196,6 +196,21 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
             .execute()
     }
 
+    /**
+     * Restores previously soft-deleted books whose files reappeared during a library rescan - like
+     * markUndeleted, but also stamps added_on with a fresh timestamp (mirrors BookRestorationService
+     * treating a restore as a fresh addition, e.g. for "recently added" sorting).
+     */
+    fun restoreDeleted(bookIds: Collection<Long>, addedOn: Instant) {
+        if (bookIds.isEmpty()) return
+        dsl.update(BOOK)
+            .set(BOOK.DELETED, 0.toByte())
+            .setNull(BOOK.DELETED_AT)
+            .set(BOOK.ADDED_ON, LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC))
+            .where(BOOK.ID.`in`(bookIds))
+            .execute()
+    }
+
     fun deleteByIds(bookIds: Collection<Long>): Int {
         if (bookIds.isEmpty()) return 0
         return dsl.deleteFrom(BOOK).where(BOOK.ID.`in`(bookIds)).execute()
@@ -225,6 +240,11 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
 
     fun deleteBookFileById(bookFileId: Long) {
         dsl.deleteFrom(bf).where(bf.ID.eq(bookFileId)).execute()
+    }
+
+    fun deleteBookFilesByIds(bookFileIds: Collection<Long>): Int {
+        if (bookFileIds.isEmpty()) return 0
+        return dsl.deleteFrom(bf).where(bf.ID.`in`(bookFileIds)).execute()
     }
 
     /** Reassigns a file to a different book, also updating its path/name (e.g. after a physical file move). */
