@@ -8,6 +8,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MergeMetadataType;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -39,7 +40,7 @@ class MetadataManagementServiceTest {
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock private JooqBookRepository jooqBookRepository;
-    @Mock private BookMetadataRepository bookMetadataRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private AppSettingService appSettingService;
     @Mock private MetadataWriterFactory metadataWriterFactory;
@@ -60,6 +61,15 @@ class MetadataManagementServiceTest {
         );
     }
 
+    /** Wraps a standalone BookMetadataEntity in a minimal BookEntity, mirroring what
+     * JooqBookEntityRepository.findAllByIdsIncludingDeleted actually returns (metadata + its book
+     * back-reference both populated). */
+    private BookEntity bookWithMetadata(BookMetadataEntity metadata) {
+        BookEntity book = BookEntity.builder().id(metadata.getBookId()).metadata(metadata).build();
+        metadata.setBook(book);
+        return book;
+    }
+
     @Test
     void consolidateAuthors_mergesOldIntoTargetAndDeletesOld() {
         long bookId = 15L;
@@ -68,7 +78,7 @@ class MetadataManagementServiceTest {
                 .thenReturn(List.of("Old Author"), List.of("Target Author"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target Author"), List.of("Old Author"));
 
@@ -86,7 +96,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findCategoryNamesByBookId(bookId)).thenReturn(Set.of("Old Cat"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.consolidateMetadata(MergeMetadataType.categories, List.of("Target Cat"), List.of("Old Cat"));
 
@@ -102,7 +112,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findMoodNamesByBookId(bookId)).thenReturn(Set.of("Old Mood"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.consolidateMetadata(MergeMetadataType.moods, List.of("Target Mood"), List.of("Old Mood"));
 
@@ -118,7 +128,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findTagNamesByBookId(bookId)).thenReturn(Set.of("Old Tag"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.consolidateMetadata(MergeMetadataType.tags, List.of("Target Tag"), List.of("Old Tag"));
 
@@ -131,7 +141,8 @@ class MetadataManagementServiceTest {
     void consolidateSeries_updatesSeriesNameOnAllBooks() {
         long bookId = 42L;
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).seriesName("Old Series").build();
-        when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Old Series")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase("Old Series")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
         when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
 
         service.consolidateMetadata(MergeMetadataType.series, List.of("New Series"), List.of("Old Series"));
@@ -152,7 +163,8 @@ class MetadataManagementServiceTest {
     void consolidatePublishers_updatesPublisherOnAllBooks() {
         long bookId = 43L;
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).publisher("Old Pub").build();
-        when(bookMetadataRepository.findAllByPublisherIgnoreCase("Old Pub")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsByPublisherIgnoreCase("Old Pub")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.consolidateMetadata(MergeMetadataType.publishers, List.of("New Pub"), List.of("Old Pub"));
 
@@ -171,7 +183,8 @@ class MetadataManagementServiceTest {
     void consolidateLanguages_updatesLanguageOnAllBooks() {
         long bookId = 44L;
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).language("fr").build();
-        when(bookMetadataRepository.findAllByLanguageIgnoreCase("fr")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsByLanguageIgnoreCase("fr")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.consolidateMetadata(MergeMetadataType.languages, List.of("en"), List.of("fr"));
 
@@ -219,7 +232,7 @@ class MetadataManagementServiceTest {
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(book));
 
         MetadataWriter writer = mock(MetadataWriter.class);
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.of(writer));
@@ -279,7 +292,7 @@ class MetadataManagementServiceTest {
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(book));
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.empty());
         when(fileMoveService.moveSingleFile(book)).thenReturn(
                 FileMoveResult.builder().moved(true).newFileName("new.epub").newFileSubPath("new/sub").build()
@@ -303,7 +316,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of("Author1"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.deleteMetadata(MergeMetadataType.authors, List.of("Author1"));
 
@@ -318,7 +331,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findCategoryNamesByBookId(bookId)).thenReturn(Set.of("Cat1"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.deleteMetadata(MergeMetadataType.categories, List.of("Cat1"));
 
@@ -333,7 +346,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findMoodNamesByBookId(bookId)).thenReturn(Set.of("Mood1"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.deleteMetadata(MergeMetadataType.moods, List.of("Mood1"));
 
@@ -348,7 +361,7 @@ class MetadataManagementServiceTest {
         when(relationsRepository.findTagNamesByBookId(bookId)).thenReturn(Set.of("Tag1"));
 
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).build();
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.deleteMetadata(MergeMetadataType.tags, List.of("Tag1"));
 
@@ -365,7 +378,8 @@ class MetadataManagementServiceTest {
                 .seriesNumber(1.0f)
                 .seriesTotal(3)
                 .build();
-        when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("My Series")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase("My Series")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
         when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
 
         service.deleteMetadata(MergeMetadataType.series, List.of("My Series"));
@@ -380,7 +394,8 @@ class MetadataManagementServiceTest {
     void deletePublishers_clearsPublisherFromBooks() {
         long bookId = 46L;
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).publisher("Old Pub").build();
-        when(bookMetadataRepository.findAllByPublisherIgnoreCase("Old Pub")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsByPublisherIgnoreCase("Old Pub")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.deleteMetadata(MergeMetadataType.publishers, List.of("Old Pub"));
 
@@ -392,7 +407,8 @@ class MetadataManagementServiceTest {
     void deleteLanguages_clearsLanguageFromBooks() {
         long bookId = 47L;
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).language("fr").build();
-        when(bookMetadataRepository.findAllByLanguageIgnoreCase("fr")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsByLanguageIgnoreCase("fr")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(bookWithMetadata(metadata)));
 
         service.deleteMetadata(MergeMetadataType.languages, List.of("fr"));
 
@@ -402,7 +418,7 @@ class MetadataManagementServiceTest {
 
     @Test
     void deleteSeries_skipsWhenNoBooksFound() {
-        when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Missing")).thenReturn(List.of());
+        when(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase("Missing")).thenReturn(List.of());
 
         service.deleteMetadata(MergeMetadataType.series, List.of("Missing"));
 
@@ -411,7 +427,7 @@ class MetadataManagementServiceTest {
 
     @Test
     void deletePublishers_skipsWhenNoBooksFound() {
-        when(bookMetadataRepository.findAllByPublisherIgnoreCase("Missing")).thenReturn(List.of());
+        when(jooqBookMetadataRepository.findBookIdsByPublisherIgnoreCase("Missing")).thenReturn(List.of());
 
         service.deleteMetadata(MergeMetadataType.publishers, List.of("Missing"));
 
@@ -425,7 +441,7 @@ class MetadataManagementServiceTest {
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target"), List.of("NonExistent"));
 
         verify(relationsRepository).renameOrCreateAuthor("Target");
-        verify(bookMetadataRepository, never()).findAllById(anyList());
+        verify(jooqBookEntityRepository, never()).findAllByIdsIncludingDeleted(any());
         verify(relationsRepository, never()).deleteAuthorByName(any());
     }
 
@@ -433,7 +449,11 @@ class MetadataManagementServiceTest {
     void writeMetadataToFile_skipsWhenBookIsNull() {
         long bookId = 48L;
         BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).book(null).build();
-        when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Old")).thenReturn(List.of(metadata));
+        BookEntity book = BookEntity.builder().id(bookId).metadata(metadata).build();
+        // Deliberately NOT setting metadata.setBook(book) here, to exercise writeMetadataToFile's
+        // defensive "book == null" guard even though the real hydrator always sets this back-reference.
+        when(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase("Old")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(book));
         when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
 
         service.consolidateMetadata(MergeMetadataType.series, List.of("New"), List.of("Old"));
@@ -441,6 +461,27 @@ class MetadataManagementServiceTest {
         verify(metadataWriterFactory, never()).getWriter(any());
         verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
         verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+    }
+
+    @Test
+    void writeMetadataToFile_skipsFilelessPhysicalBookWithoutCrashing() {
+        // Regression: writeMetadataToFile used to dereference book.getPrimaryBookFile() unconditionally,
+        // NPEing for physical (fileless) books - masked under the old mocks because they never populated
+        // metadata.getBook(), so this block was never actually exercised in tests.
+        long bookId = 49L;
+        BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(bookId).seriesName("Old").build();
+        BookEntity book = BookEntity.builder().id(bookId).metadata(metadata).isPhysical(true).build();
+        metadata.setBook(book);
+
+        when(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase("Old")).thenReturn(List.of(bookId));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(book));
+        when(relationsRepository.findAuthorNamesByBookId(bookId)).thenReturn(List.of());
+
+        service.consolidateMetadata(MergeMetadataType.series, List.of("New"), List.of("Old"));
+
+        assertThat(metadata.getSeriesName()).isEqualTo("New");
+        verify(metadataWriterFactory, never()).getWriter(any());
+        verify(fileMoveService, never()).moveSingleFile(any());
     }
 
     @Test
@@ -471,7 +512,8 @@ class MetadataManagementServiceTest {
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllBySeriesNameIgnoreCase("Old")).thenReturn(List.of(metadata));
+        when(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase("Old")).thenReturn(List.of(1L));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(1L))).thenReturn(List.of(book));
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.empty());
         when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
 
@@ -525,7 +567,7 @@ class MetadataManagementServiceTest {
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(book));
         when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.empty());
         when(fileMoveService.moveSingleFile(book)).thenReturn(
                 FileMoveResult.builder().moved(false).build()
@@ -569,7 +611,7 @@ class MetadataManagementServiceTest {
                 .build();
         book.setMetadata(metadata);
 
-        when(bookMetadataRepository.findAllById(List.of(bookId))).thenReturn(List.of(metadata));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(Set.of(bookId))).thenReturn(List.of(book));
 
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target"), List.of("Old"));
 

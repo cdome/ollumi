@@ -250,4 +250,13 @@ class JooqBookMetadataRepository(private val dsl: DSLContext) {
             .where(bm.BOOK_ID.eq(bookId))
             .execute()
     }
+
+    fun findBookIdsBySeriesNameIgnoreCase(seriesName: String): List<Long> =
+        dsl.select(bm.BOOK_ID).from(bm).where(bm.SERIES_NAME.equalIgnoreCase(seriesName)).fetch(bm.BOOK_ID)
+
+    fun findBookIdsByPublisherIgnoreCase(publisher: String): List<Long> =
+        dsl.select(bm.BOOK_ID).from(bm).where(bm.PUBLISHER.equalIgnoreCase(publisher)).fetch(bm.BOOK_ID)
+
+    fun findBookIdsByLanguageIgnoreCase(language: String): List<Long> =
+        dsl.select(bm.BOOK_ID).from(bm).where(bm.LANGUAGE.equalIgnoreCase(language)).fetch(bm.BOOK_ID)
 }

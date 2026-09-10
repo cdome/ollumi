@@ -10,8 +10,8 @@ import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
     private JooqUserBookProgressRepository userBookProgressRepository;
 
     @Autowired
-    private BookMetadataRepository bookMetadataRepository;
+    private JooqBookMetadataRepository jooqBookMetadataRepository;
 
     @Autowired
     private JooqBookMetadataRelationsRepository relationsRepository;
@@ -592,7 +592,7 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         BookMetadataEntity metadata = book.getMetadata();
         relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
         metadata.setPageCount(300);
-        bookMetadataRepository.save(metadata);
+        jooqBookMetadataRepository.updateFullRow(metadata);
         return book;
     }
 
@@ -603,7 +603,7 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         relationsRepository.setAuthorsForBook(metadata.getBookId(), List.of(authorName));
         relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
         metadata.setPageCount(300);
-        bookMetadataRepository.save(metadata);
+        jooqBookMetadataRepository.updateFullRow(metadata);
         return book;
     }
 

@@ -7,6 +7,7 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MergeMetadataType;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -35,7 +36,7 @@ public class MetadataManagementService {
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final BookMetadataRepository bookMetadataRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AppSettingService appSettingService;
     private final MetadataWriterFactory metadataWriterFactory;
@@ -59,12 +60,22 @@ public class MetadataManagementService {
         }
     }
 
+    private List<BookMetadataEntity> findMetadataByIds(List<Long> bookIds) {
+        return jooqBookEntityRepository.findAllByIdsIncludingDeleted(new HashSet<>(bookIds)).stream()
+                .map(BookEntity::getMetadata)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     private void writeMetadataToFile(List<BookMetadataEntity> metadataList, boolean moveFile) {
         for (BookMetadataEntity metadata : metadataList) {
             if (metadata.getBook() != null) {
                 BookEntity book = metadata.getBook();
 
                 var primaryFile = book.getPrimaryBookFile();
+                if (primaryFile == null) {
+                    continue;
+                }
                 BookFileType bookType = primaryFile.getBookType();
                 if (appProperties.isLocalStorage()) {
                     Optional<MetadataWriter> writerOpt = metadataWriterFactory.getWriter(bookType);
@@ -108,7 +119,7 @@ public class MetadataManagementService {
                 relationsRepository.setAuthorsForBook(bookId, finalAuthors);
             }
 
-            List<BookMetadataEntity> booksWithOldAuthor = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithOldAuthor = findMetadataByIds(affectedBookIds);
             for (BookMetadataEntity metadata : booksWithOldAuthor) {
                 metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
                 jooqBookMetadataRepository.updateSearchText(metadata.getBookId(), BookUtils.buildSearchText(metadata));
@@ -136,7 +147,7 @@ public class MetadataManagementService {
                 relationsRepository.setCategoriesForBook(bookId, finalCategories);
             }
 
-            List<BookMetadataEntity> booksWithOldCategory = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithOldCategory = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithOldCategory, moveFile);
             relationsRepository.deleteCategoryByName(oldCategoryName);
         }
@@ -160,7 +171,7 @@ public class MetadataManagementService {
                 relationsRepository.setMoodsForBook(bookId, finalMoods);
             }
 
-            List<BookMetadataEntity> booksWithOldMood = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithOldMood = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithOldMood, moveFile);
             relationsRepository.deleteMoodByName(oldMoodName);
         }
@@ -184,7 +195,7 @@ public class MetadataManagementService {
                 relationsRepository.setTagsForBook(bookId, finalTags);
             }
 
-            List<BookMetadataEntity> booksWithOldTag = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithOldTag = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithOldTag, moveFile);
             relationsRepository.deleteTagByName(oldTagName);
         }
@@ -199,7 +210,7 @@ public class MetadataManagementService {
         String targetSeriesName = trimOrNull(targetValues.getFirst());
 
         for (String oldSeriesName : valuesToMerge) {
-            List<BookMetadataEntity> booksWithOldSeries = bookMetadataRepository.findAllBySeriesNameIgnoreCase(oldSeriesName);
+            List<BookMetadataEntity> booksWithOldSeries = findMetadataByIds(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase(oldSeriesName));
 
             for (BookMetadataEntity metadata : booksWithOldSeries) {
                 metadata.setSeriesName(targetSeriesName);
@@ -220,7 +231,7 @@ public class MetadataManagementService {
         String targetPublisher = trimOrNull(targetValues.getFirst());
 
         for (String oldPublisher : valuesToMerge) {
-            List<BookMetadataEntity> booksWithOldPublisher = bookMetadataRepository.findAllByPublisherIgnoreCase(oldPublisher);
+            List<BookMetadataEntity> booksWithOldPublisher = findMetadataByIds(jooqBookMetadataRepository.findBookIdsByPublisherIgnoreCase(oldPublisher));
 
             for (BookMetadataEntity metadata : booksWithOldPublisher) {
                 metadata.setPublisher(targetPublisher);
@@ -240,7 +251,7 @@ public class MetadataManagementService {
         String targetLanguage = trimOrNull(targetValues.getFirst());
 
         for (String oldLanguage : valuesToMerge) {
-            List<BookMetadataEntity> booksWithOldLanguage = bookMetadataRepository.findAllByLanguageIgnoreCase(oldLanguage);
+            List<BookMetadataEntity> booksWithOldLanguage = findMetadataByIds(jooqBookMetadataRepository.findBookIdsByLanguageIgnoreCase(oldLanguage));
 
             for (BookMetadataEntity metadata : booksWithOldLanguage) {
                 metadata.setLanguage(targetLanguage);
@@ -282,7 +293,7 @@ public class MetadataManagementService {
                 relationsRepository.setAuthorsForBook(bookId, finalAuthors);
             }
 
-            List<BookMetadataEntity> booksWithAuthor = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithAuthor = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithAuthor, moveFile);
             relationsRepository.deleteAuthorByName(authorName);
         }
@@ -303,7 +314,7 @@ public class MetadataManagementService {
                 relationsRepository.setCategoriesForBook(bookId, finalCategories);
             }
 
-            List<BookMetadataEntity> booksWithCategory = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithCategory = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithCategory, moveFile);
             relationsRepository.deleteCategoryByName(categoryName);
         }
@@ -324,7 +335,7 @@ public class MetadataManagementService {
                 relationsRepository.setMoodsForBook(bookId, finalMoods);
             }
 
-            List<BookMetadataEntity> booksWithMood = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithMood = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithMood, moveFile);
             relationsRepository.deleteMoodByName(moodName);
         }
@@ -345,7 +356,7 @@ public class MetadataManagementService {
                 relationsRepository.setTagsForBook(bookId, finalTags);
             }
 
-            List<BookMetadataEntity> booksWithTag = bookMetadataRepository.findAllById(affectedBookIds);
+            List<BookMetadataEntity> booksWithTag = findMetadataByIds(affectedBookIds);
             writeMetadataToFile(booksWithTag, moveFile);
             relationsRepository.deleteTagByName(tagName);
         }
@@ -355,7 +366,7 @@ public class MetadataManagementService {
 
     private void deleteSeries(List<String> valuesToDelete, boolean moveFile) {
         for (String seriesName : valuesToDelete) {
-            List<BookMetadataEntity> booksWithSeries = bookMetadataRepository.findAllBySeriesNameIgnoreCase(seriesName);
+            List<BookMetadataEntity> booksWithSeries = findMetadataByIds(jooqBookMetadataRepository.findBookIdsBySeriesNameIgnoreCase(seriesName));
 
             for (BookMetadataEntity metadata : booksWithSeries) {
                 metadata.setSeriesName(null);
@@ -375,7 +386,7 @@ public class MetadataManagementService {
 
     private void deletePublishers(List<String> valuesToDelete, boolean moveFile) {
         for (String publisher : valuesToDelete) {
-            List<BookMetadataEntity> booksWithPublisher = bookMetadataRepository.findAllByPublisherIgnoreCase(publisher);
+            List<BookMetadataEntity> booksWithPublisher = findMetadataByIds(jooqBookMetadataRepository.findBookIdsByPublisherIgnoreCase(publisher));
 
             for (BookMetadataEntity metadata : booksWithPublisher) {
                 metadata.setPublisher(null);
@@ -392,7 +403,7 @@ public class MetadataManagementService {
 
     private void deleteLanguages(List<String> valuesToDelete, boolean moveFile) {
         for (String language : valuesToDelete) {
-            List<BookMetadataEntity> booksWithLanguage = bookMetadataRepository.findAllByLanguageIgnoreCase(language);
+            List<BookMetadataEntity> booksWithLanguage = findMetadataByIds(jooqBookMetadataRepository.findBookIdsByLanguageIgnoreCase(language));
 
             for (BookMetadataEntity metadata : booksWithLanguage) {
                 metadata.setLanguage(null);

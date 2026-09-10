@@ -255,6 +255,22 @@ class JooqBookEntityRepository(private val dsl: DSLContext, private val objectMa
         return books.values.toList()
     }
 
+    /** Mirrors BookMetadataRepository.findAllById: unlike findAllWithMetadataByIds, deliberately has NO
+     * notDeleted filter - MetadataManagementService's bulk consolidate/delete operations must keep a
+     * soft-deleted book's metadata (search_text, series/publisher/language columns) in sync too, so a
+     * later restore doesn't surface stale data. Full graph, since writeMetadataToFile reads
+     * metadata.getBook().getPrimaryBookFile()/getFullFilePath() and feeds the book into
+     * FileMoveService.moveSingleFile (needs library+libraryPath+bookFiles). */
+    fun findAllByIdsIncludingDeleted(bookIds: Set<Long>): List<BookEntity> {
+        if (bookIds.isEmpty()) return emptyList()
+        val books = fetchBase(BOOK.ID.`in`(bookIds))
+        attachMetadata(books, includeComic = true)
+        attachBookFiles(books)
+        attachLibraries(books)
+        attachLibraryPaths(books)
+        return books.values.toList()
+    }
+
     /** Mirrors findAllFullBooks. Declared JPA graph was metadata + metadata.comicMetadata only, and
      * that's genuinely sufficient for MetadataMatchService/BookVectorService/BookSimilarityService/
      * PopulateMetadataScoresMigration (verified: all only read book.getMetadata()/book.getId()) - but

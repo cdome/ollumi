@@ -5,7 +5,6 @@ import org.booklore.model.enums.*;
 import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.repository.jooq.JooqAuthorRepository;
 import org.booklore.repository.jooq.dto.AuthorRow;
-import org.booklore.repository.BookMetadataRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
@@ -33,7 +32,6 @@ public class TestDataFactory {
     private final LibraryRepository libraryRepository;
     private final LibraryPathRepository libraryPathRepository;
     private final BookRepository bookRepository;
-    private final BookMetadataRepository bookMetadataRepository;
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
@@ -45,7 +43,6 @@ public class TestDataFactory {
     public TestDataFactory(LibraryRepository libraryRepository,
                            LibraryPathRepository libraryPathRepository,
                            BookRepository bookRepository,
-                           BookMetadataRepository bookMetadataRepository,
                            ShelfRepository shelfRepository,
                            JooqShelfRepository jooqShelfRepository,
                            JooqUserLibraryRepository jooqUserLibraryRepository,
@@ -56,7 +53,6 @@ public class TestDataFactory {
         this.libraryRepository = libraryRepository;
         this.libraryPathRepository = libraryPathRepository;
         this.bookRepository = bookRepository;
-        this.bookMetadataRepository = bookMetadataRepository;
         this.shelfRepository = shelfRepository;
         this.jooqShelfRepository = jooqShelfRepository;
         this.jooqUserLibraryRepository = jooqUserLibraryRepository;
