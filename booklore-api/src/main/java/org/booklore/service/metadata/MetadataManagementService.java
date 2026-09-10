@@ -37,7 +37,6 @@ public class MetadataManagementService {
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AppSettingService appSettingService;
     private final MetadataWriterFactory metadataWriterFactory;
     private final FileMoveService fileMoveService;
@@ -93,7 +92,7 @@ public class MetadataManagementService {
                     if (result.isMoved()) {
                         primaryFile.setFileName(result.getNewFileName());
                         primaryFile.setFileSubPath(result.getNewFileSubPath());
-                        bookAdditionalFileRepository.updateFileNameAndSubPath(
+                        jooqBookRepository.updateFileNameAndSubPath(
                                 primaryFile.getId(), result.getNewFileName(), result.getNewFileSubPath());
                     }
                 }

@@ -8,10 +8,9 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -38,8 +37,7 @@ public class BookFilePersistenceService {
 
     private final EntityManager entityManager;
     private final BookRepository bookRepository;
-    private final BookFileRepository bookFileRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
@@ -71,7 +69,7 @@ public class BookFilePersistenceService {
             book.setDeleted(Boolean.FALSE);
             book.setDeletedAt(null);
             jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), newLibraryPath.getId());
-            bookAdditionalFileRepository.updateFileNameAndSubPath(matchedFile.getId(), newFileName, newSubPath);
+            jooqBookRepository.updateFileNameAndSubPath(matchedFile.getId(), newFileName, newSubPath);
             jooqBookRepository.markUndeleted(List.of(book.getId()));
             log.info("[FILE_CREATE] Updated path / undeleted existing book with hash '{}': '{}'", currentHash, path);
         } else {
@@ -119,7 +117,7 @@ public class BookFilePersistenceService {
 
     @Transactional(readOnly = true)
     public Optional<BookFileEntity> findBookFileByLibraryPathSubPathAndFileName(long libraryPathId, String fileSubPath, String fileName) {
-        return bookFileRepository.findByLibraryPathIdAndFileSubPathAndFileName(libraryPathId, fileSubPath, fileName);
+        return Optional.ofNullable(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(libraryPathId, fileSubPath, fileName));
     }
 
     @Transactional
@@ -137,7 +135,7 @@ public class BookFilePersistenceService {
 
     @Transactional(readOnly = true)
     public long countBookFilesByBookId(Long bookId) {
-        return bookFileRepository.countByBookId(bookId);
+        return jooqBookEntityRepository.countBookFilesByBookId(bookId);
     }
 
     @Transactional
@@ -151,7 +149,8 @@ public class BookFilePersistenceService {
         book.setDeletedAt(null);
 
         for (PendingDeletionPool.FileSnapshot fs : bookSnap.files()) {
-            bookFileRepository.findById(fs.bookFileId()).ifPresent(bf -> {
+            BookFileEntity bf = jooqBookEntityRepository.findBookFileById(fs.bookFileId());
+            if (bf != null) {
                 for (var entry : fileHashes.entrySet()) {
                     if (entry.getValue().equals(fs.currentHash())) {
                         Path filePath = entry.getKey();
@@ -160,12 +159,12 @@ public class BookFilePersistenceService {
                         bf.setFileSubPath(newSubPath);
                         bf.setFileName(newFileName);
                         bf.setCurrentHash(entry.getValue());
-                        bookAdditionalFileRepository.updateFileNameAndSubPath(bf.getId(), newFileName, newSubPath);
+                        jooqBookRepository.updateFileNameAndSubPath(bf.getId(), newFileName, newSubPath);
                         jooqBookRepository.updateBookFileHash(bf.getId(), entry.getValue());
                         break;
                     }
                 }
-            });
+            }
         }
 
         jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), book.getLibraryPath().getId());

@@ -41,7 +41,6 @@ class MetadataManagementServiceTest {
     @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private AppSettingService appSettingService;
     @Mock private MetadataWriterFactory metadataWriterFactory;
     @Mock private FileMoveService fileMoveService;
@@ -302,7 +301,7 @@ class MetadataManagementServiceTest {
 
         assertThat(bookFile.getFileName()).isEqualTo("new.epub");
         assertThat(bookFile.getFileSubPath()).isEqualTo("new/sub");
-        verify(bookAdditionalFileRepository).updateFileNameAndSubPath(102L, "new.epub", "new/sub");
+        verify(jooqBookRepository).updateFileNameAndSubPath(102L, "new.epub", "new/sub");
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);
@@ -460,7 +459,7 @@ class MetadataManagementServiceTest {
 
         verify(metadataWriterFactory, never()).getWriter(any());
         verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
-        verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+        verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
     }
 
     @Test
@@ -520,7 +519,7 @@ class MetadataManagementServiceTest {
         service.consolidateMetadata(MergeMetadataType.series, List.of("New"), List.of("Old"));
 
         verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
-        verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+        verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);
@@ -576,7 +575,7 @@ class MetadataManagementServiceTest {
         service.consolidateMetadata(MergeMetadataType.authors, List.of("Target"), List.of("Old"));
 
         assertThat(bookFile.getFileName()).isEqualTo("original.epub");
-        verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+        verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
 
         java.nio.file.Files.deleteIfExists(tempFile);
         java.nio.file.Files.deleteIfExists(subDir);

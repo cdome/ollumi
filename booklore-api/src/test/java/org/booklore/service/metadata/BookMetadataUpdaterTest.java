@@ -44,7 +44,6 @@ class BookMetadataUpdaterTest {
     @Mock private org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
     @Mock private org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock private org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private FileService fileService;
     @Mock private MetadataMatchService metadataMatchService;
     @Mock private AppSettingService appSettingService;
@@ -589,7 +588,7 @@ class BookMetadataUpdaterTest {
             updater.updateFileNameIfConverted(bookFile, original);
 
             assertThat(bookFile.getFileName()).isEqualTo("test.cbr");
-            verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+            verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
             java.nio.file.Files.deleteIfExists(original);
             java.nio.file.Files.deleteIfExists(tempDir);
         } catch (Exception e) {
@@ -609,7 +608,7 @@ class BookMetadataUpdaterTest {
             updater.updateFileNameIfConverted(bookFile, original);
 
             assertThat(bookFile.getFileName()).isEqualTo("test.cbz");
-            verify(bookAdditionalFileRepository).updateFileNameAndSubPath(10L, "test.cbz", null);
+            verify(jooqBookRepository).updateFileNameAndSubPath(10L, "test.cbz", null);
             java.nio.file.Files.deleteIfExists(cbz);
             java.nio.file.Files.deleteIfExists(tempDir);
         } catch (Exception e) {
@@ -1690,7 +1689,7 @@ class BookMetadataUpdaterTest {
                 updater.updateFileNameIfConverted(bookFile, original);
 
                 assertThat(bookFile.getFileName()).isEqualTo("test.cbr");
-                verify(bookAdditionalFileRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
+                verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), any(), any());
                 java.nio.file.Files.deleteIfExists(tempDir);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -1709,7 +1708,7 @@ class BookMetadataUpdaterTest {
                 updater.updateFileNameIfConverted(bookFile, original);
 
                 assertThat(bookFile.getFileName()).isEqualTo("testfile.cbz");
-                verify(bookAdditionalFileRepository).updateFileNameAndSubPath(11L, "testfile.cbz", null);
+                verify(jooqBookRepository).updateFileNameAndSubPath(11L, "testfile.cbz", null);
                 java.nio.file.Files.deleteIfExists(cbz);
                 java.nio.file.Files.deleteIfExists(tempDir);
             } catch (Exception e) {

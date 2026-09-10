@@ -11,9 +11,9 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.FileProcessStatus;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.event.BookEventBroadcaster;
 import org.booklore.service.file.FileFingerprint;
@@ -61,7 +61,7 @@ class FileAsBookProcessorTest {
     private BookRepository bookRepository;
 
     @Mock
-    private BookAdditionalFileRepository bookAdditionalFileRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private JooqBookRepository jooqBookRepository;
@@ -98,7 +98,7 @@ class FileAsBookProcessorTest {
                 processorRegistry,
                 koboAutoShelfService,
                 bookRepository,
-                bookAdditionalFileRepository,
+                jooqBookEntityRepository,
                 jooqBookRepository,
                 libraryRepository,
                 fileService,
@@ -270,8 +270,8 @@ class FileAsBookProcessorTest {
                 .fileName("book.epub")
                 .bookFileType(BookFileType.EPUB)
                 .build();
-        when(bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(1L, "books", "book.epub"))
-                .thenReturn(Optional.of(new BookFileEntity()));
+        when(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(1L, "books", "book.epub"))
+                .thenReturn(new BookFileEntity());
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(10L);
@@ -293,8 +293,8 @@ class FileAsBookProcessorTest {
                 .bookFileType(BookFileType.EPUB)
                 .folderBased(false)
                 .build();
-        when(bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(1L, "books", "book.epub"))
-                .thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(1L, "books", "book.epub"))
+                .thenReturn(null);
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(10L);

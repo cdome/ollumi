@@ -11,8 +11,6 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -41,8 +39,6 @@ import java.util.stream.Collectors;
 public class BookFileAttachmentService {
 
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final BookFileRepository bookFileRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
@@ -132,7 +128,7 @@ public class BookFileAttachmentService {
                     List<Long> bookFileIds = bookFormatFiles.stream()
                             .map(BookFileEntity::getId)
                             .toList();
-                    bookFileRepository.reassignFilesToBook(targetBook.getId(), bookFileIds);
+                    jooqBookRepository.reassignFilesToBook(targetBook.getId(), bookFileIds);
                 } else {
                     Path sourceLibraryRoot = Paths.get(sourceBook.getLibraryPath().getPath()).toAbsolutePath().normalize();
                     for (BookFileEntity file : bookFormatFiles) {
@@ -140,7 +136,7 @@ public class BookFileAttachmentService {
                         String newSubPath = fileDir.equals(targetLibraryRoot)
                                 ? ""
                                 : targetLibraryRoot.relativize(fileDir).toString();
-                        bookFileRepository.reassignFileToBookWithPath(targetBook.getId(), newSubPath, file.getId());
+                        jooqBookRepository.reassignFileWithNewNameAndPath(file.getId(), targetBook.getId(), newSubPath, file.getFileName());
                     }
                 }
             }
@@ -248,7 +244,7 @@ public class BookFileAttachmentService {
                             log.info("Organized file from {} to {}", currentPath, destinationPath);
                             existingFile.setFileSubPath(targetFileSubPath);
                             existingFile.setFileName(newFileName);
-                            bookAdditionalFileRepository.updateFileNameAndSubPath(existingFile.getId(), newFileName, targetFileSubPath);
+                            jooqBookRepository.updateFileNameAndSubPath(existingFile.getId(), newFileName, targetFileSubPath);
                         } catch (IOException e) {
                             throw ApiError.INTERNAL_SERVER_ERROR.createException(
                                     "Failed to organize file " + currentPath + ": " + e.getMessage());

@@ -13,7 +13,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
@@ -69,8 +68,6 @@ class FileUploadServiceTest {
     @Mock
     JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
-    BookAdditionalFileRepository bookAdditionalFileRepository;
-    @Mock
     JooqBookRepository jooqBookRepository;
     @Mock
     AppSettingService appSettingService;
@@ -101,7 +98,7 @@ class FileUploadServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(settings);
 
         service = new FileUploadService(
-                libraryRepository, libraryPathRepository, jooqLibraryPathRepository, relationsRepository, jooqBookEntityRepository, bookAdditionalFileRepository, jooqBookRepository,
+                libraryRepository, libraryPathRepository, jooqLibraryPathRepository, relationsRepository, jooqBookEntityRepository, jooqBookRepository,
                 appSettingService, appProperties, metadataExtractorFactory, additionalFileMapper, fileMovingHelper, monitoringRegistrationService, auditService
         );
     }
@@ -250,7 +247,7 @@ class FileUploadServiceTest {
         try (MockedStatic<FileFingerprint> fp = mockStatic(FileFingerprint.class)) {
             fp.when(() -> FileFingerprint.generateHash(any())).thenReturn("hash-123");
 
-            when(bookAdditionalFileRepository.findByAltFormatCurrentHash("hash-123")).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findBookFileByAltFormatCurrentHash("hash-123")).thenReturn(null);
 
             when(jooqBookRepository.insertBookFile(eq(bookId), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(99L);
@@ -292,7 +289,7 @@ class FileUploadServiceTest {
 
             BookFileEntity existing = new BookFileEntity();
             existing.setId(1L);
-            when(bookAdditionalFileRepository.findByAltFormatCurrentHash("dup-hash")).thenReturn(Optional.of(existing));
+            when(jooqBookEntityRepository.findBookFileByAltFormatCurrentHash("dup-hash")).thenReturn(existing);
 
             assertThatExceptionOfType(IllegalArgumentException.class)
                     .isThrownBy(() -> service.uploadAdditionalFile(bookId, file, true, BookFileType.PDF, null));

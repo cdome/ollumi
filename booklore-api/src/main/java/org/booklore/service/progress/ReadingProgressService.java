@@ -49,7 +49,6 @@ public class ReadingProgressService {
     private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final BookFileRepository bookFileRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateService koboReadingStateService;
@@ -235,8 +234,10 @@ public class ReadingProgressService {
 
                 saveToUserBookFileProgress(userEntity, fileProgress, now);
 
-                BookFileEntity bookFile = bookFileRepository.findById(fileProgress.bookFileId())
-                        .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book file not found"));
+                BookFileEntity bookFile = jooqBookEntityRepository.findBookFileById(fileProgress.bookFileId());
+                if (bookFile == null) {
+                    throw ApiError.GENERIC_NOT_FOUND.createException("Book file not found");
+                }
                 updateProgressFromFileProgress(progress, bookFile.getBookType(), fileProgress);
             } else {
                 BookFileEntity primaryFile = book.getPrimaryBookFile();
@@ -302,8 +303,10 @@ public class ReadingProgressService {
                 .findByUserIdAndBookFileId(user.getId(), fileProgress.bookFileId())
                 .orElseGet(UserBookFileProgressRow::new);
 
-        BookFileEntity bookFile = bookFileRepository.findById(fileProgress.bookFileId())
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book file not found"));
+        BookFileEntity bookFile = jooqBookEntityRepository.findBookFileById(fileProgress.bookFileId());
+        if (bookFile == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("Book file not found");
+        }
 
         entity.setUserId(user.getId());
         entity.setBookFileId(bookFile.getId());

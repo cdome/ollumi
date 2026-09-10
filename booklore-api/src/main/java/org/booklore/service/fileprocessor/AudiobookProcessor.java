@@ -10,7 +10,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
@@ -40,14 +39,13 @@ public class AudiobookProcessor extends AbstractFileProcessor implements BookFil
     private final AudiobookMetadataExtractor audiobookMetadataExtractor;
 
     public AudiobookProcessor(BookRepository bookRepository,
-                              BookAdditionalFileRepository bookAdditionalFileRepository,
                               BookCreatorService bookCreatorService,
                               BookMapper bookMapper,
                               FileService fileService,
                               MetadataMatchService metadataMatchService,
                               SidecarMetadataWriter sidecarMetadataWriter,
                               AudiobookMetadataExtractor audiobookMetadataExtractor) {
-        super(bookRepository, bookAdditionalFileRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
+        super(bookRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         this.audiobookMetadataExtractor = audiobookMetadataExtractor;
     }
 

@@ -14,7 +14,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
@@ -58,7 +57,6 @@ public class FileUploadService {
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final BookAdditionalFileRepository additionalFileRepository;
     private final JooqBookRepository jooqBookRepository;
     private final AppSettingService appSettingService;
     private final AppProperties appProperties;
@@ -331,8 +329,8 @@ public class FileUploadService {
     }
 
     private void validateAlternativeFormatDuplicate(String fileHash) {
-        final Optional<BookFileEntity> existingAltFormat = additionalFileRepository.findByAltFormatCurrentHash(fileHash);
-        if (existingAltFormat.isPresent()) {
+        final BookFileEntity existingAltFormat = jooqBookEntityRepository.findBookFileByAltFormatCurrentHash(fileHash);
+        if (existingAltFormat != null) {
             throw new IllegalArgumentException("Alternative format file already exists with same content");
         }
     }

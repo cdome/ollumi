@@ -8,8 +8,6 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.AttachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -38,8 +36,6 @@ import static org.mockito.Mockito.*;
 class BookFileAttachmentServiceTest {
 
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
-    @Mock private BookFileRepository bookFileRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
@@ -323,7 +319,7 @@ class BookFileAttachmentServiceTest {
             assertNotNull(result);
             assertNotNull(result.updatedBook());
             assertEquals(List.of(2L), result.deletedSourceBookIds());
-            verify(bookFileRepository).reassignFilesToBook(eq(1L), anyList());
+            verify(jooqBookRepository).reassignFilesToBook(eq(1L), anyList());
             verify(jooqBookRepository).deleteByIds(List.of(2L));
         }
 
@@ -347,7 +343,7 @@ class BookFileAttachmentServiceTest {
 
             service.attachBookFiles(1L, List.of(2L, 3L), false);
 
-            verify(bookFileRepository, times(2)).reassignFilesToBook(eq(1L), anyList());
+            verify(jooqBookRepository, times(2)).reassignFilesToBook(eq(1L), anyList());
             verify(jooqBookRepository).deleteByIds(anyList());
         }
 
@@ -722,7 +718,7 @@ class BookFileAttachmentServiceTest {
 
             service.attachBookFiles(1L, List.of(2L), false);
 
-            verify(bookFileRepository).reassignFilesToBook(eq(1L), anyList());
+            verify(jooqBookRepository).reassignFilesToBook(eq(1L), anyList());
             verify(jooqBookRepository).deleteByIds(List.of(2L));
         }
 
@@ -802,7 +798,7 @@ class BookFileAttachmentServiceTest {
 
             assertTrue(Files.exists(sourceDir.resolve("source.pdf")),
                     "Source file should remain at original location");
-            verify(bookFileRepository).reassignFileToBookWithPath(eq(1L), anyString(), eq(20L));
+            verify(jooqBookRepository).reassignFileWithNewNameAndPath(eq(20L), eq(1L), anyString(), eq("source.pdf"));
             assertEquals(List.of(2L), result.deletedSourceBookIds());
         }
 

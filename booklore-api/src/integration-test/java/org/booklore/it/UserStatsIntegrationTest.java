@@ -9,9 +9,9 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.junit.jupiter.api.Test;
@@ -53,7 +53,7 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
     private JooqBookMetadataRelationsRepository relationsRepository;
 
     @Autowired
-    private BookFileRepository bookFileRepository;
+    private JooqBookRepository jooqBookRepository;
 
     private static final int CURRENT_YEAR = LocalDate.now(ZoneId.systemDefault()).getYear();
     private static final int CURRENT_MONTH = LocalDate.now(ZoneId.systemDefault()).getMonthValue();
@@ -633,7 +633,10 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
                 .isFixedLayout(false)
                 .durationSeconds(3600L)
                 .build();
-        bookFileRepository.save(file);
+        Long id = jooqBookRepository.insertBookFile(book.getId(), file.getFileName(), file.getFileSubPath(),
+                file.isBookFormat(), file.isFolderBased(), file.getBookType(), null, null, null, null, Instant.now());
+        file.setId(id);
+        jooqBookRepository.updateBookFileFullRow(file);
     }
 
     private void createReadingSession(BookLoreUserEntity user, BookEntity book, BookFileType bookType,

@@ -6,8 +6,8 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileService;
@@ -30,7 +30,7 @@ import java.util.stream.Stream;
 public class BookDeletionService {
 
     private final BookRepository bookRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final FileService fileService;
     private final NotificationService notificationService;
@@ -92,7 +92,7 @@ public class BookDeletionService {
         }
 
         Set<BookFileType> allowed = EnumSet.copyOf(allowedFormats);
-        List<BookFileEntity> allBookFiles = bookAdditionalFileRepository.findByLibraryId(libraryEntity.getId());
+        List<BookFileEntity> allBookFiles = jooqBookEntityRepository.findBookFilesByLibraryId(libraryEntity.getId());
 
         List<BookFileEntity> disallowedFiles = allBookFiles.stream()
                 .filter(BookFileEntity::isBook)

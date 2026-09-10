@@ -266,6 +266,13 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
         return dsl.deleteFrom(bf).where(bf.ID.`in`(bookFileIds)).execute()
     }
 
+    /** Mirrors BookFileRepository.reassignFilesToBook: bulk-reassigns files (already in the target's
+     * libraryPath) to a different book without touching their name/path. */
+    fun reassignFilesToBook(targetBookId: Long, fileIds: Collection<Long>) {
+        if (fileIds.isEmpty()) return
+        dsl.update(bf).set(bf.BOOK_ID, targetBookId).where(bf.ID.`in`(fileIds)).execute()
+    }
+
     /** Reassigns a file to a different book, also updating its path/name (e.g. after a physical file move). */
     fun reassignFileWithNewNameAndPath(bookFileId: Long, targetBookId: Long, newFileSubPath: String, newFileName: String) {
         dsl.update(bf)
@@ -386,6 +393,15 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
     fun updateBookFileHash(bookFileId: Long, hash: String) {
         dsl.update(bf)
             .set(bf.CURRENT_HASH, hash)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
+    /** Mirrors BookAdditionalFileRepository.updateFileNameAndSubPath. */
+    fun updateFileNameAndSubPath(bookFileId: Long, fileName: String, fileSubPath: String) {
+        dsl.update(bf)
+            .set(bf.FILE_NAME, fileName)
+            .set(bf.FILE_SUB_PATH, fileSubPath)
             .where(bf.ID.eq(bookFileId))
             .execute()
     }

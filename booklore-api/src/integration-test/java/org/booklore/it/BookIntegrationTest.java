@@ -24,7 +24,6 @@ import org.booklore.model.enums.NewPdfPageFitMode;
 import org.booklore.model.enums.NewPdfPageScrollMode;
 import org.booklore.model.enums.NewPdfPageSpread;
 import org.booklore.model.enums.NewPdfPageViewMode;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.BookRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,9 +47,6 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
     private BookRepository bookRepository;
-
-    @Autowired
-    private BookFileRepository bookFileRepository;
 
     private LibraryEntity createLibrary() throws Exception {
         Path tempDir = Files.createTempDirectory("book-it-");

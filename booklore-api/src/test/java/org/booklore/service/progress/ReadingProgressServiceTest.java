@@ -44,8 +44,6 @@ class ReadingProgressServiceTest {
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
-    private BookFileRepository bookFileRepository;
-    @Mock
     private UserRepository userRepository;
     @Mock
     private AuthenticationService authenticationService;

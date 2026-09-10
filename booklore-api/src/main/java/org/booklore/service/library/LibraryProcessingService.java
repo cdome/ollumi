@@ -11,7 +11,6 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -44,7 +43,6 @@ public class LibraryProcessingService {
     private final JooqBookRepository jooqBookRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final FileAsBookProcessor fileAsBookProcessor;
     private final BookRestorationService bookRestorationService;
     private final BookDeletionService bookDeletionService;
@@ -171,7 +169,7 @@ public class LibraryProcessingService {
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
-        Set<String> additionalFileKeys = bookAdditionalFileRepository.findByLibraryId(libraryId).stream()
+        Set<String> additionalFileKeys = jooqBookEntityRepository.findBookFilesByLibraryId(libraryId).stream()
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
@@ -184,9 +182,9 @@ public class LibraryProcessingService {
 
     void autoAttachFile(BookEntity book, LibraryFile file) {
         // Check if file already exists to prevent duplicates during concurrent rescans
-        var existing = bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(
+        var existing = jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(
                 file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
-        if (existing.isPresent()) {
+        if (existing != null) {
             log.debug("Additional file already exists, skipping: {}", file.getFileName());
             return;
         }
@@ -257,7 +255,7 @@ public class LibraryProcessingService {
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
-        List<BookFileEntity> allAdditionalFiles = bookAdditionalFileRepository.findByLibraryId(libraryEntity.getId());
+        List<BookFileEntity> allAdditionalFiles = jooqBookEntityRepository.findBookFilesByLibraryId(libraryEntity.getId());
 
         return allAdditionalFiles.stream()
                 .filter(BookFileEntity::isBookFormat)

@@ -8,7 +8,6 @@ import org.booklore.model.dto.settings.KoboSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.kobo.CbxConversionService;
@@ -45,7 +44,6 @@ public class BookDownloadService {
     private static final Pattern NON_ASCII_PATTERN = Pattern.compile("[^\\x00-\\x7F]");
 
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final BookFileRepository bookFileRepository;
     private final KepubConversionService kepubConversionService;
     private final CbxConversionService cbxConversionService;
     private final AppSettingService appSettingService;
@@ -98,8 +96,10 @@ public class BookDownloadService {
 
     public ResponseEntity<Resource> downloadBookFile(Long bookId, Long fileId) {
         try {
-            BookFileEntity bookFileEntity = bookFileRepository.findByIdWithBookAndLibraryPath(fileId)
-                    .orElseThrow(() -> ApiError.FILE_NOT_FOUND.createException(fileId));
+            BookFileEntity bookFileEntity = jooqBookEntityRepository.findBookFileById(fileId);
+            if (bookFileEntity == null) {
+                throw ApiError.FILE_NOT_FOUND.createException(fileId);
+            }
 
             // Verify the file belongs to the specified book
             if (!bookFileEntity.getBook().getId().equals(bookId)) {

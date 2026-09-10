@@ -13,7 +13,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
@@ -43,7 +42,6 @@ public class FileMoveService {
     private final AppProperties appProperties;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final BookAdditionalFileRepository bookFileRepository;
     private final LibraryRepository libraryRepository;
     private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
@@ -205,7 +203,7 @@ public class FileMoveService {
                         } else {
                             newFileName = bookFile.getFileName();
                         }
-                        bookFileRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
+                        jooqBookRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
                     }
 
                     jooqBookRepository.updateLibrary(bookEntity.getId(), targetLibrary.getId(), libraryPathEntity.getId());
@@ -368,7 +366,7 @@ public class FileMoveService {
                         } else {
                             newFileName = bookFile.getFileName();
                         }
-                        bookFileRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
+                        jooqBookRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
                     }
                 });
             } catch (Exception e) {

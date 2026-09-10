@@ -9,8 +9,8 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.event.BookEventBroadcaster;
@@ -46,7 +46,7 @@ public class FileAsBookProcessor {
     private final BookFileProcessorRegistry processorRegistry;
     private final KoboAutoShelfService koboAutoShelfService;
     private final BookRepository bookRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryRepository libraryRepository;
     private final FileService fileService;
@@ -138,11 +138,10 @@ public class FileAsBookProcessor {
     }
 
     void createAdditionalBookFile(BookEntity bookEntity, LibraryFile file) {
-        Optional<BookFileEntity> existing = bookAdditionalFileRepository
-                .findByLibraryPath_IdAndFileSubPathAndFileName(
-                        file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
+        BookFileEntity existing = jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(
+                file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
 
-        if (existing.isPresent()) {
+        if (existing != null) {
             log.debug("Additional file already exists: {}", file.getFileName());
             return;
         }

@@ -12,6 +12,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
@@ -42,7 +43,7 @@ public class TelemetryService {
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMarkRepository bookMarkRepository;
     private final JooqBookNoteRepository bookNoteRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final ShelfRepository shelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
@@ -95,7 +96,7 @@ public class TelemetryService {
                 .appVersion(versionService.appVersion)
                 .totalLibraries((int) libraryRepository.count())
                 .totalBooks(bookRepository.count())
-                .totalAdditionalBookFiles(bookAdditionalFileRepository.count())
+                .totalAdditionalBookFiles(jooqBookEntityRepository.countAllBookFiles())
                 .totalAuthors(relationsRepository.countAllAuthors())
                 .totalBookmarks(bookMarkRepository.count())
                 .totalBookNotes(bookNoteRepository.count())

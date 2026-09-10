@@ -13,7 +13,6 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -41,7 +40,6 @@ import java.util.Set;
 public class BookFileDetachmentService {
 
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final BookFileRepository bookFileRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
@@ -119,7 +117,7 @@ public class BookFileDetachmentService {
         // this row is never going through JPA persist() at all.
         long newBookId = jooqBookRepository.insertBook(sourceBook.getLibrary().getId(), newLibraryPath.getId(), Instant.now());
         jooqBookMetadataRepository.insertRow(newBookId, newMetadata);
-        bookFileRepository.reassignFileToBookWithPath(newBookId, newFileSubPath, targetFile.getId());
+        jooqBookRepository.reassignFileWithNewNameAndPath(targetFile.getId(), newBookId, newFileSubPath, targetFile.getFileName());
 
         if (copyMetadata) {
             if (!sourceMoods.isEmpty()) {

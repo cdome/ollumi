@@ -6,8 +6,8 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileService;
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.*;
 class BookDeletionServiceTest {
 
     @Mock private BookRepository bookRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private FileService fileService;
     @Mock private NotificationService notificationService;
@@ -53,7 +53,6 @@ class BookDeletionServiceTest {
         bookDeletionService.deleteRemovedAdditionalFiles(List.of(1L, 2L));
 
         verify(jooqBookRepository).deleteBookFilesByIds(List.of(1L, 2L));
-        verifyNoInteractions(bookAdditionalFileRepository);
     }
 
     @Test
@@ -112,7 +111,7 @@ class BookDeletionServiceTest {
 
         bookDeletionService.purgeDisallowedFormats(library);
 
-        verifyNoInteractions(bookAdditionalFileRepository, jooqBookRepository);
+        verifyNoInteractions(jooqBookRepository);
     }
 
     @Test
@@ -126,7 +125,7 @@ class BookDeletionServiceTest {
         BookFileEntity bookACbx = BookFileEntity.builder().id(2L).book(bookA).isBookFormat(true).bookType(BookFileType.CBX).build();
         BookFileEntity bookBCbx = BookFileEntity.builder().id(3L).book(bookB).isBookFormat(true).bookType(BookFileType.CBX).build();
 
-        when(bookAdditionalFileRepository.findByLibraryId(1L)).thenReturn(List.of(bookAEpub, bookACbx, bookBCbx));
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(1L)).thenReturn(List.of(bookAEpub, bookACbx, bookBCbx));
         when(fileService.getImagesFolder(200L)).thenReturn(tempDir.resolve("images-200").toString());
         when(fileService.getBookMetadataBackupPath(200L)).thenReturn(tempDir.resolve("backup-200").toString());
 

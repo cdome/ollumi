@@ -13,7 +13,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
@@ -49,7 +48,6 @@ class FileMoveServiceTest {
     @Mock private AppProperties appProperties;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
-    @Mock private BookAdditionalFileRepository bookFileRepository;
     @Mock private LibraryRepository libraryRepository;
     @Mock private LibraryPathRepository libraryPathRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
@@ -67,14 +65,14 @@ class FileMoveServiceTest {
     private LibraryPathEntity libraryPath;
 
     static class TestableFileMoveService extends FileMoveService {
-        TestableFileMoveService(AppProperties appProperties, JooqBookEntityRepository jooqBookEntityRepository, JooqBookRepository jooqBookRepository, BookAdditionalFileRepository bookFileRepository,
+        TestableFileMoveService(AppProperties appProperties, JooqBookEntityRepository jooqBookEntityRepository, JooqBookRepository jooqBookRepository,
                                 LibraryRepository libraryRepository, LibraryPathRepository libraryPathRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
                                 FileMoveHelper fileMoveHelper,
                                 MonitoringRegistrationService monitoringRegistrationService, LibraryMapper libraryMapper,
                                 BookMapper bookMapper, NotificationService notificationService, EntityManager entityManager,
                                 org.springframework.transaction.support.TransactionTemplate transactionTemplate,
                                 SidecarMetadataWriter sidecarMetadataWriter) {
-            super(appProperties, jooqBookEntityRepository, jooqBookRepository, bookFileRepository, libraryRepository, libraryPathRepository, jooqLibraryPathRepository, fileMoveHelper,
+            super(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository, libraryPathRepository, jooqLibraryPathRepository, fileMoveHelper,
                     monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter);
         }
 
@@ -95,7 +93,7 @@ class FileMoveServiceTest {
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
 
-        service = spy(new TestableFileMoveService(appProperties, jooqBookEntityRepository, jooqBookRepository, bookFileRepository, libraryRepository,
+        service = spy(new TestableFileMoveService(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository,
                 libraryPathRepository, jooqLibraryPathRepository,
                 fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter));
 
@@ -181,7 +179,7 @@ class FileMoveServiceTest {
             assertThat(result.getNewFileSubPath()).isEqualTo("new/subpath");
             verify(fileMoveHelper).moveFileWithBackup(any());
             verify(fileMoveHelper).commitMove(any(), any());
-            verify(bookFileRepository).updateFileNameAndSubPath(eq(1L), anyString(), eq("new/subpath"));
+            verify(jooqBookRepository).updateFileNameAndSubPath(eq(1L), anyString(), eq("new/subpath"));
         }
 
         @Test
@@ -215,7 +213,7 @@ class FileMoveServiceTest {
             assertThat(result.isMoved()).isTrue();
             verify(fileMoveHelper, times(2)).moveFileWithBackup(any());
             verify(fileMoveHelper, times(2)).commitMove(any(), any());
-            verify(bookFileRepository, times(2)).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, times(2)).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -254,7 +252,7 @@ class FileMoveServiceTest {
             assertThat(result.isMoved()).isTrue();
             verify(fileMoveHelper, times(4)).moveFileWithBackup(any());
             verify(fileMoveHelper, times(4)).commitMove(any(), any());
-            verify(bookFileRepository, times(4)).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, times(4)).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -324,7 +322,7 @@ class FileMoveServiceTest {
             assertThat(result.isMoved()).isFalse();
             verify(fileMoveHelper, never()).moveFileWithBackup(any());
             verify(fileMoveHelper, never()).commitMove(any(), any());
-            verify(bookFileRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -510,7 +508,7 @@ class FileMoveServiceTest {
             FileMoveResult result = service.moveSingleFile(book);
 
             assertThat(result.isMoved()).isFalse();
-            verify(bookFileRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -528,7 +526,7 @@ class FileMoveServiceTest {
 
             assertThat(result.isMoved()).isFalse();
             verify(fileMoveHelper).rollbackMove(any(), any());
-            verify(bookFileRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -564,7 +562,7 @@ class FileMoveServiceTest {
 
             service.moveSingleFile(book);
 
-            verify(bookFileRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
     }
 
@@ -853,7 +851,7 @@ class FileMoveServiceTest {
 
             verify(fileMoveHelper, times(3)).moveFileWithBackup(any());
             verify(fileMoveHelper, times(3)).commitMove(any(), any());
-            verify(bookFileRepository, times(3)).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository, times(3)).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -874,7 +872,7 @@ class FileMoveServiceTest {
 
             service.bulkMoveFiles(request);
 
-            verify(bookFileRepository).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+            verify(jooqBookRepository).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
             verify(jooqBookRepository).updateLibrary(eq(100L), eq(2L), eq(20L));
         }
 

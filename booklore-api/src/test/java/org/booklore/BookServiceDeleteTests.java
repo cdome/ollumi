@@ -48,7 +48,6 @@ class BookServiceDeleteTests {
     void setUp() {
         JooqBookEntityRepository jooqBookEntityRepository = Mockito.mock(JooqBookEntityRepository.class);
         JooqBookRepository jooqBookRepository = Mockito.mock(JooqBookRepository.class);
-        BookFileRepository bookFileRepository = Mockito.mock(BookFileRepository.class);
         JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository = Mockito.mock(JooqPdfViewerPreferenceRepository.class);
         JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository = Mockito.mock(JooqEbookViewerPreferenceRepository.class);
         JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository = Mockito.mock(JooqCbxViewerPreferenceRepository.class);
@@ -70,7 +69,6 @@ class BookServiceDeleteTests {
         bookService = new BookService(
                 jooqBookEntityRepository,
                 jooqBookRepository,
-                bookFileRepository,
                 pdfViewerPreferencesRepository,
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,

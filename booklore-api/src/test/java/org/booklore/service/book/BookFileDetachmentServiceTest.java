@@ -8,7 +8,6 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.DetachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
@@ -36,7 +35,6 @@ import static org.mockito.Mockito.*;
 class BookFileDetachmentServiceTest {
 
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
-    @Mock private BookFileRepository bookFileRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock private LibraryPathRepository libraryPathRepository;
@@ -131,7 +129,7 @@ class BookFileDetachmentServiceTest {
             assertThat(metadata.getTitle()).isEqualTo("Test Book 1");
             return true;
         }));
-        verify(bookFileRepository).reassignFileToBookWithPath(2L, "", 11L);
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(11L, 2L, "", "file-11.pdf");
     }
 
     @Test
@@ -171,7 +169,7 @@ class BookFileDetachmentServiceTest {
 
         // fileName itself is never touched by the reassignment call, so "notes.txt" staying intact
         // is implicit in reassigning by id rather than rebuilding the file.
-        verify(bookFileRepository).reassignFileToBookWithPath(2L, "", 11L);
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(11L, 2L, "", "notes.txt");
         verify(jooqBookMetadataRepository).insertRow(eq(2L), argThat(metadata -> {
             assertThat(metadata.getTitle()).isEqualTo("notes");
             return true;
@@ -195,7 +193,7 @@ class BookFileDetachmentServiceTest {
         // Which file remains primary on the source book is BookEntity.getPrimaryBookFile()'s own
         // format-priority logic over freshly-read DB state - this test only verifies detachment
         // reassigned the correct file (10L, not 11L).
-        verify(bookFileRepository).reassignFileToBookWithPath(2L, "", 10L);
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(10L, 2L, "", "file-10.epub");
     }
 
     @Test
@@ -271,6 +269,6 @@ class BookFileDetachmentServiceTest {
         service.detachBookFile(1L, 11L, false);
 
         verify(jooqBookRepository).insertBook(eq(1L), eq(2L), any());
-        verify(bookFileRepository).reassignFileToBookWithPath(3L, "", 11L);
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(11L, 3L, "", "file-11.pdf");
     }
 }

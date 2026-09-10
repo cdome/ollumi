@@ -64,7 +64,6 @@ public class BookService {
 
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final BookFileRepository bookFileRepository;
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;

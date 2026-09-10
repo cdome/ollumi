@@ -7,7 +7,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
@@ -34,14 +33,13 @@ public class MobiProcessor extends AbstractFileProcessor implements BookFileProc
     private final MobiMetadataExtractor mobiMetadataExtractor;
 
     public MobiProcessor(BookRepository bookRepository,
-                         BookAdditionalFileRepository bookAdditionalFileRepository,
                          BookCreatorService bookCreatorService,
                          BookMapper bookMapper,
                          FileService fileService,
                          MetadataMatchService metadataMatchService,
                          SidecarMetadataWriter sidecarMetadataWriter,
                          MobiMetadataExtractor mobiMetadataExtractor) {
-        super(bookRepository, bookAdditionalFileRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
+        super(bookRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         this.mobiMetadataExtractor = mobiMetadataExtractor;
     }
 

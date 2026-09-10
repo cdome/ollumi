@@ -7,7 +7,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
@@ -36,14 +35,13 @@ public class EpubProcessor extends AbstractFileProcessor implements BookFileProc
     private final EpubMetadataExtractor epubMetadataExtractor;
 
     public EpubProcessor(BookRepository bookRepository,
-                         BookAdditionalFileRepository bookAdditionalFileRepository,
                          BookCreatorService bookCreatorService,
                          BookMapper bookMapper,
                          FileService fileService,
                          MetadataMatchService metadataMatchService,
                          SidecarMetadataWriter sidecarMetadataWriter,
                          EpubMetadataExtractor epubMetadataExtractor) {
-        super(bookRepository, bookAdditionalFileRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
+        super(bookRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         this.epubMetadataExtractor = epubMetadataExtractor;
     }
 

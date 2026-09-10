@@ -271,6 +271,72 @@ class JooqBookEntityRepository(private val dsl: DSLContext, private val objectMa
         return books.values.toList()
     }
 
+    // ========================================================================
+    // BookFileEntity finders - replacing BookFileRepository/BookAdditionalFileRepository (both were
+    // JpaRepository<BookFileEntity, Long> over the same table; consolidated here since consumers
+    // consistently touch bookFile.getBook() with real relation depth - .getDeleted(), .getLibraryPath(),
+    // .getLibrary() - not just a null check, so every method attaches the FULL parent BookEntity rather
+    // than tracing each consumer's exact depth. No notDeleted filter anywhere below, matching every
+    // original JPQL query here (none had one) - these operate on files, not the book lifecycle.
+    // ========================================================================
+
+    private fun hydrateBookFiles(records: List<BookFileRecord>): List<BookFileEntity> {
+        if (records.isEmpty()) return emptyList()
+        val bookIds = records.mapNotNull { it.bookId }.distinct().toSet()
+        val booksById = findAllByIdsIncludingDeleted(bookIds).associateBy { it.id }
+        return records.mapNotNull { r -> booksById[r.bookId]?.let { book -> toBookFileEntity(r, book) } }
+    }
+
+    /** Mirrors both BookFileRepository.findById and BookAdditionalFileRepository.findById (inherited
+     * JpaRepository methods) and BookFileRepository.findByIdWithBookAndLibraryPath (whose declared
+     * graph - book+libraryPath+library - is a strict subset of this). */
+    fun findBookFileById(id: Long): BookFileEntity? {
+        val record = dsl.selectFrom(bf).where(bf.ID.eq(id)).fetchOne() ?: return null
+        return hydrateBookFiles(listOf(record)).firstOrNull()
+    }
+
+    fun countBookFilesByBookId(bookId: Long): Long = dsl.fetchCount(bf, bf.BOOK_ID.eq(bookId)).toLong()
+
+    fun countAllBookFiles(): Long = dsl.fetchCount(bf).toLong()
+
+    /** Mirrors both BookFileRepository.findByLibraryPathIdAndFileSubPathAndFileName and
+     * BookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName - identical JPQL
+     * declared in two separate JPA repos over the same entity. */
+    fun findBookFileByLibraryPathIdAndFileSubPathAndFileName(libraryPathId: Long, fileSubPath: String, fileName: String): BookFileEntity? {
+        val record = dsl.selectFrom(bf)
+            .where(
+                bf.FILE_SUB_PATH.eq(fileSubPath)
+                    .and(bf.FILE_NAME.eq(fileName))
+                    .and(bf.BOOK_ID.`in`(dsl.select(BOOK.ID).from(BOOK).where(BOOK.LIBRARY_PATH_ID.eq(libraryPathId))))
+            )
+            .fetchOne() ?: return null
+        return hydrateBookFiles(listOf(record)).firstOrNull()
+    }
+
+    fun findBookFilesByBookId(bookId: Long): List<BookFileEntity> =
+        hydrateBookFiles(dsl.selectFrom(bf).where(bf.BOOK_ID.eq(bookId)).orderBy(bf.ID.asc()).fetch())
+
+    fun findBookFilesByBookIdAndIsBookFormat(bookId: Long, isBookFormat: Boolean): List<BookFileEntity> =
+        hydrateBookFiles(
+            dsl.selectFrom(bf)
+                .where(bf.BOOK_ID.eq(bookId).and(bf.IS_BOOK.eq(if (isBookFormat) 1 else 0)))
+                .orderBy(bf.ID.asc())
+                .fetch()
+        )
+
+    fun findBookFileByAltFormatCurrentHash(hash: String): BookFileEntity? {
+        val record = dsl.selectFrom(bf).where(bf.ALT_FORMAT_CURRENT_HASH.eq(hash)).fetchOne() ?: return null
+        return hydrateBookFiles(listOf(record)).firstOrNull()
+    }
+
+    fun findBookFilesByLibraryId(libraryId: Long): List<BookFileEntity> =
+        hydrateBookFiles(
+            dsl.selectFrom(bf)
+                .where(bf.BOOK_ID.`in`(dsl.select(BOOK.ID).from(BOOK).where(BOOK.LIBRARY_ID.eq(libraryId))))
+                .orderBy(bf.ID.asc())
+                .fetch()
+        )
+
     /** Mirrors findAllFullBooks. Declared JPA graph was metadata + metadata.comicMetadata only, and
      * that's genuinely sufficient for MetadataMatchService/BookVectorService/BookSimilarityService/
      * PopulateMetadataScoresMigration (verified: all only read book.getMetadata()/book.getId()) - but

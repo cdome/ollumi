@@ -5,7 +5,6 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -44,8 +43,6 @@ class LibraryProcessingServiceRegressionTest {
     @Mock
     private NotificationService notificationService;
     @Mock
-    private BookAdditionalFileRepository bookAdditionalFileRepository;
-    @Mock
     private FileAsBookProcessor fileAsBookProcessor;
     @Mock
     private BookRestorationService bookRestorationService;
@@ -68,7 +65,6 @@ class LibraryProcessingServiceRegressionTest {
                 jooqBookRepository,
                 jooqLibraryPathRepository,
                 notificationService,
-                bookAdditionalFileRepository,
                 fileAsBookProcessor,
                 bookRestorationService,
                 bookDeletionService,
@@ -110,7 +106,7 @@ class LibraryProcessingServiceRegressionTest {
                 .build()
         ));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForRescan(anyList(), any(LibraryEntity.class)))
                 .thenReturn(new BookGroupingService.GroupingResult(Collections.emptyMap(), Collections.emptyMap()));
 

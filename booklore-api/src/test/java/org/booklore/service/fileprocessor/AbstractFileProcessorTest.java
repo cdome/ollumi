@@ -7,7 +7,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
@@ -37,7 +36,6 @@ import static org.mockito.Mockito.when;
 class AbstractFileProcessorTest {
 
     @Mock private BookRepository bookRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private BookCreatorService bookCreatorService;
     @Mock private BookMapper bookMapper;
     @Mock private FileService fileService;
@@ -52,7 +50,7 @@ class AbstractFileProcessorTest {
     @BeforeEach
     void setUp() {
         processor = new TestableFileProcessor(
-                bookRepository, bookAdditionalFileRepository, bookCreatorService,
+                bookRepository, bookCreatorService,
                 bookMapper, fileService, metadataMatchService, sidecarMetadataWriter
         );
     }
@@ -193,13 +191,12 @@ class AbstractFileProcessorTest {
     static class TestableFileProcessor extends AbstractFileProcessor {
 
         TestableFileProcessor(BookRepository bookRepository,
-                              BookAdditionalFileRepository bookAdditionalFileRepository,
                               BookCreatorService bookCreatorService,
                               BookMapper bookMapper,
                               FileService fileService,
                               MetadataMatchService metadataMatchService,
                               SidecarMetadataWriter sidecarMetadataWriter) {
-            super(bookRepository, bookAdditionalFileRepository, bookCreatorService,
+            super(bookRepository, bookCreatorService,
                     bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         }
 

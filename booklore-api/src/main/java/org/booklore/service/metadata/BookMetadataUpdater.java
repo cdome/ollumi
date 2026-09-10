@@ -48,7 +48,6 @@ public class BookMetadataUpdater {
     private final org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
     private final org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final AppProperties appProperties;
     private final FileService fileService;
     private final MetadataMatchService metadataMatchService;
@@ -178,7 +177,7 @@ public class BookMetadataUpdater {
                     if (bookPrimaryFile != null) {
                         bookPrimaryFile.setFileName(result.getNewFileName());
                         bookPrimaryFile.setFileSubPath(result.getNewFileSubPath());
-                        bookAdditionalFileRepository.updateFileNameAndSubPath(
+                        jooqBookRepository.updateFileNameAndSubPath(
                                 bookPrimaryFile.getId(), result.getNewFileName(), result.getNewFileSubPath());
                     }
                 }
@@ -839,7 +838,7 @@ public class BookMetadataUpdater {
         if (Files.exists(cbzPath)) {
             log.info("File converted from {} to {}, updating book file record", fileName, cbzFileName);
             bookFile.setFileName(cbzFileName);
-            bookAdditionalFileRepository.updateFileNameAndSubPath(bookFile.getId(), cbzFileName, bookFile.getFileSubPath());
+            jooqBookRepository.updateFileNameAndSubPath(bookFile.getId(), cbzFileName, bookFile.getFileSubPath());
         }
     }
 

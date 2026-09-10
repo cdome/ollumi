@@ -5,7 +5,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.repository.BookAdditionalFileRepository;
 import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
@@ -37,7 +36,6 @@ import static org.mockito.Mockito.when;
 class CbxProcessorTest {
 
     @Mock private BookRepository bookRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock private BookCreatorService bookCreatorService;
     @Mock private BookMapper bookMapper;
     @Mock private FileService fileService;
@@ -54,7 +52,6 @@ class CbxProcessorTest {
     void setUp() {
         cbxProcessor = new CbxProcessor(
                 bookRepository,
-                bookAdditionalFileRepository,
                 bookCreatorService,
                 bookMapper,
                 fileService,
