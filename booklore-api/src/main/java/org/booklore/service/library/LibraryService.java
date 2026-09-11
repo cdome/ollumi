@@ -18,7 +18,6 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
@@ -69,7 +68,6 @@ public class LibraryService {
     }
 
     private final LibraryRepository libraryRepository;
-    private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
@@ -137,7 +135,7 @@ public class LibraryService {
                 notificationService.sendMessage(Topic.BOOKS_REMOVE, books);
             }
 
-            libraryPathRepository.deleteAllById(idsToRemove);
+            jooqLibraryPathRepository.deleteAllById(idsToRemove);
         }
 
         if (!newPaths.isEmpty()) {
@@ -145,7 +143,7 @@ public class LibraryService {
                     .map(path -> LibraryPathEntity.builder().path(path).library(library).build())
                     .collect(Collectors.toList());
 
-            libraryPathRepository.saveAll(newPathEntities);
+            jooqLibraryPathRepository.insertAll(newPathEntities);
         }
 
         LibraryEntity savedLibrary = libraryRepository.save(library);
@@ -188,7 +186,7 @@ public class LibraryService {
                         .collect(Collectors.toList());
 
         if (!pathEntities.isEmpty()) {
-            libraryPathRepository.saveAll(pathEntities);
+            jooqLibraryPathRepository.insertAll(pathEntities);
         }
 
         if (request.isWatch()) {

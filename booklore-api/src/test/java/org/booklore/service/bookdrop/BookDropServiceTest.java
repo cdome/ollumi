@@ -13,7 +13,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookdropFileStatus;
-import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
@@ -65,8 +64,6 @@ class BookDropServiceTest {
     @Mock
     private LibraryRepository libraryRepository;
     @Mock
-    private LibraryPathRepository libraryPathRepository;
-    @Mock
     private org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     private JooqBookEntityRepository jooqBookEntityRepository;
@@ -110,7 +107,7 @@ class BookDropServiceTest {
         libraryEntity = new LibraryEntity();
         libraryEntity.setId(1L);
         libraryEntity.setName("Test Library");
-        when(libraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPathEntity));
+        when(jooqLibraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPathEntity));
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
                 .thenReturn(List.of(new org.booklore.repository.jooq.dto.LibraryPathRow(libraryPathEntity.getId(), libraryPathEntity.getPath())));
 
@@ -476,10 +473,6 @@ class BookDropServiceTest {
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
         when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
         
-        LibraryPathEntity pathEntity = new LibraryPathEntity();
-        pathEntity.setId(1L);
-        pathEntity.setPath("/books");
-        when(libraryPathRepository.findById(1L)).thenReturn(Optional.of(pathEntity));
 
         lenient().when(objectMapper.readValue(anyString(), any(Class.class))).thenReturn(new BookMetadata());
         when(fileMovingHelper.getFileNamingPattern(libraryEntity)).thenReturn("{title}");

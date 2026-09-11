@@ -8,14 +8,12 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
-import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,10 +32,8 @@ import static org.booklore.model.enums.PermissionType.MANAGE_LIBRARY;
 @AllArgsConstructor
 public class BookFilePersistenceService {
 
-    private final EntityManager entityManager;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
     private final BookMapper bookMapper;
@@ -45,7 +41,6 @@ public class BookFilePersistenceService {
     @Transactional
     public void updatePathIfChanged(BookEntity book, LibraryEntity libraryEntity, Path path, String currentHash) {
         LibraryPathEntity newLibraryPath = getLibraryPathEntityForFile(libraryEntity, path.toString());
-        newLibraryPath = entityManager.merge(newLibraryPath);
 
         String newSubPath = FileUtils.getRelativeSubPath(newLibraryPath.getPath(), path);
         String newFileName = path.getFileName().toString();
@@ -99,8 +94,11 @@ public class BookFilePersistenceService {
                 .max(Comparator.comparingInt(entry -> entry.getValue().getNameCount()))
                 .map(Map.Entry::getKey)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(inputPath));
-        return libraryPathRepository.findById(match.getId())
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(inputPath));
+        LibraryPathEntity libraryPath = jooqLibraryPathRepository.findById(match.getId());
+        if (libraryPath == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(inputPath);
+        }
+        return libraryPath;
     }
 
     @Transactional
@@ -142,7 +140,7 @@ public class BookFilePersistenceService {
         BookEntity book = jooqBookEntityRepository.findByIdIncludingDeleted(bookSnap.bookId());
         if (book == null) return;
 
-        book.setLibraryPath(entityManager.merge(newLibraryPath));
+        book.setLibraryPath(newLibraryPath);
         book.setDeleted(false);
         book.setDeletedAt(null);
 

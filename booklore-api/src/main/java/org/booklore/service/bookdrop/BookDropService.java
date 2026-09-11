@@ -64,7 +64,6 @@ public class BookDropService {
 
     private final JooqBookdropFileRepository bookdropFileRepository;
     private final LibraryRepository libraryRepository;
-    private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
     private final org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookdropMonitoringService bookdropMonitoringService;
@@ -377,7 +376,7 @@ public class BookDropService {
         LibraryEntity library = libraryRepository.findById(libraryId)
                 .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
 
-        LibraryPathEntity path = libraryPathRepository.findByLibraryId(libraryId).stream()
+        LibraryPathEntity path = jooqLibraryPathRepository.findByLibraryId(libraryId).stream()
                 .filter(p -> p.getId().equals(pathId))
                 .findFirst()
                 .orElseThrow(() -> ApiError.INVALID_LIBRARY_PATH.createException(libraryId));

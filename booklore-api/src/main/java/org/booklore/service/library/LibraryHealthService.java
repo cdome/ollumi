@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.LibraryHealthPayload;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class LibraryHealthService {
 
-    private final LibraryPathRepository libraryPathRepository;
+    private final JooqLibraryPathRepository libraryPathRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ConcurrentHashMap<Long, Boolean> previousHealth = new ConcurrentHashMap<>();
 

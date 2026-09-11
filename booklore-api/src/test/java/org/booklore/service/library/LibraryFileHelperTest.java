@@ -5,7 +5,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -19,7 +19,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +28,7 @@ class LibraryFileHelperTest {
     @TempDir
     Path tempDir;
 
-    private final LibraryPathRepository libraryPathRepository = mock(LibraryPathRepository.class);
+    private final JooqLibraryPathRepository libraryPathRepository = mock(JooqLibraryPathRepository.class);
 
     @Test
     void testGetLibraryFiles_HandlesInaccessibleDirectories() throws IOException {
@@ -43,11 +43,12 @@ class LibraryFileHelperTest {
         libraryPath.setPath(tempDir.toString());
 
         LibraryEntity testLibrary = LibraryEntity.builder()
+                .id(1L)
                 .name("Test Library")
                 .icon("book")
                 .watch(false)
                 .build();
-        when(libraryPathRepository.findByLibraryId(any())).thenReturn(List.of(libraryPath));
+        when(libraryPathRepository.findByLibraryId(anyLong())).thenReturn(List.of(libraryPath));
 
         List<LibraryFile> libraryFiles = libraryFileHelper.getLibraryFiles(testLibrary);
         assertEquals(libraryFiles.stream().map(LibraryFile::getFileName).sorted().toList(), List.of("happy.epub", "zzzz_happ.epub"));
@@ -57,9 +58,10 @@ class LibraryFileHelperTest {
         LibraryPathEntity libraryPath = new LibraryPathEntity();
         libraryPath.setId(1L);
         libraryPath.setPath(path.toString());
-        when(libraryPathRepository.findByLibraryId(any())).thenReturn(List.of(libraryPath));
+        when(libraryPathRepository.findByLibraryId(anyLong())).thenReturn(List.of(libraryPath));
 
         return LibraryEntity.builder()
+                .id(1L)
                 .name("Test Library")
                 .icon("book")
                 .watch(false)
@@ -346,9 +348,10 @@ class LibraryFileHelperTest {
         LibraryPathEntity libraryPath = new LibraryPathEntity();
         libraryPath.setId(1L);
         libraryPath.setPath(path.toString());
-        when(libraryPathRepository.findByLibraryId(any())).thenReturn(List.of(libraryPath));
+        when(libraryPathRepository.findByLibraryId(anyLong())).thenReturn(List.of(libraryPath));
 
         return LibraryEntity.builder()
+                .id(1L)
                 .name("Test Library")
                 .icon("book")
                 .watch(false)

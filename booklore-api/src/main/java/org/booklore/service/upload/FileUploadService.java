@@ -53,7 +53,6 @@ public class FileUploadService {
     private static final long MB_TO_BYTES_MULTIPLIER = 1024L * 1024L;
 
     private final LibraryRepository libraryRepository;
-    private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
@@ -214,7 +213,7 @@ public class FileUploadService {
         if (book.getLibrary() == null) {
             throw new IllegalStateException("Cannot upload file to physical book: library has no paths configured");
         }
-        List<LibraryPathEntity> paths = libraryPathRepository.findByLibraryId(book.getLibrary().getId());
+        List<LibraryPathEntity> paths = jooqLibraryPathRepository.findByLibraryId(book.getLibrary().getId());
         if (paths.isEmpty()) {
             throw new IllegalStateException("Cannot upload file to physical book: library has no paths configured");
         }

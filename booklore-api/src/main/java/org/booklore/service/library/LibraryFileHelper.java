@@ -6,7 +6,7 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.util.FileUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +36,7 @@ public class LibraryFileHelper {
 
     private static final int MIN_AUDIO_FILES_FOR_FOLDER_AUDIOBOOK = 2;
 
-    private final LibraryPathRepository libraryPathRepository;
+    private final JooqLibraryPathRepository libraryPathRepository;
 
     public List<LibraryFile> getAllLibraryFiles(LibraryEntity libraryEntity) throws IOException {
         List<LibraryFile> allFiles = new ArrayList<>();

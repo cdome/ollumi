@@ -7,9 +7,9 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
@@ -30,7 +30,7 @@ public class FileMoveIntegrationTest extends RestApiIntegrationTest {
     private LibraryRepository libraryRepository;
 
     @Autowired
-    private LibraryPathRepository libraryPathRepository;
+    private JooqLibraryPathRepository libraryPathRepository;
 
     @Autowired
     private JooqBookEntityRepository jooqBookEntityRepository;
@@ -47,7 +47,7 @@ public class FileMoveIntegrationTest extends RestApiIntegrationTest {
         LibraryPathEntity path2 = new LibraryPathEntity();
         path2.setPath(path2Dir.toAbsolutePath().toString());
         path2.setLibrary(library);
-        libraryPathRepository.save(path2);
+        path2.setId(libraryPathRepository.insertLibraryPath(library.getId(), path2.getPath()));
 
         Path pdf = Files.createTempFile("move-source-", ".pdf");
         FixtureFactory.writePdf(pdf);

@@ -7,10 +7,8 @@ import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
-import org.booklore.repository.LibraryPathRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
-import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -32,10 +30,8 @@ import org.booklore.service.watcher.PendingDeletionPool.FileSnapshot;
 
 class BookFilePersistenceServiceTest {
 
-    @Mock private EntityManager entityManager;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
-    @Mock private LibraryPathRepository libraryPathRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private NotificationService notificationService;
     @Mock private BookMapper bookMapper;
@@ -51,7 +47,7 @@ class BookFilePersistenceServiceTest {
     @BeforeEach
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
-        service = new BookFilePersistenceService(entityManager, jooqBookEntityRepository, jooqBookRepository, libraryPathRepository, jooqLibraryPathRepository, notificationService, bookMapper);
+        service = new BookFilePersistenceService(jooqBookEntityRepository, jooqBookRepository, jooqLibraryPathRepository, notificationService, bookMapper);
 
         fileUtilsMock = mockStatic(FileUtils.class);
         fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("sub");
@@ -68,7 +64,7 @@ class BookFilePersistenceServiceTest {
         // paths are read via jOOQ now, not off the LAZY entity collection
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
                 .thenReturn(List.of(new LibraryPathRow(1L, "/library")));
-        when(libraryPathRepository.findById(1L)).thenReturn(Optional.of(libraryPath));
+        when(jooqLibraryPathRepository.findById(1L)).thenReturn(libraryPath);
     }
 
     @AfterEach
@@ -146,7 +142,7 @@ class BookFilePersistenceServiceTest {
             deeperPath.setPath("/library/sub");
             when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(
                     List.of(new LibraryPathRow(1L, "/library"), new LibraryPathRow(2L, "/library/sub")));
-            when(libraryPathRepository.findById(2L)).thenReturn(Optional.of(deeperPath));
+            when(jooqLibraryPathRepository.findById(2L)).thenReturn(deeperPath);
 
             LibraryPathEntity result = service.getLibraryPathEntityForFile(library, "/library/sub/test.epub");
 
@@ -163,7 +159,6 @@ class BookFilePersistenceServiceTest {
             BookFileEntity bookFile = buildBookFile(100L, book, "test.epub", "hash123");
             book.setBookFiles(new ArrayList<>(List.of(bookFile)));
 
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("newsub");
 
             service.updatePathIfChanged(book, library, Path.of("/library/newsub/test.epub"), "hash123");
@@ -180,7 +175,6 @@ class BookFilePersistenceServiceTest {
             BookFileEntity bookFile = buildBookFile(100L, book, "old.epub", "hash123");
             book.setBookFiles(new ArrayList<>(List.of(bookFile)));
 
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
 
             service.updatePathIfChanged(book, library, Path.of("/library/sub/new.epub"), "hash123");
 
@@ -197,7 +191,6 @@ class BookFilePersistenceServiceTest {
             BookFileEntity bookFile = buildBookFile(100L, book, "test.epub", "hash123");
             book.setBookFiles(new ArrayList<>(List.of(bookFile)));
 
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
 
             service.updatePathIfChanged(book, library, Path.of("/library/sub/test.epub"), "hash123");
 
@@ -215,7 +208,6 @@ class BookFilePersistenceServiceTest {
             bookFile.setFileSubPath("sub");
             book.setBookFiles(new ArrayList<>(List.of(bookFile)));
 
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
 
             service.updatePathIfChanged(book, library, Path.of("/library/sub/test.epub"), "hash123");
 
@@ -229,7 +221,6 @@ class BookFilePersistenceServiceTest {
             BookFileEntity secondaryFile = buildBookFile(101L, book, "secondary.pdf", "hash123");
             book.setBookFiles(new ArrayList<>(List.of(primaryFile, secondaryFile)));
 
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("newsub");
 
             service.updatePathIfChanged(book, library, Path.of("/library/newsub/secondary.pdf"), "hash123");
@@ -248,7 +239,6 @@ class BookFilePersistenceServiceTest {
             BookFileEntity bookFile = buildBookFile(100L, book, "test.epub", "hash123");
             book.setBookFiles(new ArrayList<>(List.of(bookFile)));
 
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("newsub");
 
             service.updatePathIfChanged(book, library, Path.of("/library/newsub/test.epub"), "hash123");
@@ -348,7 +338,6 @@ class BookFilePersistenceServiceTest {
 
             when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
             when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(bookFile);
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("newsub");
 
             Map<Path, String> fileHashes = Map.of(Path.of("/library/newsub/new.epub"), "filehash1");
@@ -391,7 +380,6 @@ class BookFilePersistenceServiceTest {
             when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
             when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(file1);
             when(jooqBookEntityRepository.findBookFileById(101L)).thenReturn(file2);
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(eq("/library"), eq(Path.of("/new/a.epub")))).thenReturn("newsub1");
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(eq("/library"), eq(Path.of("/new/b.epub")))).thenReturn("newsub2");
 
@@ -421,7 +409,6 @@ class BookFilePersistenceServiceTest {
 
             when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
             when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(bookFile);
-            when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
 
             Map<Path, String> fileHashes = Map.of(Path.of("/new/other.epub"), "differenthash");
 

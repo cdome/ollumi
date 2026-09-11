@@ -9,7 +9,7 @@ import org.booklore.model.dto.response.DetachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -37,7 +37,7 @@ class BookFileDetachmentServiceTest {
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
-    @Mock private LibraryPathRepository libraryPathRepository;
+    @Mock private JooqLibraryPathRepository libraryPathRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;

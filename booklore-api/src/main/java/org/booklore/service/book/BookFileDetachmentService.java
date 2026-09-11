@@ -42,7 +42,7 @@ public class BookFileDetachmentService {
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
-    private final org.booklore.repository.LibraryPathRepository libraryPathRepository;
+    private final org.booklore.repository.jooq.JooqLibraryPathRepository libraryPathRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final AuthenticationService authenticationService;

@@ -13,7 +13,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -43,7 +42,6 @@ public class FileMoveService {
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryRepository libraryRepository;
-    private final LibraryPathRepository libraryPathRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final FileMoveHelper fileMoveHelper;
     private final MonitoringRegistrationService monitoringRegistrationService;
@@ -117,7 +115,7 @@ public class FileMoveService {
                 return;
             }
             LibraryEntity targetLibrary = optionalLibrary.get();
-            List<LibraryPathEntity> targetLibraryPaths = libraryPathRepository.findByLibraryId(targetLibrary.getId());
+            List<LibraryPathEntity> targetLibraryPaths = jooqLibraryPathRepository.findByLibraryId(targetLibrary.getId());
 
             Optional<LibraryPathEntity> optionalLibraryPathEntity = targetLibraryPaths.stream()
                     .filter(libraryPath -> Objects.equals(libraryPath.getId(), targetLibraryPathId))

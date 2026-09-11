@@ -8,7 +8,7 @@ import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.AuthorRow;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.repository.jooq.JooqShelfRepository;
@@ -32,7 +32,7 @@ import java.util.UUID;
 public class TestDataFactory {
 
     private final LibraryRepository libraryRepository;
-    private final LibraryPathRepository libraryPathRepository;
+    private final JooqLibraryPathRepository libraryPathRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
@@ -45,7 +45,7 @@ public class TestDataFactory {
     private final PasswordEncoder passwordEncoder;
 
     public TestDataFactory(LibraryRepository libraryRepository,
-                           LibraryPathRepository libraryPathRepository,
+                           JooqLibraryPathRepository libraryPathRepository,
                            JooqBookRepository jooqBookRepository,
                            JooqBookMetadataRepository jooqBookMetadataRepository,
                            JooqBookEntityRepository jooqBookEntityRepository,
@@ -84,12 +84,13 @@ public class TestDataFactory {
         LibraryPathEntity path = new LibraryPathEntity();
         path.setPath(rootDir.toAbsolutePath().toString());
         path.setLibrary(library);
-        libraryPathRepository.save(path);
+        long pathId = libraryPathRepository.insertLibraryPath(library.getId(), path.getPath());
+        path.setId(pathId);
 
         return library;
     }
 
-    /** The first (and typically only) configured path of [library], loaded fresh via the JPA repository. */
+    /** The first (and typically only) configured path of [library], loaded fresh via jOOQ. */
     public LibraryPathEntity getFirstLibraryPath(LibraryEntity library) {
         List<LibraryPathEntity> paths = libraryPathRepository.findByLibraryId(library.getId());
         if (paths.isEmpty()) {
