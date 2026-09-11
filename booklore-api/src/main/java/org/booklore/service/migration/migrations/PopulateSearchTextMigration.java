@@ -2,7 +2,6 @@ package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
@@ -13,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +21,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PopulateSearchTextMigration implements Migration {
 
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
@@ -49,7 +48,7 @@ public class PopulateSearchTextMigration implements Migration {
             if (bookBatch.isEmpty()) break;
 
             List<Long> bookIds = bookBatch.stream().map(BookEntity::getId).toList();
-            List<BookEntity> books = bookRepository.findAllById(bookIds);
+            List<BookEntity> books = jooqBookEntityRepository.findAllByIdsIncludingDeleted(new LinkedHashSet<>(bookIds));
             Map<Long, List<String>> authorNamesByBookId = relationsRepository.findAuthorNamesByBookIds(bookIds);
 
             for (BookEntity book : books) {

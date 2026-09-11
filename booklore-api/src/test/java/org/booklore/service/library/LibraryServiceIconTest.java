@@ -19,7 +19,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.booklore.mapper.BookMapper;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -50,8 +49,6 @@ class LibraryServiceIconTest {
     private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     private JooqUserLibraryRepository jooqUserLibraryRepository;
-    @Mock
-    private BookRepository bookRepository;
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock

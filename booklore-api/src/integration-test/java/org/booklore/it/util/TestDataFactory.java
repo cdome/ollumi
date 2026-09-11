@@ -4,8 +4,10 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.*;
 import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.AuthorRow;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
@@ -31,7 +33,9 @@ public class TestDataFactory {
 
     private final LibraryRepository libraryRepository;
     private final LibraryPathRepository libraryPathRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
@@ -42,7 +46,9 @@ public class TestDataFactory {
 
     public TestDataFactory(LibraryRepository libraryRepository,
                            LibraryPathRepository libraryPathRepository,
-                           BookRepository bookRepository,
+                           JooqBookRepository jooqBookRepository,
+                           JooqBookMetadataRepository jooqBookMetadataRepository,
+                           JooqBookEntityRepository jooqBookEntityRepository,
                            ShelfRepository shelfRepository,
                            JooqShelfRepository jooqShelfRepository,
                            JooqUserLibraryRepository jooqUserLibraryRepository,
@@ -52,7 +58,9 @@ public class TestDataFactory {
                            PasswordEncoder passwordEncoder) {
         this.libraryRepository = libraryRepository;
         this.libraryPathRepository = libraryPathRepository;
-        this.bookRepository = bookRepository;
+        this.jooqBookRepository = jooqBookRepository;
+        this.jooqBookMetadataRepository = jooqBookMetadataRepository;
+        this.jooqBookEntityRepository = jooqBookEntityRepository;
         this.shelfRepository = shelfRepository;
         this.jooqShelfRepository = jooqShelfRepository;
         this.jooqUserLibraryRepository = jooqUserLibraryRepository;
@@ -110,7 +118,36 @@ public class TestDataFactory {
                 .build();
         book.setMetadata(metadata);
 
-        return bookRepository.save(book);
+        return insertBook(book);
+    }
+
+    /** Persists an in-memory book graph (book + metadata + bookFiles, built via builders the same way
+     * the JPA cascade used to accept) via jOOQ inserts, returning the fully-hydrated persisted entity -
+     * a stand-in for the old bookRepository.save(book) cascade. */
+    public BookEntity insertBook(BookEntity book) {
+        Long libraryId = book.getLibrary().getId();
+        Long libraryPathId = book.getLibraryPath() != null ? book.getLibraryPath().getId() : null;
+        long bookId = jooqBookRepository.insertBook(libraryId, libraryPathId, book.getAddedOn());
+        if (book.getScannedOn() != null) {
+            jooqBookRepository.updateScannedOn(bookId, book.getScannedOn());
+        }
+
+        if (book.getMetadata() != null) {
+            jooqBookMetadataRepository.insertRow(bookId, book.getMetadata());
+        }
+
+        if (book.getBookFiles() != null) {
+            for (BookFileEntity file : book.getBookFiles()) {
+                Long fileId = jooqBookRepository.insertBookFile(
+                        bookId, file.getFileName(), file.getFileSubPath(), file.isBookFormat(),
+                        file.isFolderBased(), file.getBookType(), file.getFileSizeKb(),
+                        file.getInitialHash(), file.getCurrentHash(), file.getDescription(), Instant.now());
+                file.setId(fileId);
+                jooqBookRepository.updateBookFileFullRow(file);
+            }
+        }
+
+        return jooqBookEntityRepository.findByIdFull(bookId);
     }
 
     public void assignLibraryToUser(BookLoreUserEntity user, LibraryEntity library) {
@@ -159,7 +196,7 @@ public class TestDataFactory {
                 .build();
         book.setBookFiles(List.of(bookFile));
 
-        return bookRepository.save(book);
+        return insertBook(book);
     }
 
     private String primaryExtension(BookFileType bookType) {

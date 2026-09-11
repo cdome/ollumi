@@ -6,7 +6,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
@@ -29,7 +28,6 @@ import java.util.stream.Stream;
 @Slf4j
 public class BookDeletionService {
 
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final FileService fileService;
@@ -52,7 +50,7 @@ public class BookDeletionService {
             return;
         }
 
-        List<BookEntity> books = bookRepository.findAllById(deletedBookIds);
+        List<BookEntity> books = jooqBookEntityRepository.findAllByIdsIncludingDeleted(new LinkedHashSet<>(deletedBookIds));
         List<Long> booksToDelete = new ArrayList<>();
 
         for (BookEntity book : books) {

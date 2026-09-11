@@ -271,6 +271,22 @@ class JooqBookEntityRepository(private val dsl: DSLContext, private val objectMa
         return books.values.toList()
     }
 
+    /** Single-id convenience wrapper, for consumers (PendingDeletionPool.recoverBook,
+     * BookFilePersistenceService.recoverFolderBook) that need a possibly-soft-deleted book back with
+     * the full graph - both feed the result into bookMapper.toBookWithDescription. */
+    fun findByIdIncludingDeleted(id: Long): BookEntity? = findAllByIdsIncludingDeleted(setOf(id)).firstOrNull()
+
+    // ========================================================================
+    // Replacing BookRepository's inherited JpaRepository methods (existsById/count) - the interface
+    // itself never had any custom methods, just these three inherited CRUD shapes still called directly.
+    // ========================================================================
+
+    fun existsById(id: Long): Boolean = dsl.fetchExists(BOOK, BOOK.ID.eq(id))
+
+    /** Mirrors bookRepository.count(): unfiltered row count, deleted books included (matches plain
+     * JpaRepository.count() semantics - TelemetryService reports this as a raw total). */
+    fun countAllBooks(): Long = dsl.fetchCount(BOOK).toLong()
+
     // ========================================================================
     // BookFileEntity finders - replacing BookFileRepository/BookAdditionalFileRepository (both were
     // JpaRepository<BookFileEntity, Long> over the same table; consolidated here since consumers

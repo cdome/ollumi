@@ -7,7 +7,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
@@ -35,7 +34,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AbstractFileProcessorTest {
 
-    @Mock private BookRepository bookRepository;
     @Mock private BookCreatorService bookCreatorService;
     @Mock private BookMapper bookMapper;
     @Mock private FileService fileService;
@@ -50,7 +48,7 @@ class AbstractFileProcessorTest {
     @BeforeEach
     void setUp() {
         processor = new TestableFileProcessor(
-                bookRepository, bookCreatorService,
+                bookCreatorService,
                 bookMapper, fileService, metadataMatchService, sidecarMetadataWriter
         );
     }
@@ -190,13 +188,12 @@ class AbstractFileProcessorTest {
      */
     static class TestableFileProcessor extends AbstractFileProcessor {
 
-        TestableFileProcessor(BookRepository bookRepository,
-                              BookCreatorService bookCreatorService,
+        TestableFileProcessor(BookCreatorService bookCreatorService,
                               BookMapper bookMapper,
                               FileService fileService,
                               MetadataMatchService metadataMatchService,
                               SidecarMetadataWriter sidecarMetadataWriter) {
-            super(bookRepository, bookCreatorService,
+            super(bookCreatorService,
                     bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         }
 

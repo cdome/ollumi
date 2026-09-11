@@ -17,7 +17,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.Lock;
 import org.booklore.model.enums.MergeMetadataType;
-import org.booklore.repository.BookRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -37,9 +36,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
-
-    @Autowired
-    private BookRepository bookRepository;
 
     private LibraryEntity createLibrary() throws Exception {
         Path tempDir = Files.createTempDirectory("metadata-it-");
@@ -76,7 +72,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
         Path libraryRoot = Path.of(data.getFirstLibraryPath(library).getPath());
         Files.createFile(libraryRoot.resolve(fileName));
 
-        return bookRepository.save(book);
+        return data.insertBook(book);
     }
 
     @Test

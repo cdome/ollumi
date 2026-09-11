@@ -1,7 +1,7 @@
 package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.migration.Migration;
@@ -18,7 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PopulateFileHashesMigration implements Migration {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
 
     @Override
@@ -35,7 +35,9 @@ public class PopulateFileHashesMigration implements Migration {
     public void execute() {
         log.info("Starting migration: {}", getKey());
 
-        List<BookEntity> books = bookRepository.findAll();
+        // Deliberately excludes soft-deleted books (unlike the old unfiltered findAll()) - backfilling
+        // hash values for a book pending permanent deletion has no benefit.
+        List<BookEntity> books = jooqBookEntityRepository.findAllFullBooks();
         int updated = 0;
 
         for (BookEntity book : books) {

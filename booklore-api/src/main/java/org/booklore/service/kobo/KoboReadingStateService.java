@@ -11,6 +11,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -52,7 +53,7 @@ public class KoboReadingStateService {
     private final JooqKoboReadingStateRepository repository;
     private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final KoboSettingsService koboSettingsService;
@@ -194,13 +195,12 @@ public class KoboReadingStateService {
         try {
             Long bookId = Long.parseLong(readingState.getEntitlementId());
 
-            Optional<BookEntity> bookOpt = bookRepository.findById(bookId);
-            if (bookOpt.isEmpty()) {
+            BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+            if (book == null) {
                 log.warn("Book not found for entitlement ID: {}", readingState.getEntitlementId());
                 return;
             }
 
-            BookEntity book = bookOpt.get();
             Optional<BookLoreUserEntity> userOpt = userRepository.findById(userId);
             if (userOpt.isEmpty()) {
                 log.warn("User not found: {}", userId);

@@ -11,7 +11,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.FileProcessStatus;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -58,9 +57,6 @@ class FileAsBookProcessorTest {
     private KoboAutoShelfService koboAutoShelfService;
 
     @Mock
-    private BookRepository bookRepository;
-
-    @Mock
     private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
@@ -97,7 +93,6 @@ class FileAsBookProcessorTest {
                 bookEventBroadcaster,
                 processorRegistry,
                 koboAutoShelfService,
-                bookRepository,
                 jooqBookEntityRepository,
                 jooqBookRepository,
                 libraryRepository,

@@ -8,7 +8,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.LibraryPathRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -36,7 +35,6 @@ import static org.booklore.model.enums.PermissionType.MANAGE_LIBRARY;
 public class BookFilePersistenceService {
 
     private final EntityManager entityManager;
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryPathRepository libraryPathRepository;
@@ -141,7 +139,7 @@ public class BookFilePersistenceService {
     @Transactional
     public void recoverFolderBook(PendingDeletionPool.BookSnapshot bookSnap, LibraryPathEntity newLibraryPath,
                                    Path folderPath, Map<Path, String> fileHashes) {
-        BookEntity book = bookRepository.findById(bookSnap.bookId()).orElse(null);
+        BookEntity book = jooqBookEntityRepository.findByIdIncludingDeleted(bookSnap.bookId());
         if (book == null) return;
 
         book.setLibraryPath(entityManager.merge(newLibraryPath));

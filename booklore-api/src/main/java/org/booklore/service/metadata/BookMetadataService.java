@@ -17,7 +17,6 @@ import org.booklore.model.dto.request.ToggleAllLockRequest;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.*;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqComicMetadataRepository;
@@ -52,7 +51,6 @@ import java.util.stream.Stream;
 @AllArgsConstructor
 public class BookMetadataService {
 
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookMapper bookMapper;
     private final BookMetadataMapper bookMetadataMapper;
@@ -212,7 +210,10 @@ public class BookMetadataService {
 
     public BookMetadata getFileMetadata(long bookId) {
         log.info("Extracting file metadata for book ID: {}", bookId);
-        BookEntity bookEntity = bookRepository.findById(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         var primaryFile = bookEntity.getPrimaryBookFile();
         if (primaryFile == null) {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Book has no file to extract metadata from");

@@ -24,7 +24,6 @@ import org.booklore.model.enums.NewPdfPageFitMode;
 import org.booklore.model.enums.NewPdfPageScrollMode;
 import org.booklore.model.enums.NewPdfPageSpread;
 import org.booklore.model.enums.NewPdfPageViewMode;
-import org.booklore.repository.BookRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -44,9 +43,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class BookIntegrationTest extends RestApiIntegrationTest {
-
-    @Autowired
-    private BookRepository bookRepository;
 
     private LibraryEntity createLibrary() throws Exception {
         Path tempDir = Files.createTempDirectory("book-it-");
@@ -83,7 +79,7 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         Path libraryRoot = Path.of(data.getFirstLibraryPath(library).getPath());
         Files.createFile(libraryRoot.resolve(fileName));
 
-        return bookRepository.save(book);
+        return data.insertBook(book);
     }
 
     private Integer createShelf(String accessToken, String name) {

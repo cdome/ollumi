@@ -9,7 +9,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -45,7 +44,6 @@ public class FileAsBookProcessor {
     private final BookEventBroadcaster bookEventBroadcaster;
     private final BookFileProcessorRegistry processorRegistry;
     private final KoboAutoShelfService koboAutoShelfService;
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final LibraryRepository libraryRepository;
@@ -116,7 +114,11 @@ public class FileAsBookProcessor {
                 .toList();
 
         if (!additionalFiles.isEmpty()) {
-            BookEntity bookEntity = bookRepository.getReferenceById(result.getBook().getId());
+            BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(result.getBook().getId());
+            if (bookEntity == null) {
+                log.warn("Book id={} not found right after processing; skipping additional files", result.getBook().getId());
+                return;
+            }
             for (LibraryFile additionalFile : additionalFiles) {
                 createAdditionalBookFile(bookEntity, additionalFile);
             }

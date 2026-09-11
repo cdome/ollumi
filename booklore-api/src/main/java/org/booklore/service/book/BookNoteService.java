@@ -5,7 +5,7 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookNote;
 import org.booklore.model.dto.CreateBookNoteRequest;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -20,7 +20,7 @@ import java.util.List;
 public class BookNoteService {
 
     private final JooqBookNoteRepository bookNoteRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
 
@@ -34,7 +34,7 @@ public class BookNoteService {
     public BookNote createOrUpdateNote(CreateBookNoteRequest request) {
         BookLoreUser currentUser = authenticationService.getAuthenticatedUser();
 
-        if (!bookRepository.existsById(request.getBookId())) {
+        if (!jooqBookEntityRepository.existsById(request.getBookId())) {
             throw ApiError.BOOK_NOT_FOUND.createException(request.getBookId());
         }
         if (!userRepository.existsById(currentUser.getId())) {

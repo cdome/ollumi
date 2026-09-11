@@ -39,7 +39,6 @@ public class TelemetryService {
     private final VersionService versionService;
     private final LibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
-    private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMarkRepository bookMarkRepository;
     private final JooqBookNoteRepository bookNoteRepository;
@@ -76,7 +75,7 @@ public class TelemetryService {
         AppSettings settings = appSettingService.getAppSettings();
 
         BookloreTelemetry.BookStatistics bookStatistics = BookloreTelemetry.BookStatistics.builder()
-                .totalBooks(bookRepository.count())
+                .totalBooks(jooqBookEntityRepository.countAllBooks())
                 .bookCountByType(getBookFileTypeCounts())
                 .build();
 
@@ -95,7 +94,7 @@ public class TelemetryService {
                 .installationDate(installation.getDate() != null ? installation.getDate().toString() : null)
                 .appVersion(versionService.appVersion)
                 .totalLibraries((int) libraryRepository.count())
-                .totalBooks(bookRepository.count())
+                .totalBooks(jooqBookEntityRepository.countAllBooks())
                 .totalAdditionalBookFiles(jooqBookEntityRepository.countAllBookFiles())
                 .totalAuthors(relationsRepository.countAllAuthors())
                 .totalBookmarks(bookMarkRepository.count())

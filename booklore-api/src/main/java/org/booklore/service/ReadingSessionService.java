@@ -7,12 +7,11 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.ReadingSessionRequest;
 import org.booklore.model.dto.response.*;
-import org.booklore.model.entity.BookEntity;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.CompletionRaceSession;
@@ -42,7 +41,7 @@ public class ReadingSessionService {
     private final AuthenticationService authenticationService;
     private final JooqReadingSessionRepository jooqReadingSessionRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
@@ -57,11 +56,13 @@ public class ReadingSessionService {
         Long userId = authenticatedUser.getId();
 
         userRepository.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
-        BookEntity book = bookRepository.findById(request.getBookId()).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(request.getBookId()));
+        if (!jooqBookEntityRepository.existsById(request.getBookId())) {
+            throw ApiError.BOOK_NOT_FOUND.createException(request.getBookId());
+        }
 
         Long sessionId = jooqReadingSessionRepository.insert(
                 userId,
-                book.getId(),
+                request.getBookId(),
                 request.getBookType(),
                 request.getStartTime(),
                 request.getEndTime(),
@@ -243,7 +244,7 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        if (!bookRepository.existsById(bookId)) {
+        if (!jooqBookEntityRepository.existsById(bookId)) {
             throw ApiError.BOOK_NOT_FOUND.createException(bookId);
         }
 

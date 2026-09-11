@@ -12,7 +12,6 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -39,8 +38,6 @@ class KoreaderServiceTest {
 
     @Mock
     JooqUserBookProgressRepository progressRepo;
-    @Mock
-    BookRepository bookRepo;
     @Mock
     org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock

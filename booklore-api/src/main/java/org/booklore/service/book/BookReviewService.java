@@ -11,7 +11,6 @@ import org.booklore.model.dto.BookReview;
 import org.booklore.model.dto.settings.MetadataPublicReviewsSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReviewRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -32,7 +31,6 @@ public class BookReviewService {
 
     private final JooqBookReviewRepository bookReviewRepository;
     private final BookReviewUpdateService bookReviewUpdateService;
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final AppSettingService appSettingService;
     private final MetadataRefreshService metadataRefreshService;
@@ -119,7 +117,7 @@ public class BookReviewService {
 
     @Transactional
     public void deleteAllByBookId(Long bookId) {
-        if (!bookRepository.existsById(bookId)) {
+        if (!jooqBookEntityRepository.existsById(bookId)) {
             throw ApiError.BOOK_NOT_FOUND.createException(bookId);
         }
         bookReviewRepository.deleteByBookId(bookId);

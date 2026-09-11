@@ -7,8 +7,8 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookMark;
 import org.booklore.model.dto.CreateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.service.book.BookMarkService;
 import jakarta.persistence.EntityNotFoundException;
@@ -31,7 +31,7 @@ class BookMarkServiceTest {
     @Mock
     private JooqBookMarkRepository bookMarkRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -79,7 +79,7 @@ class BookMarkServiceTest {
         when(bookmarkProperties.getDefaultPriority()).thenReturn(3);
         when(bookMarkRepository.existsByCfiAndBookIdAndUserId(eq("new-cfi"), eq(bookId), eq(userId), isNull())).thenReturn(false);
         when(userRepository.existsById(userId)).thenReturn(true);
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(bookMarkRepository.insert(bookId, userId, "new-cfi", null, null, "New Bookmark", 3)).thenReturn(bookmarkDto);
 
         BookMark result = bookMarkService.createBookmark(request);
@@ -114,7 +114,7 @@ class BookMarkServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(userDto);
         when(bookMarkRepository.existsByCfiAndBookIdAndUserId(eq("new-cfi"), eq(bookId), eq(userId), isNull())).thenReturn(false);
-        when(bookRepository.existsById(bookId)).thenReturn(false);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(false);
 
         assertThrows(EntityNotFoundException.class, () -> bookMarkService.createBookmark(request));
         verify(bookMarkRepository, never()).insert(anyLong(), anyLong(), any(), any(), any(), any(), any());

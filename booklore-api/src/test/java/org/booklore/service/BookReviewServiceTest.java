@@ -10,7 +10,6 @@ import org.booklore.model.dto.settings.MetadataPublicReviewsSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReviewRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -37,8 +36,6 @@ class BookReviewServiceTest {
     @Mock
     private BookReviewUpdateService bookReviewUpdateService;
     @Mock
-    private BookRepository bookRepository;
-    @Mock
     private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private AppSettingService appSettingService;
@@ -54,7 +51,6 @@ class BookReviewServiceTest {
         service = new BookReviewService(
             bookReviewRepository,
             bookReviewUpdateService,
-            bookRepository,
             jooqBookEntityRepository,
             appSettingService,
             metadataRefreshService,

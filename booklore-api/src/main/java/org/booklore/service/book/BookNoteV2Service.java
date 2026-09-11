@@ -5,7 +5,7 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.BookNoteV2;
 import org.booklore.model.dto.CreateBookNoteV2Request;
 import org.booklore.model.dto.UpdateBookNoteV2Request;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import jakarta.persistence.EntityNotFoundException;
@@ -24,7 +24,7 @@ import java.util.Optional;
 public class BookNoteV2Service {
 
     private final JooqBookNoteV2Repository bookNoteV2Repository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
 
@@ -44,7 +44,7 @@ public class BookNoteV2Service {
         Long userId = getCurrentUserId();
         validateNoDuplicateNote(request.getCfi(), request.getBookId(), userId);
 
-        if (!bookRepository.existsById(request.getBookId())) {
+        if (!jooqBookEntityRepository.existsById(request.getBookId())) {
             throw new EntityNotFoundException("Book not found: " + request.getBookId());
         }
         if (!userRepository.existsById(userId)) {

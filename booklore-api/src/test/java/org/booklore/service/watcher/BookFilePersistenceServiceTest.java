@@ -8,7 +8,6 @@ import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.LibraryPathRepository;
-import org.booklore.repository.BookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
 import jakarta.persistence.EntityManager;
@@ -34,7 +33,6 @@ import org.booklore.service.watcher.PendingDeletionPool.FileSnapshot;
 class BookFilePersistenceServiceTest {
 
     @Mock private EntityManager entityManager;
-    @Mock private BookRepository bookRepository;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private LibraryPathRepository libraryPathRepository;
@@ -53,7 +51,7 @@ class BookFilePersistenceServiceTest {
     @BeforeEach
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
-        service = new BookFilePersistenceService(entityManager, bookRepository, jooqBookEntityRepository, jooqBookRepository, libraryPathRepository, jooqLibraryPathRepository, notificationService, bookMapper);
+        service = new BookFilePersistenceService(entityManager, jooqBookEntityRepository, jooqBookRepository, libraryPathRepository, jooqLibraryPathRepository, notificationService, bookMapper);
 
         fileUtilsMock = mockStatic(FileUtils.class);
         fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("sub");
@@ -348,7 +346,7 @@ class BookFilePersistenceServiceTest {
             var fileSnap = new FileSnapshot(100L, "old.epub", "sub", "filehash1", false, BookFileType.EPUB);
             var bookSnap = new BookSnapshot(10L, 1L, "sub", List.of(fileSnap));
 
-            when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
             when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(bookFile);
             when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
             fileUtilsMock.when(() -> FileUtils.getRelativeSubPath(anyString(), any(Path.class))).thenReturn("newsub");
@@ -371,7 +369,7 @@ class BookFilePersistenceServiceTest {
         @Test
         void bookNotFound_doesNothing() {
             var bookSnap = new BookSnapshot(999L, 1L, "sub", List.of());
-            when(bookRepository.findById(999L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdIncludingDeleted(999L)).thenReturn(null);
 
             service.recoverFolderBook(bookSnap, libraryPath, Path.of("/library"), Map.of());
 
@@ -390,7 +388,7 @@ class BookFilePersistenceServiceTest {
             var snap2 = new FileSnapshot(101L, "b.epub", "sub", "hash2", false, BookFileType.EPUB);
             var bookSnap = new BookSnapshot(10L, 1L, "sub", List.of(snap1, snap2));
 
-            when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
             when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(file1);
             when(jooqBookEntityRepository.findBookFileById(101L)).thenReturn(file2);
             when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
@@ -421,7 +419,7 @@ class BookFilePersistenceServiceTest {
             var fileSnap = new FileSnapshot(100L, "old.epub", "sub", "nomatch", false, BookFileType.EPUB);
             var bookSnap = new BookSnapshot(10L, 1L, "sub", List.of(fileSnap));
 
-            when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
             when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(bookFile);
             when(entityManager.merge(any(LibraryPathEntity.class))).thenReturn(libraryPath);
 

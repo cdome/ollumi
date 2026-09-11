@@ -34,7 +34,6 @@ public class KoreaderService {
 
     private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final JooqKoreaderUserRepository koreaderUserRepository;

@@ -13,7 +13,6 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
 import org.booklore.service.metadata.extractor.PdfMetadataExtractor;
@@ -36,14 +35,13 @@ public class PdfProcessor extends AbstractFileProcessor implements BookFileProce
 
     private final PdfMetadataExtractor pdfMetadataExtractor;
 
-    public PdfProcessor(BookRepository bookRepository,
-                        BookCreatorService bookCreatorService,
+    public PdfProcessor(BookCreatorService bookCreatorService,
                         BookMapper bookMapper,
                         FileService fileService,
                         MetadataMatchService metadataMatchService,
                         SidecarMetadataWriter sidecarMetadataWriter,
                         PdfMetadataExtractor pdfMetadataExtractor) {
-        super(bookRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
+        super(bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         this.pdfMetadataExtractor = pdfMetadataExtractor;
     }
 

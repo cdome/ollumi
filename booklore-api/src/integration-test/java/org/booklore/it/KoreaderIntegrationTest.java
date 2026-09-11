@@ -6,7 +6,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.util.Md5Util;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class KoreaderIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private BookRepository bookRepository;
+    private JooqBookRepository jooqBookRepository;
 
     private String koreaderUsername;
     private String koreaderPassword;
@@ -54,7 +54,7 @@ public class KoreaderIntegrationTest extends RestApiIntegrationTest {
         bookHash = UUID.randomUUID().toString();
         BookFileEntity primaryFile = book.getBookFiles().get(0);
         primaryFile.setCurrentHash(bookHash);
-        bookRepository.save(book);
+        jooqBookRepository.updateBookFileHash(primaryFile.getId(), bookHash);
 
         Files.deleteIfExists(epub);
     }

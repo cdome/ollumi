@@ -8,7 +8,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
@@ -40,7 +40,7 @@ class OpdsBookServiceTest {
 
     @Mock private JooqBookOpdsRepository jooqBookOpdsRepository;
     @Mock private JooqBookReadRepository jooqBookReadRepository;
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private UserRepository userRepository;
     @Mock private BookLoreUserTransformer bookLoreUserTransformer;
     @Mock private ShelfRepository shelfRepository;
@@ -525,7 +525,7 @@ class OpdsBookServiceTest {
 
         opdsBookService.validateBookContentAccess(99L, 1L);
 
-        verify(bookRepository, never()).findById(anyLong());
+        verify(jooqBookEntityRepository, never()).findByIdFull(anyLong());
         verify(contentRestrictionService, never()).applyRestrictions(anyList(), eq(1L));
     }
 
@@ -545,7 +545,7 @@ class OpdsBookServiceTest {
         LibraryEntity library = mock(LibraryEntity.class);
         when(library.getId()).thenReturn(99L);
         when(book.getLibrary()).thenReturn(library);
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() ->
                 opdsBookService.validateBookContentAccess(1L, 2L)
@@ -568,7 +568,7 @@ class OpdsBookServiceTest {
         LibraryEntity library = mock(LibraryEntity.class);
         when(library.getId()).thenReturn(5L);
         when(book.getLibrary()).thenReturn(library);
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         when(contentRestrictionService.applyRestrictions(eq(List.of(book)), eq(2L)))
                 .thenReturn(List.of());
@@ -594,7 +594,7 @@ class OpdsBookServiceTest {
         LibraryEntity library = mock(LibraryEntity.class);
         when(library.getId()).thenReturn(5L);
         when(book.getLibrary()).thenReturn(library);
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         when(contentRestrictionService.applyRestrictions(eq(List.of(book)), eq(2L)))
                 .thenReturn(List.of(book));

@@ -4,8 +4,8 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
 import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
@@ -31,7 +31,7 @@ public class KoboLibrarySnapshotService {
     private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final org.booklore.repository.jooq.JooqUserLibraryRepository jooqUserLibraryRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
     private final KoboCompatibilityService koboCompatibilityService;
     private final AuthenticationService authenticationService;
@@ -125,7 +125,7 @@ public class KoboLibrarySnapshotService {
         if (bookIds.isEmpty()) {
             return List.of();
         }
-        return bookRepository.findAllById(bookIds).stream()
+        return jooqBookEntityRepository.findAllByIdsIncludingDeleted(bookIds).stream()
                 .filter(book -> isBookOwnedByUser(book, userId))
                 .filter(koboCompatibilityService::isBookSupportedForKobo)
                 .map(book -> new KoboSnapshotBook(

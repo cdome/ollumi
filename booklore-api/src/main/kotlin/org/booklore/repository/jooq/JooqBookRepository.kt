@@ -197,6 +197,13 @@ class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: 
             .execute()
     }
 
+    fun updateScannedOn(bookId: Long, scannedOn: Instant) {
+        dsl.update(BOOK)
+            .set(BOOK.SCANNED_ON, LocalDateTime.ofInstant(scannedOn, ZoneOffset.UTC))
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
     fun markDeleted(bookIds: Collection<Long>, deletedAt: Instant) {
         if (bookIds.isEmpty()) return
         dsl.update(BOOK)

@@ -95,6 +95,7 @@ class BookFileDetachmentServiceTest {
                 .isBookFormat(isBookFormat)
                 .bookType(type)
                 .build();
+        book.getBookFiles().add(file);
         return file;
     }
 

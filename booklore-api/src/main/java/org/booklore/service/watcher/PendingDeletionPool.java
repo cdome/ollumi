@@ -8,7 +8,6 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
@@ -26,7 +25,6 @@ import java.util.concurrent.ScheduledFuture;
 @AllArgsConstructor
 public class PendingDeletionPool {
 
-    private final BookRepository bookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final NotificationService notificationService;
@@ -191,9 +189,8 @@ public class PendingDeletionPool {
         }
 
         for (BookSnapshot bookSnap : pending.affectedBooks().values()) {
-            Optional<BookEntity> bookOpt = bookRepository.findById(bookSnap.bookId());
-            if (bookOpt.isEmpty()) continue;
-            BookEntity book = bookOpt.get();
+            BookEntity book = jooqBookEntityRepository.findByIdIncludingDeleted(bookSnap.bookId());
+            if (book == null) continue;
 
             long remainingFiles = jooqBookEntityRepository.countBookFilesByBookId(book.getId());
             if (remainingFiles <= 1) {
@@ -228,9 +225,8 @@ public class PendingDeletionPool {
         }
 
         for (BookSnapshot bookSnap : pending.affectedBooks().values()) {
-            Optional<BookEntity> bookOpt = bookRepository.findById(bookSnap.bookId());
-            if (bookOpt.isEmpty()) continue;
-            BookEntity book = bookOpt.get();
+            BookEntity book = jooqBookEntityRepository.findByIdIncludingDeleted(bookSnap.bookId());
+            if (book == null) continue;
             Instant now = Instant.now();
             book.setDeleted(true);
             book.setDeletedAt(now);
@@ -247,8 +243,10 @@ public class PendingDeletionPool {
 
     @Transactional
     public void recoverBook(MatchResult match, org.booklore.model.entity.LibraryPathEntity newLibraryPath, String newFileSubPath, String newFileName, String hash) {
-        BookEntity book = bookRepository.findById(match.book().bookId())
-                .orElseThrow(() -> new IllegalStateException("Book not found: " + match.book().bookId()));
+        BookEntity book = jooqBookEntityRepository.findByIdIncludingDeleted(match.book().bookId());
+        if (book == null) {
+            throw new IllegalStateException("Book not found: " + match.book().bookId());
+        }
 
         BookFileEntity bookFile = jooqBookEntityRepository.findBookFileById(match.file().bookFileId());
         if (bookFile == null) {

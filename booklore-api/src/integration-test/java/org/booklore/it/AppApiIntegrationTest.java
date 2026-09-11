@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class AppApiIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private BookRepository bookRepository;
+    private org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
 
     @Autowired
     private JooqBookMetadataRelationsRepository relationsRepository;
@@ -104,7 +104,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         Path libraryRoot = Path.of(data.getFirstLibraryPath(library).getPath());
         Files.createFile(libraryRoot.resolve(fileName));
 
-        return bookRepository.save(book);
+        return data.insertBook(book);
     }
 
     private String sanitize(String title) {
@@ -549,7 +549,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Series Book " + UUID.randomUUID());
         book.getMetadata().setSeriesName("App Series " + UUID.randomUUID());
-        bookRepository.save(book);
+        jooqBookMetadataRepository.updateFullRow(book.getMetadata());
 
         ResponseEntity<AppPageResponse<AppSeriesSummary>> response = rest.exchange(
                 baseUrl() + "/api/v1/app/series",
@@ -571,7 +571,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         String seriesName = "App Series Books " + UUID.randomUUID();
         BookEntity book = createPhantomBook(library, "Series Book One " + UUID.randomUUID());
         book.getMetadata().setSeriesName(seriesName);
-        bookRepository.save(book);
+        jooqBookMetadataRepository.updateFullRow(book.getMetadata());
 
         String url = UriComponentsBuilder.fromUriString(baseUrl() + "/api/v1/app/series/{seriesName}/books")
                 .buildAndExpand(Map.of("seriesName", seriesName))

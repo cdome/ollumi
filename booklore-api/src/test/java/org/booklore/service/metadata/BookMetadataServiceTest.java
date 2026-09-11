@@ -21,7 +21,6 @@ import org.booklore.model.entity.ComicMetadataEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.Lock;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.NotificationService;
@@ -54,7 +53,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookMetadataServiceTest {
 
-    @Mock private BookRepository bookRepository;
     @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookMapper bookMapper;
     @Mock private BookMetadataMapper bookMetadataMapper;
@@ -77,7 +75,7 @@ class BookMetadataServiceTest {
     void setUp() {
         parserMap = new HashMap<>();
         service = new BookMetadataService(
-                bookRepository, jooqBookEntityRepository, bookMapper, bookMetadataMapper, bookMetadataUpdater,
+                jooqBookEntityRepository, bookMapper, bookMetadataMapper, bookMetadataUpdater,
                 notificationService, jooqBookMetadataRepository, jooqComicMetadataRepository, bookQueryService,
                 auditService, parserMap, cbxMetadataExtractor, metadataExtractorFactory,
                 metadataClearFlagsMapper, transactionManager, appSettingService
@@ -490,7 +488,7 @@ class BookMetadataServiceTest {
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findById(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.getFileMetadata(1L))
                     .isInstanceOf(APIException.class);
@@ -499,7 +497,7 @@ class BookMetadataServiceTest {
         @Test
         void throwsWhenPrimaryFileIsNull() {
             BookEntity bookEntity = BookEntity.builder().id(1L).bookFiles(new ArrayList<>()).build();
-            when(bookRepository.findById(1L)).thenReturn(Optional.of(bookEntity));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
             assertThatThrownBy(() -> service.getFileMetadata(1L))
                     .isInstanceOf(APIException.class);

@@ -4,8 +4,8 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookNote;
 import org.booklore.model.dto.CreateBookNoteRequest;
-import org.booklore.repository.BookRepository;
 import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.service.book.BookNoteService;
 import jakarta.persistence.EntityNotFoundException;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.*;
 class BookNoteServiceTest {
 
     private JooqBookNoteRepository bookNoteRepository;
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     private UserRepository userRepository;
     private BookNoteService service;
 
@@ -32,10 +32,10 @@ class BookNoteServiceTest {
     @BeforeEach
     void setUp() {
         bookNoteRepository = mock(JooqBookNoteRepository.class);
-        bookRepository = mock(BookRepository.class);
+        jooqBookEntityRepository = mock(JooqBookEntityRepository.class);
         userRepository = mock(UserRepository.class);
         AuthenticationService authenticationService = mock(AuthenticationService.class);
-        service = new BookNoteService(bookNoteRepository, bookRepository, userRepository, authenticationService);
+        service = new BookNoteService(bookNoteRepository, jooqBookEntityRepository, userRepository, authenticationService);
 
         BookLoreUser user = new BookLoreUser();
         user.setId(userId);
@@ -63,7 +63,7 @@ class BookNoteServiceTest {
                 .build();
 
         BookNote dto = BookNote.builder().id(noteId).title("t").content("c").build();
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(true);
         when(bookNoteRepository.insert(bookId, userId, "t", "c")).thenReturn(dto);
 
@@ -84,7 +84,7 @@ class BookNoteServiceTest {
                 .build();
 
         BookNote dto = BookNote.builder().id(noteId).title("new title").content("new content").build();
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(true);
         when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(BookNote.builder().id(noteId).build());
         when(bookNoteRepository.update(noteId, userId, "new title", "new content")).thenReturn(dto);
@@ -105,7 +105,7 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        when(bookRepository.existsById(bookId)).thenReturn(false);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(false);
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> service.createOrUpdateNote(req));
 
@@ -123,7 +123,7 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(false);
 
         assertThrows(EntityNotFoundException.class, () -> service.createOrUpdateNote(req));
@@ -138,7 +138,7 @@ class BookNoteServiceTest {
                 .content("c")
                 .build();
 
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(true);
         when(bookNoteRepository.findByIdAndUserId(noteId, userId)).thenReturn(null);
 

@@ -9,7 +9,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
@@ -59,7 +59,7 @@ class KoboLibrarySnapshotServiceTest {
     private JooqUserLibraryRepository jooqUserLibraryRepository;
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
@@ -143,7 +143,7 @@ class KoboLibrarySnapshotServiceTest {
         when(shelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
                 .thenReturn(Optional.of(shelf));
         when(jooqShelfRepository.findBookIdsByShelfId(500L)).thenReturn(Set.of(101L, 202L));
-        when(bookRepository.findAllById(any())).thenReturn(List.of(ownersBook, otherUsersBook));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(any())).thenReturn(List.of(ownersBook, otherUsersBook));
 
         when(koboCompatibilityService.isBookSupportedForKobo(any())).thenReturn(true);
 
@@ -169,7 +169,7 @@ class KoboLibrarySnapshotServiceTest {
         when(shelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
                 .thenReturn(Optional.of(shelf));
         when(jooqShelfRepository.findBookIdsByShelfId(500L)).thenReturn(Set.of(101L));
-        when(bookRepository.findAllById(any())).thenReturn(List.of(ownersBook));
+        when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(any())).thenReturn(List.of(ownersBook));
 
         when(koboCompatibilityService.isBookSupportedForKobo(ownersBook)).thenReturn(false);
 

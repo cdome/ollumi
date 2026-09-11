@@ -12,7 +12,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.OpdsSortOrder;
 import org.booklore.repository.jooq.JooqBookReadRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
@@ -38,7 +38,7 @@ public class OpdsBookService {
 
     private final JooqBookOpdsRepository jooqBookOpdsRepository;
     private final JooqBookReadRepository jooqBookReadRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
     private final ShelfRepository shelfRepository;
@@ -425,8 +425,10 @@ public class OpdsBookService {
             return;
         }
 
-        BookEntity book = bookRepository.findById(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
         boolean hasLibraryAccess = user.getAssignedLibraries().stream()
