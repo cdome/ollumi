@@ -18,7 +18,6 @@ import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.kobo.KoboCompatibilityService;
@@ -78,9 +77,6 @@ class KoboEntitlementServiceTest {
 
     @Mock
     private AuthenticationService authenticationService;
-
-    @Mock
-    private ShelfRepository shelfRepository;
 
     @Mock
     private JooqShelfRepository jooqShelfRepository;
@@ -205,13 +201,13 @@ class KoboEntitlementServiceTest {
                 LocalDateTime.now(), LocalDateTime.now());
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L, 2L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(List.of(book1, book2));
         when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of(magicShelf));
         when(magicShelfBookService.getBookIdsByMagicShelfId(eq(user.getId()), eq(201L), anyInt()))
                 .thenReturn(List.of(2L));
@@ -245,12 +241,12 @@ class KoboEntitlementServiceTest {
         ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         List<KoboTagWrapper> tags = koboEntitlementService.generateTags();
@@ -269,13 +265,13 @@ class KoboEntitlementServiceTest {
         ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(2L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         List<KoboTagWrapper> tags = koboEntitlementService.generateTags();
@@ -298,14 +294,14 @@ class KoboEntitlementServiceTest {
         ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("My Favorites").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L, 2L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L, 2L))).thenReturn(List.of(supportedBook, unsupportedBook));
         when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L, 2L));
         when(koboCompatibilityService.isBookSupportedForKobo(supportedBook)).thenReturn(true);
         when(koboCompatibilityService.isBookSupportedForKobo(unsupportedBook)).thenReturn(false);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         List<KoboTagWrapper> tags = koboEntitlementService.generateTags();
@@ -326,13 +322,13 @@ class KoboEntitlementServiceTest {
         ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("Reading").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         List<KoboTagWrapper> tags = koboEntitlementService.generateTags();
@@ -354,12 +350,12 @@ class KoboEntitlementServiceTest {
                 201L, user.getId(), "Fantasy", "pi-book", null, "{}", false, createdAt, updatedAt);
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of(magicShelf));
         when(magicShelfBookService.getBookIdsByMagicShelfId(eq(user.getId()), eq(201L), anyInt()))
                 .thenReturn(List.of(1L));
@@ -379,12 +375,12 @@ class KoboEntitlementServiceTest {
         ShelfEntity koboShelf = ShelfEntity.builder().id(100L).name(ShelfType.KOBO.getName()).build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(book1));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         List<KoboTagWrapper> tags = koboEntitlementService.generateTags();
@@ -402,13 +398,13 @@ class KoboEntitlementServiceTest {
         ShelfEntity userShelf = ShelfEntity.builder().id(101L).name("Collection").build();
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(shelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
-                .thenReturn(Optional.of(koboShelf));
+        when(jooqShelfRepository.findByUserIdAndName(user.getId(), ShelfType.KOBO.getName()))
+                .thenReturn(koboShelf);
         when(jooqShelfRepository.findBookIdsByShelfId(100L)).thenReturn(Set.of(1L, 2L, 3L));
         when(bookQueryService.findAllWithMetadataByIds(Set.of(1L, 2L, 3L))).thenReturn(List.of(book1, book2, book3));
         when(jooqShelfRepository.findBookIdsByShelfId(101L)).thenReturn(Set.of(1L, 2L, 3L));
         when(koboCompatibilityService.isBookSupportedForKobo(any(BookEntity.class))).thenReturn(true);
-        when(shelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
+        when(jooqShelfRepository.findByUserId(user.getId())).thenReturn(List.of(koboShelf, userShelf));
         when(magicShelfRepository.findAllByUserId(user.getId())).thenReturn(List.of());
 
         List<KoboTagWrapper> tags = koboEntitlementService.generateTags();

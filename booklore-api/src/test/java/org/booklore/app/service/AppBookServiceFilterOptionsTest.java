@@ -8,7 +8,7 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
@@ -30,7 +30,6 @@ import org.springframework.data.domain.PageRequest;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,7 +45,7 @@ class AppBookServiceFilterOptionsTest {
     @Mock private JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     @Mock private JooqAppBookDetailRepository jooqAppBookDetailRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
-    @Mock private ShelfRepository shelfRepository;
+    @Mock private JooqShelfRepository shelfRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private MagicShelfBookService magicShelfBookService;
 
@@ -124,7 +123,7 @@ class AppBookServiceFilterOptionsTest {
         mockAdminUser();
         ShelfEntity shelf = ShelfEntity.builder().id(10L).isPublic(true)
                 .user(BookLoreUserEntity.builder().id(99L).build()).build();
-        when(shelfRepository.findById(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findById(10L)).thenReturn(shelf);
         mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(null, 10L, null);
@@ -137,7 +136,7 @@ class AppBookServiceFilterOptionsTest {
         mockAdminUser();
         ShelfEntity shelf = ShelfEntity.builder().id(10L).isPublic(false)
                 .user(BookLoreUserEntity.builder().id(userId).build()).build();
-        when(shelfRepository.findById(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findById(10L)).thenReturn(shelf);
         mockFacetQueries();
 
         AppFilterOptions result = service.getFilterOptions(null, 10L, null);
@@ -150,7 +149,7 @@ class AppBookServiceFilterOptionsTest {
         mockAdminUser();
         ShelfEntity shelf = ShelfEntity.builder().id(10L).isPublic(false)
                 .user(BookLoreUserEntity.builder().id(99L).build()).build();
-        when(shelfRepository.findById(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findById(10L)).thenReturn(shelf);
 
         assertThrows(APIException.class, () -> service.getFilterOptions(null, 10L, null));
     }
@@ -158,7 +157,7 @@ class AppBookServiceFilterOptionsTest {
     @Test
     void getFilterOptions_withShelfId_notFound_throwsException() {
         mockAdminUser();
-        when(shelfRepository.findById(10L)).thenReturn(Optional.empty());
+        when(shelfRepository.findById(10L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> service.getFilterOptions(null, 10L, null));
     }

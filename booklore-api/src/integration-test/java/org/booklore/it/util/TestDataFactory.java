@@ -13,7 +13,6 @@ import org.booklore.repository.LibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -36,7 +35,6 @@ public class TestDataFactory {
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final JooqAuthorRepository jooqAuthorRepository;
@@ -49,7 +47,6 @@ public class TestDataFactory {
                            JooqBookRepository jooqBookRepository,
                            JooqBookMetadataRepository jooqBookMetadataRepository,
                            JooqBookEntityRepository jooqBookEntityRepository,
-                           ShelfRepository shelfRepository,
                            JooqShelfRepository jooqShelfRepository,
                            JooqUserLibraryRepository jooqUserLibraryRepository,
                            JooqAuthorRepository jooqAuthorRepository,
@@ -61,7 +58,6 @@ public class TestDataFactory {
         this.jooqBookRepository = jooqBookRepository;
         this.jooqBookMetadataRepository = jooqBookMetadataRepository;
         this.jooqBookEntityRepository = jooqBookEntityRepository;
-        this.shelfRepository = shelfRepository;
         this.jooqShelfRepository = jooqShelfRepository;
         this.jooqUserLibraryRepository = jooqUserLibraryRepository;
         this.jooqAuthorRepository = jooqAuthorRepository;
@@ -218,7 +214,7 @@ public class TestDataFactory {
                 .name(name)
                 .isPublic(isPublic)
                 .build();
-        return shelfRepository.save(shelf);
+        return jooqShelfRepository.save(shelf);
     }
 
     public void addBookToShelf(BookEntity book, ShelfEntity shelf) {

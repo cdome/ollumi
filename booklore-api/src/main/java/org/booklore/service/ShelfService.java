@@ -13,7 +13,6 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
 import lombok.AllArgsConstructor;
@@ -33,7 +32,6 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class ShelfService {
 
-    private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final ShelfMapper shelfMapper;
@@ -45,7 +43,7 @@ public class ShelfService {
     @Transactional
     public Shelf createShelf(ShelfCreateRequest request) {
         Long userId = getAuthenticatedUserId();
-        if (shelfRepository.existsByUserIdAndName(userId, request.getName())) {
+        if (jooqShelfRepository.existsByUserIdAndName(userId, request.getName())) {
             throw ApiError.SHELF_ALREADY_EXISTS.createException(request.getName());
         }
         if (request.isPublicShelf() && !authenticationService.getAuthenticatedUser().getPermissions().isAdmin()) {
@@ -58,7 +56,7 @@ public class ShelfService {
                 .isPublic(request.isPublicShelf())
                 .user(fetchUserEntityById(userId))
                 .build();
-        Shelf result = shelfMapper.toShelf(shelfRepository.save(shelfEntity));
+        Shelf result = shelfMapper.toShelf(jooqShelfRepository.save(shelfEntity));
         auditService.log(AuditAction.SHELF_CREATED, "Shelf", shelfEntity.getId(), "Created shelf: " + request.getName());
         return result;
     }
@@ -73,14 +71,14 @@ public class ShelfService {
         shelfEntity.setIcon(request.getIcon());
         shelfEntity.setIconType(request.getIconType());
         shelfEntity.setPublic(request.isPublicShelf());
-        Shelf result = shelfMapper.toShelf(shelfRepository.save(shelfEntity));
+        Shelf result = shelfMapper.toShelf(jooqShelfRepository.save(shelfEntity));
         auditService.log(AuditAction.SHELF_UPDATED, "Shelf", id, "Updated shelf: " + request.getName());
         return result;
     }
 
     public List<Shelf> getShelves() {
         Long userId = getAuthenticatedUserId();
-        return shelfRepository.findByUserIdOrPublicShelfTrue(userId).stream()
+        return jooqShelfRepository.findByUserIdOrPublicShelfTrue(userId).stream()
                 .map(shelfMapper::toShelf)
                 .toList();
     }
@@ -91,14 +89,14 @@ public class ShelfService {
 
     @Transactional
     public void deleteShelf(Long shelfId) {
-        shelfRepository.deleteById(shelfId);
+        jooqShelfRepository.deleteById(shelfId);
         auditService.log(AuditAction.SHELF_DELETED, "Shelf", shelfId, "Deleted shelf: " + shelfId);
     }
 
     public Shelf getUserKoboShelf() {
         Long userId = getAuthenticatedUserId();
-        Optional<ShelfEntity> koboShelf = shelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
-        return koboShelf.map(shelfMapper::toShelf).orElse(null);
+        ShelfEntity koboShelf = jooqShelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
+        return koboShelf != null ? shelfMapper.toShelf(koboShelf) : null;
     }
 
     public List<Book> getShelfBooks(Long shelfId) {
@@ -120,11 +118,14 @@ public class ShelfService {
     }
 
     private ShelfEntity findShelfByIdOrThrow(Long shelfId) {
-        return shelfRepository.findById(shelfId)
-                .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+        ShelfEntity shelf = jooqShelfRepository.findById(shelfId);
+        if (shelf == null) {
+            throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+        }
+        return shelf;
     }
 
     public Optional<ShelfEntity> getShelf(Long id, String name) {
-        return shelfRepository.findByUserIdAndName(id, name);
+        return Optional.ofNullable(jooqShelfRepository.findByUserIdAndName(id, name));
     }
 }

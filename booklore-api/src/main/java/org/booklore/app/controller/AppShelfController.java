@@ -9,8 +9,8 @@ import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.app.service.AppBookService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.ShelfEntity;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.dto.MagicShelfRow;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 public class AppShelfController {
 
     private final AuthenticationService authenticationService;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final AppBookMapper mobileBookMapper;
     private final AppBookService mobileBookService;

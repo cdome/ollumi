@@ -13,7 +13,7 @@ import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.OpdsSortOrder;
 import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
 import org.booklore.service.library.LibraryService;
@@ -41,7 +41,7 @@ public class OpdsBookService {
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final UserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final LibraryService libraryService;
     private final ContentRestrictionService contentRestrictionService;
 
@@ -149,9 +149,8 @@ public class OpdsBookService {
     }
 
     public String getShelfName(Long shelfId) {
-        return shelfRepository.findById(shelfId)
-                .map(s -> s.getName() + " - Shelf")
-                .orElse("Shelf Books");
+        ShelfEntity shelf = shelfRepository.findById(shelfId);
+        return shelf != null ? shelf.getName() + " - Shelf" : "Shelf Books";
     }
 
     public List<ShelfEntity> getUserShelves(Long userId) {
@@ -394,8 +393,10 @@ public class OpdsBookService {
     }
 
     private void validateShelfAccess(Long shelfId, Long userId, boolean isAdmin) {
-        var shelf = shelfRepository.findByIdWithUser(shelfId)
-                .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+        var shelf = shelfRepository.findByIdWithUser(shelfId);
+        if (shelf == null) {
+            throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+        }
         if (!shelf.getUser().getId().equals(userId) && !isAdmin) {
             throw ApiError.FORBIDDEN.createException("You are not allowed to access this shelf");
         }

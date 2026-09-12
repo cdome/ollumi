@@ -11,7 +11,6 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
@@ -47,7 +46,6 @@ public class KoboEntitlementService {
     private final JooqKoboReadingStateRepository readingStateRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
-    private final ShelfRepository shelfRepository;
     private final org.booklore.repository.jooq.JooqShelfRepository jooqShelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final MagicShelfBookService magicShelfBookService;
@@ -117,9 +115,11 @@ public class KoboEntitlementService {
 
     public List<KoboTagWrapper> generateTags() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        Long koboShelfId = shelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName())
-                .orElseThrow(() -> new NoSuchElementException("Kobo shelf not found for user: " + userId))
-                .getId();
+        ShelfEntity koboShelfEntity = jooqShelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
+        if (koboShelfEntity == null) {
+            throw new NoSuchElementException("Kobo shelf not found for user: " + userId);
+        }
+        Long koboShelfId = koboShelfEntity.getId();
         Set<Long> koboShelfBookIds = jooqShelfRepository.findBookIdsByShelfId(koboShelfId);
         Set<Long> koboBookIDs = bookQueryService.findAllWithMetadataByIds(koboShelfBookIds).stream()
                 .filter(koboCompatibilityService::isBookSupportedForKobo)
@@ -128,7 +128,7 @@ public class KoboEntitlementService {
 
         List<KoboTagWrapper> tags = new ArrayList<>();
         // Shelves
-        shelfRepository.findByUserId(userId).stream()
+        jooqShelfRepository.findByUserId(userId).stream()
                 .filter(shelf -> !Objects.equals(shelf.getName(), ShelfType.KOBO.getName()))
                 .map(shelf -> buildKoboTag("BL-S-" + shelf.getId(), shelf.getName(), null, null,
                         jooqShelfRepository.findBookIdsByShelfId(shelf.getId()).stream().toList(), koboBookIDs))

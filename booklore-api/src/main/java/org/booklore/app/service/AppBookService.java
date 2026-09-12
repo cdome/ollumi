@@ -13,7 +13,7 @@ import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
@@ -48,7 +48,7 @@ public class AppBookService {
     private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     private final JooqAppBookDetailRepository jooqAppBookDetailRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final AuthenticationService authenticationService;
     private final MagicShelfBookService magicShelfBookService;
 
@@ -335,8 +335,10 @@ public class AppBookService {
 
         // Validate shelf access
         if (shelfId != null) {
-            ShelfEntity shelf = shelfRepository.findById(shelfId)
-                    .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+            ShelfEntity shelf = shelfRepository.findById(shelfId);
+            if (shelf == null) {
+                throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+            }
             if (!shelf.isPublic() && !shelf.getUser().getId().equals(userId)) {
                 throw ApiError.FORBIDDEN.createException("Access denied to shelf " + shelfId);
             }
@@ -514,8 +516,10 @@ public class AppBookService {
         }
 
         if (shelfId != null) {
-            ShelfEntity shelf = shelfRepository.findById(shelfId)
-                    .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+            ShelfEntity shelf = shelfRepository.findById(shelfId);
+            if (shelf == null) {
+                throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+            }
             if (!shelf.isPublic() && !shelf.getUser().getId().equals(userId)) {
                 throw ApiError.FORBIDDEN.createException("Access denied to shelf " + shelfId);
             }

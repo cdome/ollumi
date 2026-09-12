@@ -9,7 +9,6 @@ import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
-import org.booklore.repository.ShelfRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +24,6 @@ import java.util.stream.Collectors;
 public class KoboAutoShelfService {
 
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
-    private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final KoboCompatibilityService koboCompatibilityService;
@@ -53,7 +51,7 @@ public class KoboAutoShelfService {
                 .map(KoboUserSettings::getUserId)
                 .toList();
 
-        List<ShelfEntity> shelves = shelfRepository.findByUserIdInAndName(userIds, ShelfType.KOBO.getName());
+        List<ShelfEntity> shelves = jooqShelfRepository.findByUserIdInAndName(userIds, ShelfType.KOBO.getName());
 
         Map<Long, Long> shelfIdByUser = shelves
                 .stream()

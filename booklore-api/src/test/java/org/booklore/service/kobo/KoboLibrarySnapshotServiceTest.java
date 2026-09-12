@@ -10,7 +10,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
 import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
@@ -29,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,9 +46,6 @@ class KoboLibrarySnapshotServiceTest {
 
     @Mock
     private JooqKoboSnapshotBookRepository koboSnapshotBookRepository;
-
-    @Mock
-    private ShelfRepository shelfRepository;
 
     @Mock
     private JooqShelfRepository jooqShelfRepository;
@@ -140,8 +135,8 @@ class KoboLibrarySnapshotServiceTest {
                 .name(ShelfType.KOBO.getName())
                 .build();
 
-        when(shelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
-                .thenReturn(Optional.of(shelf));
+        when(jooqShelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
+                .thenReturn(shelf);
         when(jooqShelfRepository.findBookIdsByShelfId(500L)).thenReturn(Set.of(101L, 202L));
         when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(any())).thenReturn(List.of(ownersBook, otherUsersBook));
 
@@ -166,8 +161,8 @@ class KoboLibrarySnapshotServiceTest {
                 .name(ShelfType.KOBO.getName())
                 .build();
 
-        when(shelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
-                .thenReturn(Optional.of(shelf));
+        when(jooqShelfRepository.findByUserIdAndName(eq(owner.getId()), eq(ShelfType.KOBO.getName())))
+                .thenReturn(shelf);
         when(jooqShelfRepository.findBookIdsByShelfId(500L)).thenReturn(Set.of(101L));
         when(jooqBookEntityRepository.findAllByIdsIncludingDeleted(any())).thenReturn(List.of(ownersBook));
 

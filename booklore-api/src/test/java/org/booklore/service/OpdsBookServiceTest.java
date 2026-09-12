@@ -9,7 +9,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
@@ -43,7 +43,7 @@ class OpdsBookServiceTest {
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private UserRepository userRepository;
     @Mock private BookLoreUserTransformer bookLoreUserTransformer;
-    @Mock private ShelfRepository shelfRepository;
+    @Mock private JooqShelfRepository shelfRepository;
     @Mock private LibraryService libraryService;
     @Mock private ContentRestrictionService contentRestrictionService;
 
@@ -155,7 +155,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(999L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(2L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(2L)).thenReturn(shelf);
 
         when(jooqBookOpdsRepository.findBookIds(any())).thenReturn(Page.empty());
         when(jooqBookOpdsRepository.findBookIdsByLibraryIds(anySet(), any())).thenReturn(Page.empty());
@@ -195,7 +195,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(anyLong())).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(anyLong())).thenReturn(shelf);
 
         opdsBookService.getBooksPage(details.getOpdsUserV2().getUserId(), "q", 1L, Set.of(2L), 0, 10);
     }
@@ -263,7 +263,7 @@ class OpdsBookServiceTest {
     void getShelfName_returnsShelfName_whenFound() {
         ShelfEntity shelf = mock(ShelfEntity.class);
         when(shelf.getName()).thenReturn("Shelf1");
-        when(shelfRepository.findById(1L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findById(1L)).thenReturn(shelf);
 
         String name = opdsBookService.getShelfName(1L);
 
@@ -272,7 +272,7 @@ class OpdsBookServiceTest {
 
     @Test
     void getShelfName_returnsDefault_whenNotFound() {
-        when(shelfRepository.findById(1L)).thenReturn(Optional.empty());
+        when(shelfRepository.findById(1L)).thenReturn(null);
 
         String name = opdsBookService.getShelfName(1L);
 
@@ -354,7 +354,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         Book book = Book.builder().id(1L).build();
 
@@ -392,8 +392,8 @@ class OpdsBookServiceTest {
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf1.getUser()).thenReturn(shelfUser);
         when(shelf2.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf1));
-        when(shelfRepository.findByIdWithUser(20L)).thenReturn(Optional.of(shelf2));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf1);
+        when(shelfRepository.findByIdWithUser(20L)).thenReturn(shelf2);
 
         Book book1 = Book.builder().id(1L).build();
         Book book2 = Book.builder().id(2L).build();
@@ -430,7 +430,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         Book book = Book.builder().id(1L).build();
 
@@ -466,7 +466,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(999L); // Different user
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         assertThatThrownBy(() ->
                 opdsBookService.getBooksPage(1L, null, null, Set.of(10L), 0, 10)
@@ -496,7 +496,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(999L); // Different user, but admin
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         when(jooqBookOpdsRepository.findBookIdsByShelfIds(eq(Set.of(10L)), any())).thenReturn(Page.empty());
 

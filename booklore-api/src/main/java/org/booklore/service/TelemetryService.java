@@ -16,6 +16,7 @@ import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
@@ -43,7 +44,7 @@ public class TelemetryService {
     private final JooqBookMarkRepository bookMarkRepository;
     private final JooqBookNoteRepository bookNoteRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final UserRepository userRepository;

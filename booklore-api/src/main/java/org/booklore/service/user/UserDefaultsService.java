@@ -7,7 +7,7 @@ import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.IconType;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class UserDefaultsService {
 
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final ObjectMapper objectMapper;
     private final DefaultUserSettingsProvider defaultSettingsProvider;
     private final JooqUserSettingRepository userSettingRepository;

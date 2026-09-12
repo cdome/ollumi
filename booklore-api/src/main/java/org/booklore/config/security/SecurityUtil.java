@@ -2,7 +2,7 @@ package org.booklore.config.security;
 
 import lombok.AllArgsConstructor;
 import org.booklore.model.dto.BookLoreUser;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component("securityUtil")
 public class SecurityUtil {
 
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
 
     private BookLoreUser getCurrentUser() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -108,9 +108,8 @@ public class SecurityUtil {
     public boolean isShelfOwner(Long shelfId) {
         var user = getCurrentUser();
         if (user != null) {
-            return shelfRepository.findByIdWithUser(shelfId)
-                    .map(shelf -> shelf.getUser().getId().equals(user.getId()))
-                    .orElse(false);
+            var shelf = shelfRepository.findByIdWithUser(shelfId);
+            return shelf != null && shelf.getUser().getId().equals(user.getId());
         }
         return false;
     }
@@ -133,9 +132,8 @@ public class SecurityUtil {
     public boolean canReadShelf(Long shelfId) {
         var user = getCurrentUser();
         if (user != null) {
-            return shelfRepository.findByIdWithUser(shelfId)
-                    .map(shelf -> shelf.isPublic() || shelf.getUser().getId().equals(user.getId()))
-                    .orElse(false);
+            var shelf = shelfRepository.findByIdWithUser(shelfId);
+            return shelf != null && (shelf.isPublic() || shelf.getUser().getId().equals(user.getId()));
         }
         return false;
     }

@@ -4,7 +4,6 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
@@ -28,7 +27,6 @@ public class KoboLibrarySnapshotService {
 
     private final JooqKoboLibrarySnapshotRepository koboLibrarySnapshotRepository;
     private final JooqKoboSnapshotBookRepository koboSnapshotBookRepository;
-    private final ShelfRepository shelfRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final org.booklore.repository.jooq.JooqUserLibraryRepository jooqUserLibraryRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
@@ -113,11 +111,12 @@ public class KoboLibrarySnapshotService {
     }
 
     private ShelfEntity getKoboShelf(Long userId) {
-        return shelfRepository
-                .findByUserIdAndName(userId, ShelfType.KOBO.getName())
-                .orElseThrow(() -> new NoSuchElementException(
-                        String.format("Shelf '%s' not found for user %d", ShelfType.KOBO.getName(), userId)
-                ));
+        ShelfEntity shelf = jooqShelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
+        if (shelf == null) {
+            throw new NoSuchElementException(
+                    String.format("Shelf '%s' not found for user %d", ShelfType.KOBO.getName(), userId));
+        }
+        return shelf;
     }
 
     private List<KoboSnapshotBook> mapBooksToKoboSnapshotBook(Long shelfId, Long userId) {
