@@ -10,7 +10,7 @@ import org.booklore.model.dto.response.*;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -42,7 +42,7 @@ public class ReadingSessionService {
     private final JooqReadingSessionRepository jooqReadingSessionRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
     private String getTimezoneOffset() {
@@ -55,7 +55,9 @@ public class ReadingSessionService {
         BookLoreUser authenticatedUser = authenticationService.getAuthenticatedUser();
         Long userId = authenticatedUser.getId();
 
-        userRepository.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        if (userRepository.findById(userId) == null) {
+            throw new UsernameNotFoundException("User not found with ID: " + userId);
+        }
         if (!jooqBookEntityRepository.existsById(request.getBookId())) {
             throw ApiError.BOOK_NOT_FOUND.createException(request.getBookId());
         }

@@ -7,7 +7,7 @@ import org.booklore.model.dto.OidcGroupMapping;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqOidcGroupMappingRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -28,7 +28,7 @@ public class OidcGroupMappingService {
     private final JooqOidcGroupMappingRepository repository;
     private final AuditService auditService;
     private final AppSettingService appSettingService;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
 
     public List<OidcGroupMapping> getAll() {

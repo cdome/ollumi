@@ -11,7 +11,7 @@ import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
 import org.booklore.service.kobo.KoboReadingStateService;
@@ -47,7 +47,7 @@ class KoboStatusSyncProtectionTest {
     @Mock
     private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -81,7 +81,7 @@ class KoboStatusSyncProtectionTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
         when(koboSettingsService.getCurrentUserSettings()).thenReturn(testSettings);
         when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
     }
 
     private void setupMocksForSave(String entitlementId, KoboReadingState readingState) {

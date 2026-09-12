@@ -7,7 +7,7 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookMark;
 import org.booklore.model.dto.CreateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.service.book.BookMarkService;
@@ -33,7 +33,7 @@ class BookMarkServiceTest {
     @Mock
     private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock

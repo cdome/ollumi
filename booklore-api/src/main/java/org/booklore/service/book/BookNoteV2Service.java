@@ -6,7 +6,7 @@ import org.booklore.model.dto.BookNoteV2;
 import org.booklore.model.dto.CreateBookNoteV2Request;
 import org.booklore.model.dto.UpdateBookNoteV2Request;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class BookNoteV2Service {
 
     private final JooqBookNoteV2Repository bookNoteV2Repository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)

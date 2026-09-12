@@ -6,7 +6,7 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqOidcGroupMappingRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -46,7 +46,7 @@ class OidcGroupMappingServiceTest {
     private JooqUserLibraryRepository jooqUserLibraryRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
 
     @InjectMocks
     private OidcGroupMappingService service;

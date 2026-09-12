@@ -9,7 +9,7 @@ import org.booklore.model.dto.response.PersonalRatingUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -47,7 +47,7 @@ class BookUpdateServiceTest {
     @Mock
     private BookMapper bookMapper;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
@@ -177,7 +177,7 @@ class BookUpdateServiceTest {
         when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         List<BookStatusUpdateResponse> result = bookUpdateService.updateReadStatus(bookIds, "READ");
         verify(jooqUserBookProgressRepository).bulkUpdateReadStatus(eq(1L), eq(existing), eq(ReadStatus.READ), any(), any());
@@ -218,7 +218,7 @@ class BookUpdateServiceTest {
         when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         assertDoesNotThrow(() -> bookUpdateService.updateReadStatus(bookIds, "READ"));
     }
@@ -235,7 +235,7 @@ class BookUpdateServiceTest {
         when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         List<PersonalRatingUpdateResponse> result = bookUpdateService.updatePersonalRating(bookIds, 5);
         verify(jooqUserBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(existing), eq(5));
@@ -274,7 +274,7 @@ class BookUpdateServiceTest {
         ShelfEntity shelf2 = new ShelfEntity();
         shelf2.setId(20L);
         when(jooqShelfRepository.findByUserId(1L)).thenReturn(List.of(shelf1, shelf2));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         Set<Long> bookIds = new HashSet<>(Arrays.asList(1L, 2L));
         Set<Long> assignIds = new HashSet<>(Collections.singletonList(10L));
@@ -326,7 +326,7 @@ class BookUpdateServiceTest {
         ShelfEntity shelf1 = new ShelfEntity();
         shelf1.setId(10L);
         when(jooqShelfRepository.findByUserId(1L)).thenReturn(List.of(shelf1));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         Set<Long> bookIds = new HashSet<>(Collections.singletonList(1L));
         Set<Long> assignIds = new HashSet<>(Collections.singletonList(99L));

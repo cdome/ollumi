@@ -13,7 +13,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
 import lombok.AllArgsConstructor;
 import org.booklore.model.enums.AuditAction;
@@ -37,7 +37,7 @@ public class ShelfService {
     private final ShelfMapper shelfMapper;
     private final BookMapper bookMapper;
     private final AuthenticationService authenticationService;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuditService auditService;
 
     @Transactional
@@ -113,8 +113,11 @@ public class ShelfService {
     }
 
     private BookLoreUserEntity fetchUserEntityById(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID " + userId));
+        BookLoreUserEntity user = userRepository.findById(userId);
+        if (user == null) {
+            throw new UsernameNotFoundException("User not found with ID " + userId);
+        }
+        return user;
     }
 
     private ShelfEntity findShelfByIdOrThrow(Long shelfId) {

@@ -8,7 +8,7 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.KoreaderUser;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.service.koreader.KoreaderUserService;
@@ -28,7 +28,7 @@ import java.util.Optional;
 class KoreaderUserServiceTest {
 
     @Mock AuthenticationService authService;
-    @Mock UserRepository userRepository;
+    @Mock JooqUserRepository userRepository;
     @Mock JooqKoreaderUserRepository koreaderUserRepository;
     @InjectMocks
     KoreaderUserService service;
@@ -56,7 +56,7 @@ class KoreaderUserServiceTest {
 
     @Test
     void upsertUser_createsNew_whenAbsent() {
-        when(userRepository.findById(123L)).thenReturn(Optional.of(ownerEntity));
+        when(userRepository.findById(123L)).thenReturn(ownerEntity);
         when(koreaderUserRepository.findByBookLoreUserId(123L)).thenReturn(Optional.empty());
         when(koreaderUserRepository.save(any(KoreaderUserRow.class))).thenAnswer(invocation -> {
             KoreaderUserRow arg = invocation.getArgument(0);
@@ -77,7 +77,7 @@ class KoreaderUserServiceTest {
 
     @Test
     void upsertUser_updatesExisting_whenPresent() {
-        when(userRepository.findById(123L)).thenReturn(Optional.of(ownerEntity));
+        when(userRepository.findById(123L)).thenReturn(ownerEntity);
         when(koreaderUserRepository.findByBookLoreUserId(123L)).thenReturn(Optional.of(entity));
         when(koreaderUserRepository.save(entity)).thenReturn(entity);
 
@@ -92,7 +92,7 @@ class KoreaderUserServiceTest {
 
     @Test
     void upsertUser_throws_whenOwnerMissing() {
-        when(userRepository.findById(123L)).thenReturn(Optional.empty());
+        when(userRepository.findById(123L)).thenReturn(null);
         assertThrows(APIException.class,
                      () -> service.upsertUser("x", "y"));
     }

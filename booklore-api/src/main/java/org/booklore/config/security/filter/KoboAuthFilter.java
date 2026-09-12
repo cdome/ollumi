@@ -11,7 +11,7 @@ import org.booklore.mapper.custom.BookLoreUserTransformer;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -29,7 +29,7 @@ import java.util.List;
 public class KoboAuthFilter extends OncePerRequestFilter {
 
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
 
     @Override
@@ -58,15 +58,14 @@ public class KoboAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        var userOpt = userRepository.findByIdWithDetails(userToken.getUserId());
+        var entity = userRepository.findByIdWithDetails(userToken.getUserId());
 
-        if (userOpt.isEmpty()) {
+        if (entity == null) {
             log.warn("User not found for token: {}", token);
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found");
             return;
         }
 
-        var entity = userOpt.get();
         if (entity.getPermissions() == null || !entity.getPermissions().isPermissionSyncKobo()) {
             log.warn("User {} does not have syncKobo permission", entity.getId());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Insufficient permissions");

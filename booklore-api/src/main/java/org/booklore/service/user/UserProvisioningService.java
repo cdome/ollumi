@@ -14,7 +14,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.jooq.JooqLibraryRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -31,7 +31,7 @@ import org.booklore.service.audit.AuditService;
 public class UserProvisioningService {
 
     private final AppProperties appProperties;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqLibraryRepository libraryRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -89,8 +89,7 @@ public class UserProvisioningService {
 
     @Transactional
     public void provisionInternalUser(UserCreateRequest request) {
-        Optional<BookLoreUserEntity> existingUser = userRepository.findByUsername(request.getUsername());
-        if (existingUser.isPresent()) {
+        if (userRepository.findByUsername(request.getUsername()) != null) {
             throw ApiError.USERNAME_ALREADY_TAKEN.createException(request.getUsername());
         }
 

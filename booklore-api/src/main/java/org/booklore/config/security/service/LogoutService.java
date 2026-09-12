@@ -12,7 +12,7 @@ import org.booklore.model.enums.ProvisioningMethod;
 
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.repository.jooq.JooqOidcSessionRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.springframework.security.core.Authentication;
@@ -28,7 +28,7 @@ public class LogoutService {
 
     private final JooqRefreshTokenRepository refreshTokenRepository;
     private final JooqOidcSessionRepository oidcSessionRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AppSettingService appSettingService;
     private final OidcDiscoveryService discoveryService;
     private final AuditService auditService;
@@ -51,8 +51,11 @@ public class LogoutService {
     private BookLoreUserEntity resolveUser(Authentication auth, String refreshToken) {
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             var bookLoreUser = authenticationService.getAuthenticatedUser();
-            return userRepository.findByUsername(bookLoreUser.getUsername())
-                    .orElseThrow(() -> ApiError.GENERIC_UNAUTHORIZED.createException("User not found"));
+            BookLoreUserEntity user = userRepository.findByUsername(bookLoreUser.getUsername());
+            if (user == null) {
+                throw ApiError.GENERIC_UNAUTHORIZED.createException("User not found");
+            }
+            return user;
         }
 
         if (refreshToken != null && !refreshToken.isBlank()) {
@@ -60,8 +63,11 @@ public class LogoutService {
             if (tokenRecord == null || tokenRecord.getUserId() == null) {
                 throw ApiError.GENERIC_UNAUTHORIZED.createException("Invalid refresh token");
             }
-            return userRepository.findById(tokenRecord.getUserId())
-                    .orElseThrow(() -> ApiError.GENERIC_UNAUTHORIZED.createException("User not found"));
+            BookLoreUserEntity user = userRepository.findById(tokenRecord.getUserId());
+            if (user == null) {
+                throw ApiError.GENERIC_UNAUTHORIZED.createException("User not found");
+            }
+            return user;
         }
 
         throw ApiError.GENERIC_UNAUTHORIZED.createException("No authentication context or refresh token provided");

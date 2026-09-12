@@ -2,7 +2,7 @@ package org.booklore.config.security.filter;
 
 import org.booklore.config.security.JwtUtils;
 import org.booklore.mapper.custom.BookLoreUserTransformer;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;
 
@@ -11,7 +11,7 @@ public class CoverJwtFilter extends AbstractQueryParameterJwtFilter {
 
     public CoverJwtFilter(
             JwtUtils jwtUtils,
-            UserRepository userRepository,
+            JooqUserRepository userRepository,
             BookLoreUserTransformer bookLoreUserTransformer) {
         super(jwtUtils, userRepository, bookLoreUserTransformer);
     }

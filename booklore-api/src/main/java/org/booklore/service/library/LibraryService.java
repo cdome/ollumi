@@ -19,7 +19,7 @@ import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.jooq.JooqLibraryRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -79,7 +79,7 @@ public class LibraryService {
     private final FileService fileService;
     private final LibraryWatchService libraryWatchService;
     private final AuthenticationService authenticationService;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuditService auditService;
 
     @Transactional
@@ -250,7 +250,10 @@ public class LibraryService {
     @Transactional(readOnly = true)
     public List<Library> getLibraries() {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookLoreUserEntity userEntity = userRepository.findByIdWithLibraries(user.getId()).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        BookLoreUserEntity userEntity = userRepository.findByIdWithLibraries(user.getId());
+        if (userEntity == null) {
+            throw new UsernameNotFoundException("User not found");
+        }
         List<LibraryEntity> libraries;
         if (userEntity.getPermissions().isPermissionAdmin()) {
             libraries = libraryRepository.findAll();

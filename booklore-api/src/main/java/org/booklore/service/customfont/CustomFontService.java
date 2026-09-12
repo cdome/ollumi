@@ -4,7 +4,7 @@ import org.booklore.config.AppProperties;
 import org.booklore.exception.APIException;
 import org.booklore.model.dto.CustomFontDto;
 import org.booklore.model.enums.FontFormat;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqCustomFontRepository;
 import org.booklore.repository.jooq.dto.CustomFont;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class CustomFontService {
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final Pattern CONTROL_CHARS_PATTERN = Pattern.compile("[\\p{Cntrl}\\p{Cc}\\p{Cf}\\p{Co}\\p{Cn}]");
     private final JooqCustomFontRepository customFontRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AppProperties appProperties;
 
     private static final int MAX_FONTS_PER_USER = 10;

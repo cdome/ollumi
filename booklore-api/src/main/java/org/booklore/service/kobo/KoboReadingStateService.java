@@ -10,7 +10,7 @@ import org.booklore.model.dto.response.kobo.KoboReadingStateResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
@@ -54,7 +54,7 @@ public class KoboReadingStateService {
     private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final KoboSettingsService koboSettingsService;
     private final KoboReadingStateBuilder readingStateBuilder;
@@ -201,8 +201,7 @@ public class KoboReadingStateService {
                 return;
             }
 
-            Optional<BookLoreUserEntity> userOpt = userRepository.findById(userId);
-            if (userOpt.isEmpty()) {
+            if (userRepository.findById(userId) == null) {
                 log.warn("User not found: {}", userId);
                 return;
             }
@@ -210,7 +209,7 @@ public class KoboReadingStateService {
             UserBookProgressRow progress = progressRepository.findByUserIdAndBookId(userId, bookId)
                     .orElseGet(() -> {
                         UserBookProgressRow newProgress = new UserBookProgressRow();
-                        newProgress.setUserId(userOpt.get().getId());
+                        newProgress.setUserId(userId);
                         newProgress.setBookId(book.getId());
                         return newProgress;
                     });

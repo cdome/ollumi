@@ -9,7 +9,7 @@ import org.booklore.model.dto.response.PersonalRatingUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -44,7 +44,7 @@ public class BookUpdateService {
     private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     private final JooqShelfRepository jooqShelfRepository;
     private final BookMapper bookMapper;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
@@ -243,8 +243,11 @@ public class BookUpdateService {
     }
 
     private BookLoreUserEntity findUserOrThrow(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        BookLoreUserEntity user = userRepository.findById(userId);
+        if (user == null) {
+            throw new UsernameNotFoundException("User not found with ID: " + userId);
+        }
+        return user;
     }
 
     private void validateBulkOperationPermission(List<Long> bookIds, BookLoreUser user, UserPermission permission) {

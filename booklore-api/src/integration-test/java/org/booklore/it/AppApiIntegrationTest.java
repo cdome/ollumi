@@ -5,7 +5,6 @@ import org.booklore.it.util.AuthTestHelper;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.*;
 import org.booklore.repository.jooq.JooqAnnotationRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.dto.AuthorRow;
@@ -135,7 +134,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
     }
 
     private void seedNotebookEntries(BookEntity book) {
-        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME);
 
         annotationRepository.insert(
                 book.getId(), user.getId(),
@@ -254,7 +253,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Continue Reading Book " + UUID.randomUUID());
-        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME);
 
         UserBookProgressRow progress = new UserBookProgressRow();
         progress.setUserId(user.getId());
@@ -281,7 +280,7 @@ public class AppApiIntegrationTest extends RestApiIntegrationTest {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Continue Listening Book " + UUID.randomUUID());
-        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME);
 
         UserBookProgressRow progress = new UserBookProgressRow();
         progress.setUserId(user.getId());

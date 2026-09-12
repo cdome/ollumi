@@ -7,7 +7,7 @@ import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.model.dto.request.OpdsUserV2CreateRequest;
 import org.booklore.model.dto.request.OpdsUserV2UpdateRequest;
 import org.booklore.model.enums.OpdsSortOrder;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.service.audit.AuditService;
@@ -27,7 +27,7 @@ public class OpdsUserV2Service {
 
     private final JooqOpdsUserV2Repository opdsUserV2Repository;
     private final AuthenticationService authenticationService;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
@@ -40,8 +40,9 @@ public class OpdsUserV2Service {
     public OpdsUserV2 createOpdsUser(OpdsUserV2CreateRequest request) {
         try {
             BookLoreUser bookLoreUser = authenticationService.getAuthenticatedUser();
-            userRepository.findById(bookLoreUser.getId())
-                    .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + bookLoreUser.getId()));
+            if (userRepository.findById(bookLoreUser.getId()) == null) {
+                throw new UsernameNotFoundException("User not found with ID: " + bookLoreUser.getId());
+            }
 
             OpdsUserV2 result = opdsUserV2Repository.insert(
                     bookLoreUser.getId(),

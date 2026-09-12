@@ -4,7 +4,7 @@ import org.booklore.model.dto.request.UserLoginRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -19,10 +19,10 @@ public class AuthTestHelper {
 
     private final RestTemplate rest;
     private final PasswordEncoder passwordEncoder;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JdbcTemplate jdbc;
 
-    public AuthTestHelper(RestTemplate rest, PasswordEncoder passwordEncoder, UserRepository userRepository, JdbcTemplate jdbc) {
+    public AuthTestHelper(RestTemplate rest, PasswordEncoder passwordEncoder, JooqUserRepository userRepository, JdbcTemplate jdbc) {
         this.rest = rest;
         this.passwordEncoder = passwordEncoder;
         this.userRepository = userRepository;
@@ -30,9 +30,10 @@ public class AuthTestHelper {
     }
 
     public Tokens login(String baseUrl, String username, String password) {
-        userRepository.findByUsername(username).ifPresent(user ->
-                jdbc.update("DELETE FROM refresh_token WHERE user_id = ?", user.getId())
-        );
+        BookLoreUserEntity existing = userRepository.findByUsername(username);
+        if (existing != null) {
+            jdbc.update("DELETE FROM refresh_token WHERE user_id = ?", existing.getId());
+        }
         UserLoginRequest request = new UserLoginRequest();
         request.setUsername(username);
         request.setPassword(password);
@@ -52,8 +53,9 @@ public class AuthTestHelper {
     }
 
     public BookLoreUserEntity createUser(String username, String password, Consumer<UserPermissionsEntity> permissionsConfigurer) {
-        if (userRepository.findByUsername(username).isPresent()) {
-            return userRepository.findByUsername(username).get();
+        BookLoreUserEntity existingUser = userRepository.findByUsername(username);
+        if (existingUser != null) {
+            return existingUser;
         }
         BookLoreUserEntity user = new BookLoreUserEntity();
         user.setUsername(username);
@@ -100,7 +102,7 @@ public class AuthTestHelper {
         return passwordEncoder;
     }
 
-    public UserRepository userRepository() {
+    public JooqUserRepository userRepository() {
         return userRepository;
     }
 

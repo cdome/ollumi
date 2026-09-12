@@ -14,7 +14,7 @@ import org.booklore.model.enums.OpdsSortOrder;
 import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
 import org.booklore.service.library.LibraryService;
 import org.booklore.service.restriction.ContentRestrictionService;
@@ -39,7 +39,7 @@ public class OpdsBookService {
     private final JooqBookOpdsRepository jooqBookOpdsRepository;
     private final JooqBookReadRepository jooqBookReadRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
     private final JooqShelfRepository shelfRepository;
     private final LibraryService libraryService;
@@ -50,8 +50,10 @@ public class OpdsBookService {
             return List.of();
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         List<Library> libraries;
@@ -71,8 +73,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (entity.getPermissions() == null ||
                 (!entity.getPermissions().isPermissionAccessOpds() && !entity.getPermissions().isPermissionAdmin())) {
@@ -118,8 +122,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
@@ -182,8 +188,10 @@ public class OpdsBookService {
             return List.of();
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
@@ -201,8 +209,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
@@ -235,8 +245,10 @@ public class OpdsBookService {
             return List.of();
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
@@ -255,8 +267,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
@@ -419,8 +433,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findById(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findById(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (entity.getPermissions() != null && entity.getPermissions().isPermissionAdmin()) {
             return;

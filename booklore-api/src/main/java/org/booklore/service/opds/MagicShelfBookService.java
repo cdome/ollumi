@@ -12,7 +12,7 @@ import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookRuleEvaluator;
 import org.booklore.repository.jooq.JooqMagicShelfBookRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
@@ -46,7 +46,7 @@ public class MagicShelfBookService {
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqMagicShelfBookRepository jooqMagicShelfBookRepository;
     private final BookMapper bookMapper;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
     private final JooqBookRuleEvaluator ruleEvaluator;
     private final ContentRestrictionService contentRestrictionService;
@@ -116,8 +116,10 @@ public class MagicShelfBookService {
             return shelf;
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (entity.getPermissions() == null ||
                 (!entity.getPermissions().isPermissionAccessOpds() && !entity.getPermissions().isPermissionAdmin())) {
@@ -136,8 +138,10 @@ public class MagicShelfBookService {
     }
 
     private Condition libraryFilterCondition(Long userId) {
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 

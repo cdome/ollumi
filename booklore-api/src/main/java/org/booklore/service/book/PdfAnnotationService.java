@@ -2,7 +2,7 @@ package org.booklore.service.book;
 
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqPdfAnnotationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ public class PdfAnnotationService {
 
     private final JooqPdfAnnotationRepository pdfAnnotationRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)

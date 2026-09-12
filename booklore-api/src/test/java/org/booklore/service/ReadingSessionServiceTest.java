@@ -11,7 +11,7 @@ import org.booklore.model.dto.request.ReadingSessionRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +34,7 @@ class ReadingSessionServiceTest {
     @Mock JooqReadingSessionRepository jooqReadingSessionRepository;
     @Mock JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock JooqBookEntityRepository jooqBookEntityRepository;
-    @Mock UserRepository userRepository;
+    @Mock JooqUserRepository userRepository;
 
     @InjectMocks
     ReadingSessionService service;
@@ -55,7 +55,7 @@ class ReadingSessionServiceTest {
 
     @Test
     void recordSession_insertsWithMappedArgs() {
-        when(userRepository.findById(42L)).thenReturn(Optional.of(new BookLoreUserEntity()));
+        when(userRepository.findById(42L)).thenReturn(new BookLoreUserEntity());
         when(jooqBookEntityRepository.existsById(7L)).thenReturn(true);
         when(jooqReadingSessionRepository.insert(
                 anyLong(), anyLong(), any(), any(), any(), anyInt(), any(), any(), any(), any(), any(), any()))
@@ -71,7 +71,7 @@ class ReadingSessionServiceTest {
 
     @Test
     void recordSession_userNotFound_throws() {
-        when(userRepository.findById(42L)).thenReturn(Optional.empty());
+        when(userRepository.findById(42L)).thenReturn(null);
         assertThrows(UsernameNotFoundException.class, () -> service.recordSession(request()));
         verify(jooqReadingSessionRepository, never()).insert(
                 anyLong(), anyLong(), any(), any(), any(), anyInt(), any(), any(), any(), any(), any(), any());
@@ -79,7 +79,7 @@ class ReadingSessionServiceTest {
 
     @Test
     void recordSession_bookNotFound_throws() {
-        when(userRepository.findById(42L)).thenReturn(Optional.of(new BookLoreUserEntity()));
+        when(userRepository.findById(42L)).thenReturn(new BookLoreUserEntity());
         when(jooqBookEntityRepository.existsById(7L)).thenReturn(false);
         assertThrows(APIException.class, () -> service.recordSession(request()));
         verify(jooqReadingSessionRepository, never()).insert(

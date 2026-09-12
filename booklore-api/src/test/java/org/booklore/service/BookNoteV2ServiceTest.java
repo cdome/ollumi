@@ -6,7 +6,7 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookNoteV2;
 import org.booklore.model.dto.CreateBookNoteV2Request;
 import org.booklore.model.dto.UpdateBookNoteV2Request;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import org.booklore.service.book.BookNoteV2Service;
@@ -26,7 +26,7 @@ class BookNoteV2ServiceTest {
 
     private JooqBookNoteV2Repository bookNoteV2Repository;
     private JooqBookEntityRepository jooqBookEntityRepository;
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     private AuthenticationService authenticationService;
     private BookNoteV2Service service;
 
@@ -44,7 +44,7 @@ class BookNoteV2ServiceTest {
     void setUp() {
         bookNoteV2Repository = mock(JooqBookNoteV2Repository.class);
         jooqBookEntityRepository = mock(JooqBookEntityRepository.class);
-        userRepository = mock(UserRepository.class);
+        userRepository = mock(JooqUserRepository.class);
         authenticationService = mock(AuthenticationService.class);
         service = new BookNoteV2Service(bookNoteV2Repository, jooqBookEntityRepository, userRepository, authenticationService);
 

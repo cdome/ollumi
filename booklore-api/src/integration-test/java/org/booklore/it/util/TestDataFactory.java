@@ -13,7 +13,7 @@ import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +39,7 @@ public class TestDataFactory {
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final JooqAuthorRepository jooqAuthorRepository;
     private final JooqOpdsUserV2Repository opdsUserRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
     public TestDataFactory(JooqLibraryRepository libraryRepository,
@@ -51,7 +51,7 @@ public class TestDataFactory {
                            JooqUserLibraryRepository jooqUserLibraryRepository,
                            JooqAuthorRepository jooqAuthorRepository,
                            JooqOpdsUserV2Repository opdsUserRepository,
-                           UserRepository userRepository,
+                           JooqUserRepository userRepository,
                            PasswordEncoder passwordEncoder) {
         this.libraryRepository = libraryRepository;
         this.libraryPathRepository = libraryPathRepository;

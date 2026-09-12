@@ -18,7 +18,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
@@ -49,7 +49,7 @@ public class ReadingProgressService {
     private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateService koboReadingStateService;
     private final HardcoverSyncService hardcoverSyncService;
@@ -512,7 +512,10 @@ public class ReadingProgressService {
     }
 
     private BookLoreUserEntity findUserOrThrow(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        BookLoreUserEntity user = userRepository.findById(userId);
+        if (user == null) {
+            throw new UsernameNotFoundException("User not found with ID: " + userId);
+        }
+        return user;
     }
 }

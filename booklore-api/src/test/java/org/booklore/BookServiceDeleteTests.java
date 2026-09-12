@@ -9,7 +9,6 @@ import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
-import org.booklore.repository.*;
 import org.booklore.service.book.BookDownloadService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.book.BookService;

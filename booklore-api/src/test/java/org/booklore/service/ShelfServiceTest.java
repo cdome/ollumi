@@ -11,7 +11,7 @@ import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.IconType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqShelfRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,7 +38,7 @@ class ShelfServiceTest {
     @Mock
     private AuthenticationService authenticationService;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private AuditService auditService;
 
@@ -64,7 +64,7 @@ class ShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(jooqShelfRepository.existsByUserIdAndName(1L, "My Shelf")).thenReturn(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
         when(jooqShelfRepository.save(any(ShelfEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(shelfMapper.toShelf(any(ShelfEntity.class))).thenReturn(Shelf.builder().name("My Shelf").build());
 
@@ -89,7 +89,7 @@ class ShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(jooqShelfRepository.existsByUserIdAndName(1L, "My Shelf")).thenReturn(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
         when(jooqShelfRepository.save(any(ShelfEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(shelfMapper.toShelf(any(ShelfEntity.class))).thenReturn(
                 Shelf.builder().name("My Shelf").icon("heart").iconType(IconType.PRIME_NG).build());
@@ -176,7 +176,7 @@ class ShelfServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(jooqShelfRepository.existsByUserIdAndName(1L, "SVG Shelf")).thenReturn(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
         when(jooqShelfRepository.save(any(ShelfEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(shelfMapper.toShelf(any(ShelfEntity.class))).thenReturn(
                 Shelf.builder().name("SVG Shelf").icon("<svg>...</svg>").iconType(IconType.CUSTOM_SVG).build());

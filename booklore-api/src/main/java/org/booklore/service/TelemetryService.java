@@ -11,7 +11,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -48,7 +48,7 @@ public class TelemetryService {
     private final JooqShelfRepository shelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final org.booklore.repository.jooq.JooqEmailProviderV2Repository emailProviderV2Repository;
     private final org.booklore.repository.jooq.JooqEmailRecipientV2Repository emailRecipientV2Repository;
     private final AppSettingService appSettingService;

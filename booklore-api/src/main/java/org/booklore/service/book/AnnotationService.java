@@ -6,7 +6,7 @@ import org.booklore.model.dto.Annotation;
 import org.booklore.model.dto.CreateAnnotationRequest;
 import org.booklore.model.dto.UpdateAnnotationRequest;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqAnnotationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class AnnotationService {
 
     private final JooqAnnotationRepository annotationRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)

@@ -5,7 +5,7 @@ import org.booklore.model.dto.BookMark;
 import org.booklore.model.dto.CreateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
@@ -26,7 +26,7 @@ public class BookMarkService {
 
     private final JooqBookMarkRepository bookMarkRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final BookmarkProperties bookmarkProperties;
 
