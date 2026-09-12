@@ -11,7 +11,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -51,7 +51,7 @@ class FileMoveServiceOrderingTest {
     @Mock private AppProperties appProperties;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private FileMoveHelper fileMoveHelper;
     @Mock private MonitoringRegistrationService monitoringRegistrationService;
@@ -69,7 +69,7 @@ class FileMoveServiceOrderingTest {
 
     static class TestableFileMoveService extends FileMoveService {
         TestableFileMoveService(AppProperties appProperties, JooqBookEntityRepository jooqBookEntityRepository, JooqBookRepository jooqBookRepository,
-                                LibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
+                                JooqLibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
                                 FileMoveHelper fileMoveHelper,
                                 MonitoringRegistrationService monitoringRegistrationService, LibraryMapper libraryMapper,
                                 BookMapper bookMapper, NotificationService notificationService, EntityManager entityManager,

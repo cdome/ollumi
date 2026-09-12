@@ -9,7 +9,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.util.BookCoverUtils;
@@ -36,7 +36,7 @@ import java.util.Set;
 public class PhysicalBookService {
 
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
@@ -45,8 +45,10 @@ public class PhysicalBookService {
 
     @Transactional
     public Book createPhysicalBook(CreatePhysicalBookRequest request) {
-        LibraryEntity library = libraryRepository.findById(request.getLibraryId())
-                .orElseThrow(() -> new APIException("Library not found with id: " + request.getLibraryId(), HttpStatus.NOT_FOUND));
+        LibraryEntity library = libraryRepository.findById(request.getLibraryId());
+        if (library == null) {
+            throw new APIException("Library not found with id: " + request.getLibraryId(), HttpStatus.NOT_FOUND);
+        }
 
         Instant now = Instant.now();
         long bookId = jooqBookRepository.insertBook(library.getId(), null, now);

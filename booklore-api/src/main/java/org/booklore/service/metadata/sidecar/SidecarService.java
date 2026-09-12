@@ -11,7 +11,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.enums.SidecarSyncStatus;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.metadata.BookMetadataUpdater;
 import org.springframework.stereotype.Service;
@@ -28,7 +28,7 @@ import java.util.Optional;
 public class SidecarService {
 
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final SidecarMetadataReader sidecarReader;
     private final SidecarMetadataWriter sidecarWriter;
     private final SidecarMetadataMapper sidecarMapper;
@@ -110,8 +110,10 @@ public class SidecarService {
 
     @Transactional
     public int bulkExport(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
         List<BookEntity> books = jooqBookEntityRepository.findAllByLibraryIdWithFiles(libraryId);
         int exported = 0;
@@ -131,8 +133,10 @@ public class SidecarService {
 
     @Transactional
     public int bulkImport(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
         List<BookEntity> books = jooqBookEntityRepository.findAllByLibraryIdWithFiles(libraryId);
         int imported = 0;

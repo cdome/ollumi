@@ -8,7 +8,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.*;
 class PhysicalBookServiceTest {
 
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
@@ -46,7 +46,7 @@ class PhysicalBookServiceTest {
     @Test
     void createPhysicalBook_libraryNotFound_throws() {
         CreatePhysicalBookRequest request = CreatePhysicalBookRequest.builder().libraryId(99L).title("Ghost").build();
-        when(libraryRepository.findById(99L)).thenReturn(Optional.empty());
+        when(libraryRepository.findById(99L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> physicalBookService.createPhysicalBook(request));
 
@@ -56,7 +56,7 @@ class PhysicalBookServiceTest {
     @Test
     void createPhysicalBook_minimal_insertsBareBookAndMetadata() {
         LibraryEntity library = LibraryEntity.builder().id(1L).name("Physical Library").build();
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookRepository.insertBook(eq(1L), isNull(), any())).thenReturn(42L);
         when(bookMapper.toBook(any(BookEntity.class))).thenReturn(Book.builder().build());
 
@@ -86,7 +86,7 @@ class PhysicalBookServiceTest {
     @Test
     void createPhysicalBook_withAuthorsAndCategories_writesRelationsThenFinalFullRow() {
         LibraryEntity library = LibraryEntity.builder().id(1L).name("Physical Library").build();
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookRepository.insertBook(eq(1L), isNull(), any())).thenReturn(7L);
         when(bookMapper.toBook(any(BookEntity.class))).thenReturn(Book.builder().build());
 

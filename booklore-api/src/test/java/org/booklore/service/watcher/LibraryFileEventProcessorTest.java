@@ -6,7 +6,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.library.LibraryProcessingService;
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.*;
 
 class LibraryFileEventProcessorTest {
 
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookFileTransactionalHandler bookFileTransactionalHandler;
     @Mock private BookFilePersistenceService bookFilePersistenceService;
@@ -69,7 +69,7 @@ class LibraryFileEventProcessorTest {
                 .organizationMode(LibraryOrganizationMode.AUTO_DETECT)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         // handleEvent reads the library's paths via jOOQ, not off the LAZY entity collection
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
                 .thenReturn(List.of(new LibraryPathRow(1L, tempDir.toString())));

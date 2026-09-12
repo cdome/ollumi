@@ -9,7 +9,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
@@ -39,7 +39,7 @@ public class KomgaService {
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final KomgaMapper komgaMapper;
     private final MagicShelfService magicShelfService;
     private final CbxReaderService cbxReaderService;
@@ -53,8 +53,10 @@ public class KomgaService {
     }
 
     public KomgaLibraryDto getLibraryById(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> new RuntimeException("Library not found"));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw new RuntimeException("Library not found");
+        }
         return komgaMapper.toKomgaLibraryDto(library);
     }
 

@@ -9,7 +9,7 @@ import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.repository.jooq.dto.UserSettingRow;
@@ -29,7 +29,7 @@ public class BookLoreUserTransformer {
     private final ObjectMapper objectMapper;
     private final LibraryMapper libraryMapper;
     private final JooqUserSettingRepository userSettingRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
 
     public BookLoreUser toDTO(BookLoreUserEntity userEntity) {

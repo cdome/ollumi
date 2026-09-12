@@ -12,6 +12,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -38,7 +39,7 @@ import java.util.stream.Collectors;
 public class TelemetryService {
 
     private final VersionService versionService;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMarkRepository bookMarkRepository;

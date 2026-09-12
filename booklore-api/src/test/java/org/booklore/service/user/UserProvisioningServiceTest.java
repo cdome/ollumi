@@ -7,7 +7,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -38,7 +38,7 @@ class UserProvisioningServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
 
     @Mock
     private JooqUserLibraryRepository jooqUserLibraryRepository;

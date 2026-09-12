@@ -16,7 +16,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.service.NotificationService;
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MetadataRefreshServiceTest {
 
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private JooqMetadataFetchJobRepository metadataFetchJobRepository;
     @Mock private BookMapper bookMapper;
     @Mock private BookMetadataUpdater bookMetadataUpdater;
@@ -269,7 +269,7 @@ class MetadataRefreshServiceTest {
         LibraryEntity library = new LibraryEntity();
         library.setId(5L);
 
-        when(libraryRepository.findById(5L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(5L)).thenReturn(library);
         when(jooqBookRepository.findBookIdsByLibraryId(5L)).thenReturn(Set.of(10L, 11L));
 
         MetadataRefreshRequest request = MetadataRefreshRequest.builder()
@@ -752,7 +752,7 @@ class MetadataRefreshServiceTest {
 
         @Test
         void throwsWhenLibraryNotFound() {
-            when(libraryRepository.findById(99L)).thenReturn(Optional.empty());
+            when(libraryRepository.findById(99L)).thenReturn(null);
 
             MetadataRefreshRequest request = MetadataRefreshRequest.builder()
                     .refreshType(MetadataRefreshRequest.RefreshType.LIBRARY)

@@ -10,7 +10,7 @@ import org.booklore.model.dto.request.CreateLibraryRequest;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.IconType;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,7 +41,7 @@ import static org.mockito.Mockito.*;
 class LibraryServiceIconTest {
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
     @Mock
     private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
@@ -97,7 +97,7 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(libraryRepository.findById(1L)).thenReturn(existing);
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(Collections.emptyList());
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(Library.builder().name("Updated Library").build());
@@ -131,7 +131,7 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(libraryRepository.findById(1L)).thenReturn(existing);
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(Collections.emptyList());
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(
@@ -165,7 +165,7 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(libraryRepository.findById(1L)).thenReturn(existing);
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(Collections.emptyList());
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(Library.builder().name("Library With Icon").build());

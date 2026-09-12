@@ -11,7 +11,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class LibraryProcessingService {
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
@@ -53,7 +53,10 @@ public class LibraryProcessingService {
 
     @Transactional
     public void processLibrary(long libraryId) {
-        LibraryEntity libraryEntity = libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity libraryEntity = libraryRepository.findById(libraryId);
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started processing library: " + libraryEntity.getName()));
         try {
             List<LibraryFile> libraryFiles = libraryFileHelper.getLibraryFiles(libraryEntity);
@@ -74,7 +77,10 @@ public class LibraryProcessingService {
 
     @Transactional
     public void rescanLibrary(RescanLibraryContext context) throws IOException {
-        LibraryEntity libraryEntity = libraryRepository.findById(context.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        LibraryEntity libraryEntity = libraryRepository.findById(context.getLibraryId());
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId());
+        }
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started refreshing library: " + libraryEntity.getName()));
 
         validateLibraryPathsAccessible(libraryEntity);
@@ -109,8 +115,10 @@ public class LibraryProcessingService {
         bookDeletionService.purgeDisallowedFormats(libraryEntity);
         entityManager.clear();
         // Re-fetch library entity to get fresh state after entity manager was cleared
-        libraryEntity = libraryRepository.findById(context.getLibraryId())
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        libraryEntity = libraryRepository.findById(context.getLibraryId());
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId());
+        }
         List<BookEntity> refreshedBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
 
         List<LibraryFile> newFiles = detectNewBookPaths(filteredFiles, refreshedBooks, libraryEntity.getId());

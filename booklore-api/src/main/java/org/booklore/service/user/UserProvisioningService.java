@@ -13,7 +13,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.UserRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
@@ -32,7 +32,7 @@ public class UserProvisioningService {
 
     private final AppProperties appProperties;
     private final UserRepository userRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqUserLibraryRepository jooqUserLibraryRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final UserDefaultsService userDefaultsService;

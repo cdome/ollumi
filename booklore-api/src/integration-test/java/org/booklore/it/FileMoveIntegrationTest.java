@@ -7,7 +7,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class FileMoveIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
 
     @Autowired
     private JooqLibraryPathRepository libraryPathRepository;

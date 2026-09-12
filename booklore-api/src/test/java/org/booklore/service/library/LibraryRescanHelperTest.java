@@ -13,7 +13,7 @@ import org.booklore.model.enums.TaskType;
 import org.booklore.model.websocket.TaskProgressPayload;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.fileprocessor.AudiobookProcessor;
 import org.booklore.service.metadata.BookMetadataUpdater;
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class LibraryRescanHelperTest {
 
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private MetadataExtractorFactory metadataExtractorFactory;
     @Mock private BookMetadataUpdater bookMetadataUpdater;
     @Mock private NotificationService notificationService;
@@ -78,7 +78,7 @@ class LibraryRescanHelperTest {
 
     @Test
     void handleRescanOptions_shouldThrowException_whenLibraryNotFound() {
-        when(libraryRepository.findById(1L)).thenReturn(Optional.empty());
+        when(libraryRepository.findById(1L)).thenReturn(null);
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 libraryRescanHelper.handleRescanOptions(rescanContext, taskId)
         );
@@ -98,7 +98,7 @@ class LibraryRescanHelperTest {
         BookMetadata metadata2 = new BookMetadata();
         metadata2.setTitle("Book 2");
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book1, book2));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.EPUB), any(File.class))).thenReturn(metadata1);
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.PDF), any(File.class))).thenReturn(metadata2);
@@ -121,7 +121,7 @@ class LibraryRescanHelperTest {
         BookMetadata metadata = new BookMetadata();
         metadata.setTitle("Book 1");
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book1, book2));
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -140,7 +140,7 @@ class LibraryRescanHelperTest {
         books.add(null);
 
         BookMetadata metadata = new BookMetadata();
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(books);
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -158,7 +158,7 @@ class LibraryRescanHelperTest {
 
         BookMetadata metadata2 = new BookMetadata();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book1, book2));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.EPUB), any(File.class))).thenReturn(null);
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.PDF), any(File.class))).thenReturn(metadata2);
@@ -178,7 +178,7 @@ class LibraryRescanHelperTest {
         BookMetadata metadata1 = new BookMetadata();
         BookMetadata metadata2 = new BookMetadata();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book1, book2));
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class)))
                 .thenReturn(metadata1, metadata2);
@@ -197,7 +197,7 @@ class LibraryRescanHelperTest {
         BookEntity book1 = createBookEntity(1L, "book1.epub", BookFileType.EPUB);
         BookEntity book2 = createBookEntity(2L, "book2.pdf", BookFileType.PDF);
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book1, book2));
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false, true);
 
@@ -215,7 +215,7 @@ class LibraryRescanHelperTest {
         BookEntity book1 = createBookEntity(1L, "book1.epub", BookFileType.EPUB);
 
         BookMetadata metadata = new BookMetadata();
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book1));
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -236,7 +236,7 @@ class LibraryRescanHelperTest {
 
     @Test
     void handleRescanOptions_shouldHandleEmptyLibrary() {
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(new ArrayList<>());
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
 
@@ -257,7 +257,7 @@ class LibraryRescanHelperTest {
         BookMetadata metadata = new BookMetadata();
         metadata.setTitle("Test Book");
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book));
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -279,7 +279,7 @@ class LibraryRescanHelperTest {
         BookEntity book = createBookEntity(1L, "book1.epub", BookFileType.EPUB);
 
         BookMetadata metadata = new BookMetadata();
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book));
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class))).thenReturn(metadata);
 
@@ -297,7 +297,7 @@ class LibraryRescanHelperTest {
         BookEntity book = createBookEntity(1L, "book1.epub", BookFileType.EPUB);
 
         BookMetadata metadata = new BookMetadata();
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(book));
         when(metadataExtractorFactory.extractMetadata(any(BookFileType.class), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -325,7 +325,7 @@ class LibraryRescanHelperTest {
         metadata.setTitle("Test Audiobook");
         metadata.setAudiobookMetadata(audiobookMeta);
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(audiobookEntity));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.AUDIOBOOK), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -343,7 +343,7 @@ class LibraryRescanHelperTest {
         BookMetadata metadata = new BookMetadata();
         metadata.setTitle("Epub Book");
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(epubBook));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.EPUB), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);
@@ -362,7 +362,7 @@ class LibraryRescanHelperTest {
         metadata.setTitle("Audiobook Without Tech Meta");
         metadata.setAudiobookMetadata(null);
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(1L)).thenReturn(List.of(audiobookEntity));
         when(metadataExtractorFactory.extractMetadata(eq(BookFileType.AUDIOBOOK), any(File.class))).thenReturn(metadata);
         when(cancellationManager.isTaskCancelled(taskId)).thenReturn(false);

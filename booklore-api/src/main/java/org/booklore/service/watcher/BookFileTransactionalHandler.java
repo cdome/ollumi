@@ -11,7 +11,7 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
@@ -45,14 +45,17 @@ public class BookFileTransactionalHandler {
     private final BookFilePersistenceService bookFilePersistenceService;
     private final LibraryProcessingService libraryProcessingService;
     private final NotificationService notificationService;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final PendingDeletionPool pendingDeletionPool;
 
     @Transactional()
     public void handleNewBookFile(long libraryId, Path path) {
-        LibraryEntity libraryEntity = libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity libraryEntity = libraryRepository.findById(libraryId);
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
         String filePath = path.toString();
         String fileName = path.getFileName().toString();
@@ -175,8 +178,10 @@ public class BookFileTransactionalHandler {
 
     @Transactional
     public void handleNewFolderAudiobook(long libraryId, Path folderPath) {
-        LibraryEntity libraryEntity = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity libraryEntity = libraryRepository.findById(libraryId);
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
         String folderName = folderPath.getFileName().toString();
         String libraryPath = bookFilePersistenceService.findMatchingLibraryPath(libraryEntity, folderPath);

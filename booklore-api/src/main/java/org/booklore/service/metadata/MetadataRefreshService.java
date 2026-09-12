@@ -20,7 +20,7 @@ import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.service.NotificationService;
@@ -47,7 +47,7 @@ import static org.booklore.model.enums.MetadataProvider.*;
 @Service
 public class MetadataRefreshService {
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqMetadataFetchJobRepository metadataFetchJobRepository;
     private final BookMapper bookMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
@@ -750,7 +750,10 @@ public class MetadataRefreshService {
         }
         return switch (refreshType) {
             case LIBRARY -> {
-                LibraryEntity libraryEntity = libraryRepository.findById(request.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(request.getLibraryId()));
+                LibraryEntity libraryEntity = libraryRepository.findById(request.getLibraryId());
+                if (libraryEntity == null) {
+                    throw ApiError.LIBRARY_NOT_FOUND.createException(request.getLibraryId());
+                }
                 yield jooqBookRepository.findBookIdsByLibraryId(libraryEntity.getId());
             }
             case BOOKS -> request.getBookIds();

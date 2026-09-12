@@ -6,7 +6,7 @@ import org.booklore.app.mapper.AppBookMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class AppLibraryController {
 
     private final AuthenticationService authenticationService;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final AppBookMapper mobileBookMapper;

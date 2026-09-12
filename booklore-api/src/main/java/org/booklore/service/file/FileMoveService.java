@@ -13,7 +13,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -41,7 +41,7 @@ public class FileMoveService {
     private final AppProperties appProperties;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final FileMoveHelper fileMoveHelper;
     private final MonitoringRegistrationService monitoringRegistrationService;
@@ -73,8 +73,10 @@ public class FileMoveService {
             sleep(EVENT_DRAIN_TIMEOUT_MS);
         } finally {
             for (Long libraryId : allAffectedLibraryIds) {
-                libraryRepository.findById(libraryId)
-                        .ifPresent(library -> monitoringRegistrationService.registerLibrary(libraryMapper.toLibrary(library)));
+                LibraryEntity library = libraryRepository.findById(libraryId);
+                if (library != null) {
+                    monitoringRegistrationService.registerLibrary(libraryMapper.toLibrary(library));
+                }
             }
         }
     }
@@ -105,16 +107,15 @@ public class FileMoveService {
 
         try {
             BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
-            Optional<LibraryEntity> optionalLibrary = libraryRepository.findById(targetLibraryId);
+            LibraryEntity targetLibrary = libraryRepository.findById(targetLibraryId);
             if (bookEntity == null) {
                 log.warn("Book not found for move operation: bookId={}", bookId);
                 return;
             }
-            if (optionalLibrary.isEmpty()) {
+            if (targetLibrary == null) {
                 log.warn("Target library not found for move operation: libraryId={}", targetLibraryId);
                 return;
             }
-            LibraryEntity targetLibrary = optionalLibrary.get();
             List<LibraryPathEntity> targetLibraryPaths = jooqLibraryPathRepository.findByLibraryId(targetLibrary.getId());
 
             Optional<LibraryPathEntity> optionalLibraryPathEntity = targetLibraryPaths.stream()

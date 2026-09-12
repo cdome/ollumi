@@ -24,7 +24,7 @@ import org.booklore.model.enums.BookdropFileStatus;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.NotificationService;
@@ -63,7 +63,7 @@ import java.util.stream.Stream;
 public class BookDropService {
 
     private final JooqBookdropFileRepository bookdropFileRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookdropMonitoringService bookdropMonitoringService;
@@ -289,7 +289,7 @@ public class BookDropService {
     private void reregisterAffectedLibraries(Set<Long> libraryIds) {
         for (Long libraryId : libraryIds) {
             try {
-                LibraryEntity library = libraryRepository.findById(libraryId).orElse(null);
+                LibraryEntity library = libraryRepository.findById(libraryId);
                 if (library != null) {
                     for (org.booklore.repository.jooq.dto.LibraryPathRow libPath : jooqLibraryPathRepository.findPathsByLibraryId(libraryId)) {
                         Path libraryRoot = Path.of(libPath.getPath());
@@ -373,8 +373,10 @@ public class BookDropService {
     }
 
     private BookdropFileResult moveFile(long libraryId, long pathId, BookMetadata metadata, BookdropFileRow bookdropFile) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
         LibraryPathEntity path = jooqLibraryPathRepository.findByLibraryId(libraryId).stream()
                 .filter(p -> p.getId().equals(pathId))

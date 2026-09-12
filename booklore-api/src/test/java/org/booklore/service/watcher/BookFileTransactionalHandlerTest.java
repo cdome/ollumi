@@ -5,7 +5,7 @@ import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileFingerprint;
@@ -37,7 +37,7 @@ class BookFileTransactionalHandlerTest {
     @Mock private BookFilePersistenceService bookFilePersistenceService;
     @Mock private LibraryProcessingService libraryProcessingService;
     @Mock private NotificationService notificationService;
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private PendingDeletionPool pendingDeletionPool;
@@ -81,7 +81,7 @@ class BookFileTransactionalHandlerTest {
                 .organizationMode(LibraryOrganizationMode.AUTO_DETECT)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(bookFilePersistenceService.findMatchingLibraryPath(eq(library), any(Path.class))).thenReturn("/library");
         when(bookFilePersistenceService.getLibraryPathEntityForFile(eq(library), eq("/library"))).thenReturn(libraryPath);
     }
@@ -138,7 +138,7 @@ class BookFileTransactionalHandlerTest {
 
         @Test
         void libraryNotFound_throws() {
-            when(libraryRepository.findById(99L)).thenReturn(Optional.empty());
+            when(libraryRepository.findById(99L)).thenReturn(null);
 
             org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
                     () -> handler.handleNewBookFile(99L, Path.of("/library/sub/test.epub")));
@@ -559,7 +559,7 @@ class BookFileTransactionalHandlerTest {
 
         @Test
         void libraryNotFound_throws() {
-            when(libraryRepository.findById(99L)).thenReturn(Optional.empty());
+            when(libraryRepository.findById(99L)).thenReturn(null);
 
             org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
                     () -> handler.handleNewFolderAudiobook(99L, Path.of("/library/audiobook")));

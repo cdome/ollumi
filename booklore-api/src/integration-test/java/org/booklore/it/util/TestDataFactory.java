@@ -9,7 +9,7 @@ import org.booklore.repository.jooq.JooqBookMetadataRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqUserLibraryRepository;
@@ -30,7 +30,7 @@ import java.util.UUID;
 @Component
 public class TestDataFactory {
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqLibraryPathRepository libraryPathRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMetadataRepository jooqBookMetadataRepository;
@@ -42,7 +42,7 @@ public class TestDataFactory {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public TestDataFactory(LibraryRepository libraryRepository,
+    public TestDataFactory(JooqLibraryRepository libraryRepository,
                            JooqLibraryPathRepository libraryPathRepository,
                            JooqBookRepository jooqBookRepository,
                            JooqBookMetadataRepository jooqBookMetadataRepository,

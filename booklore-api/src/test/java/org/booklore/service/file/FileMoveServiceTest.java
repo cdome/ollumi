@@ -13,7 +13,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -47,7 +47,7 @@ class FileMoveServiceTest {
     @Mock private AppProperties appProperties;
     @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
     @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private FileMoveHelper fileMoveHelper;
     @Mock private MonitoringRegistrationService monitoringRegistrationService;
@@ -64,7 +64,7 @@ class FileMoveServiceTest {
 
     static class TestableFileMoveService extends FileMoveService {
         TestableFileMoveService(AppProperties appProperties, JooqBookEntityRepository jooqBookEntityRepository, JooqBookRepository jooqBookRepository,
-                                LibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
+                                JooqLibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
                                 FileMoveHelper fileMoveHelper,
                                 MonitoringRegistrationService monitoringRegistrationService, LibraryMapper libraryMapper,
                                 BookMapper bookMapper, NotificationService notificationService, EntityManager entityManager,
@@ -787,7 +787,7 @@ class FileMoveServiceTest {
 
         private void mockBulkMoveSetup(BookEntity book, Path targetPath) throws IOException {
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
-            when(libraryRepository.findById(2L)).thenReturn(Optional.of(targetLibrary));
+            when(libraryRepository.findById(2L)).thenReturn(targetLibrary);
 
             when(fileMoveHelper.getFileNamingPattern(targetLibrary)).thenReturn("{title}");
             when(fileMoveHelper.generateNewFilePath(eq(book), eq(targetLibraryPath), anyString())).thenReturn(targetPath);
@@ -951,7 +951,7 @@ class FileMoveServiceTest {
             BookEntity book = createBook(List.of(epub));
 
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
-            when(libraryRepository.findById(2L)).thenReturn(Optional.empty());
+            when(libraryRepository.findById(2L)).thenReturn(null);
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library")));
 
             FileMoveRequest request = new FileMoveRequest();
@@ -980,7 +980,7 @@ class FileMoveServiceTest {
             differentPath.setLibrary(targetLibrary);
 
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
-            when(libraryRepository.findById(2L)).thenReturn(Optional.of(targetLibrary));
+            when(libraryRepository.findById(2L)).thenReturn(targetLibrary);
             when(jooqLibraryPathRepository.findByLibraryId(2L)).thenReturn(List.of(differentPath));
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library")));
 
@@ -1011,7 +1011,7 @@ class FileMoveServiceTest {
             when(jooqLibraryPathRepository.findPathsByLibraryId(2L)).thenReturn(List.of(new LibraryPathRow(targetPath.getId(), targetPath.getPath())));
 
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
-            when(libraryRepository.findById(2L)).thenReturn(Optional.of(targetLibrary));
+            when(libraryRepository.findById(2L)).thenReturn(targetLibrary);
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library")));
 
             FileMoveRequest request = new FileMoveRequest();
@@ -1047,8 +1047,8 @@ class FileMoveServiceTest {
             when(jooqLibraryPathRepository.findPathsByLibraryId(2L)).thenReturn(List.of(new LibraryPathRow(targetPath.getId(), targetPath.getPath())));
 
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
-            when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
-            when(libraryRepository.findById(2L)).thenReturn(Optional.of(targetLibrary));
+            when(libraryRepository.findById(1L)).thenReturn(library);
+            when(libraryRepository.findById(2L)).thenReturn(targetLibrary);
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library"), Paths.get("/target")));
             when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(Library.builder().build());
 
@@ -1088,8 +1088,8 @@ class FileMoveServiceTest {
             when(jooqLibraryPathRepository.findPathsByLibraryId(2L)).thenReturn(List.of(new LibraryPathRow(targetPath.getId(), targetPath.getPath())));
 
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(book);
-            when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
-            when(libraryRepository.findById(2L)).thenReturn(Optional.of(targetLibrary));
+            when(libraryRepository.findById(1L)).thenReturn(library);
+            when(libraryRepository.findById(2L)).thenReturn(targetLibrary);
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library"), Paths.get("/target")));
             when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(Library.builder().build());
 

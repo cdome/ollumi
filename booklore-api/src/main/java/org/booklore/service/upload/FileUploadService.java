@@ -15,7 +15,7 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
@@ -52,7 +52,7 @@ public class FileUploadService {
     private static final long BYTES_TO_KB_DIVISOR = 1024L;
     private static final long MB_TO_BYTES_MULTIPLIER = 1024L * 1024L;
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqBookEntityRepository jooqBookEntityRepository;
@@ -263,8 +263,11 @@ public class FileUploadService {
     }
 
     private LibraryEntity findLibraryById(long libraryId) {
-        return libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
+        return library;
     }
 
     /**

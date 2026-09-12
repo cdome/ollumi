@@ -6,7 +6,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.*;
 class LibraryProcessingServiceRegressionTest {
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
     @Mock
     private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
@@ -94,7 +94,7 @@ class LibraryProcessingServiceRegressionTest {
         filelessBook.setLibraryPath(pathEntity);
         filelessBook.setBookFiles(Collections.emptyList());
 
-        when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
         when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
                 .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
         when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(filelessBook));

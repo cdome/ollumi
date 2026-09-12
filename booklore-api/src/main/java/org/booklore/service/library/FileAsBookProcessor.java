@@ -10,7 +10,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.event.BookEventBroadcaster;
 import org.booklore.service.file.FileFingerprint;
@@ -46,7 +46,7 @@ public class FileAsBookProcessor {
     private final KoboAutoShelfService koboAutoShelfService;
     private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final FileService fileService;
     private final MetadataExtractorFactory metadataExtractorFactory;
     private final AudiobookMetadataExtractor audiobookMetadataExtractor;
@@ -69,8 +69,11 @@ public class FileAsBookProcessor {
 
     private LibraryEntity ensureManaged(LibraryEntity entity) {
         if (entity.getId() == null) return entity;
-        return libraryRepository.findById(entity.getId())
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(entity.getId()));
+        LibraryEntity managed = libraryRepository.findById(entity.getId());
+        if (managed == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(entity.getId());
+        }
+        return managed;
     }
 
     private void processGroupWithErrorHandling(List<LibraryFile> group, LibraryEntity libraryEntity) {
