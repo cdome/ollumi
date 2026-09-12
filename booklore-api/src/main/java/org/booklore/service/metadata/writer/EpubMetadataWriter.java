@@ -52,6 +52,7 @@ public class EpubMetadataWriter implements MetadataWriter {
 
     private static final String OPF_NS = "http://www.idpf.org/2007/opf";
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Override
     public void saveMetadataToFile(File epubFile, BookMetadataEntity metadata, String thumbnailUrl, MetadataClearFlags clear) {
@@ -100,7 +101,8 @@ public class EpubMetadataWriter implements MetadataWriter {
             helper.copyPublishedDate(clear != null && clear.isPublishedDate(), val -> replaceAndTrackChange(opfDoc, metadataElement, "date", DC_NS, val != null ? val.toString() : null, hasChanges));
             helper.copyLanguage(clear != null && clear.isLanguage(), val -> replaceAndTrackChange(opfDoc, metadataElement, "language", DC_NS, val, hasChanges));
 
-            helper.copyAuthors(clear != null && clear.isAuthors(), names -> {
+            java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+            helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, names -> {
                 removeCreatorsByRole(metadataElement, "");
                 removeCreatorsByRole(metadataElement, "aut");
                 if (names != null) {
@@ -115,7 +117,8 @@ public class EpubMetadataWriter implements MetadataWriter {
                 hasChanges[0] = true;
             });
 
-            helper.copyCategories(clear != null && clear.isCategories(), categories -> {
+            java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+            helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, categories -> {
                 removeElementsByTagNameNS(metadataElement, DC_NS, "subject");
                 if (categories != null) {
                     for (String cat : categories.stream().map(String::trim).distinct().toList()) {
@@ -955,16 +958,18 @@ public class EpubMetadataWriter implements MetadataWriter {
             metadataElement.appendChild(createBookloreMetaElement(doc, "ranobedb_rating", String.valueOf(metadata.getRanobedbRating()), epub3));
         }
         
-        if (metadata.getMoods() != null && !metadata.getMoods().isEmpty()) {
-            String moodsJson = "[" + String.join(", ", metadata.getMoods().stream()
-                .map(mood -> "\"" + mood.getName().replace("\"", "\\\"") + "\"")
+        java.util.Set<String> moodNames = relationsRepository.findMoodNamesByBookId(metadata.getBookId());
+        if (!moodNames.isEmpty()) {
+            String moodsJson = "[" + String.join(", ", moodNames.stream()
+                .map(mood -> "\"" + mood.replace("\"", "\\\"") + "\"")
                 .toList()) + "]";
             metadataElement.appendChild(createBookloreMetaElement(doc, "moods", moodsJson, epub3));
         }
         
-        if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
-            String tagsJson = "[" + String.join(", ", metadata.getTags().stream()
-                .map(tag -> "\"" + tag.getName().replace("\"", "\\\"") + "\"")
+        java.util.Set<String> tagNames = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+        if (!tagNames.isEmpty()) {
+            String tagsJson = "[" + String.join(", ", tagNames.stream()
+                .map(tag -> "\"" + tag.replace("\"", "\\\"") + "\"")
                 .toList()) + "]";
             metadataElement.appendChild(createBookloreMetaElement(doc, "tags", tagsJson, epub3));
         }

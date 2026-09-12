@@ -1,13 +1,14 @@
 package org.booklore;
 
 import org.booklore.config.security.service.AuthenticationService;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
-import org.booklore.repository.*;
 import org.booklore.service.book.BookDownloadService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.book.BookService;
@@ -44,8 +45,8 @@ class BookServiceDeleteTests {
 
     @BeforeEach
     void setUp() {
-        BookRepository bookRepository = Mockito.mock(BookRepository.class);
-        BookFileRepository bookFileRepository = Mockito.mock(BookFileRepository.class);
+        JooqBookEntityRepository jooqBookEntityRepository = Mockito.mock(JooqBookEntityRepository.class);
+        JooqBookRepository jooqBookRepository = Mockito.mock(JooqBookRepository.class);
         JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository = Mockito.mock(JooqPdfViewerPreferenceRepository.class);
         JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository = Mockito.mock(JooqEbookViewerPreferenceRepository.class);
         JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository = Mockito.mock(JooqCbxViewerPreferenceRepository.class);
@@ -53,6 +54,7 @@ class BookServiceDeleteTests {
         FileService fileService = Mockito.mock(FileService.class);
         JooqBookReadRepository jooqBookReadRepository = Mockito.mock(JooqBookReadRepository.class);
         JooqUserBookProgressRepository userBookProgressRepository = Mockito.mock(JooqUserBookProgressRepository.class);
+        org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository = Mockito.mock(org.booklore.repository.jooq.JooqLibraryPathRepository.class);
         AuthenticationService authenticationService = Mockito.mock(AuthenticationService.class);
         BookQueryService bookQueryService = Mockito.mock(BookQueryService.class);
         ReadingProgressService readingProgressService = Mockito.mock(ReadingProgressService.class);
@@ -64,14 +66,15 @@ class BookServiceDeleteTests {
         AuditService auditService = Mockito.mock(AuditService.class);
 
         bookService = new BookService(
-                bookRepository,
-                bookFileRepository,
+                jooqBookEntityRepository,
+                jooqBookRepository,
                 pdfViewerPreferencesRepository,
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,
                 fileService,
                 jooqBookReadRepository,
                 userBookProgressRepository,
+                jooqLibraryPathRepository,
                 authenticationService,
                 bookQueryService,
                 readingProgressService,

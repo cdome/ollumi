@@ -6,12 +6,16 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.dto.*;
@@ -21,7 +25,6 @@ import org.booklore.model.dto.response.BookStatusUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.*;
 import org.booklore.service.FileStreamingService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
@@ -58,14 +61,15 @@ import java.util.stream.Collectors;
 @Service
 public class BookService {
 
-    private final BookRepository bookRepository;
-    private final BookFileRepository bookFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     private final FileService fileService;
     private final JooqBookReadRepository jooqBookReadRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
     private final ReadingProgressService readingProgressService;
@@ -174,7 +178,10 @@ public class BookService {
 
     @Transactional(readOnly = true)
     public BookViewerSettings getBookViewerSetting(long bookId, long bookFileId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
 
         BookViewerSettings.BookViewerSettingsBuilder settingsBuilder = BookViewerSettings.builder();
@@ -249,8 +256,11 @@ public class BookService {
     }
 
     public Resource getBookCover(String coverHash) {
-        BookEntity bookEntity = bookRepository.findByBookCoverHash(coverHash).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(coverHash));
-        return getBookCover(bookEntity.getId());
+        Long bookId = jooqBookRepository.findBookIdByCoverHash(coverHash);
+        if (bookId == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(coverHash);
+        }
+        return getBookCover(bookId);
     }
 
     public Resource getAudiobookThumbnail(long bookId) {
@@ -301,7 +311,10 @@ public class BookService {
     }
 
     public ResponseEntity<Resource> getBookContent(long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -325,7 +338,10 @@ public class BookService {
     }
 
     public void streamBookContent(long bookId, String bookType, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -386,8 +402,8 @@ public class BookService {
                             log.info("Deleted book file: {}", fullFilePath);
                         }
 
-                        Set<Path> libraryRoots = book.getLibrary().getLibraryPaths().stream()
-                                .map(LibraryPathEntity::getPath)
+                        Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(book.getLibrary().getId()).stream()
+                                .map(LibraryPathRow::getPath)
                                 .map(Paths::get)
                                 .map(Path::normalize)
                                 .collect(Collectors.toSet());
@@ -409,7 +425,7 @@ public class BookService {
             }
         }
 
-        bookRepository.deleteAllInBatch(books);
+        jooqBookRepository.deleteByIds(books.stream().map(BookEntity::getId).toList());
         auditService.log(AuditAction.BOOK_DELETED, "Deleted " + ids.size() + " book(s)");
         BookDeletionResponse response = new BookDeletionResponse(ids, failedFileDeletions);
         return failedFileDeletions.isEmpty()

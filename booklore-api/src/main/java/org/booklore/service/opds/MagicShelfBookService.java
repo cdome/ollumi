@@ -11,8 +11,8 @@ import org.booklore.model.dto.GroupRule;
 import org.booklore.model.dto.Library;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookRuleEvaluator;
 import org.booklore.repository.jooq.JooqMagicShelfBookRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
@@ -43,10 +43,10 @@ import static org.booklore.jooq.tables.Book.BOOK;
 public class MagicShelfBookService {
 
     private final JooqMagicShelfRepository magicShelfRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqMagicShelfBookRepository jooqMagicShelfBookRepository;
     private final BookMapper bookMapper;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
     private final JooqBookRuleEvaluator ruleEvaluator;
     private final ContentRestrictionService contentRestrictionService;
@@ -116,8 +116,10 @@ public class MagicShelfBookService {
             return shelf;
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (entity.getPermissions() == null ||
                 (!entity.getPermissions().isPermissionAccessOpds() && !entity.getPermissions().isPermissionAdmin())) {
@@ -136,8 +138,10 @@ public class MagicShelfBookService {
     }
 
     private Condition libraryFilterCondition(Long userId) {
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
@@ -156,7 +160,7 @@ public class MagicShelfBookService {
         if (bookIds.isEmpty()) {
             return List.of();
         }
-        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+        Map<Long, BookEntity> booksById = jooqBookEntityRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
                 .collect(Collectors.toMap(BookEntity::getId, book -> book));
         return bookIds.stream()
                 .map(booksById::get)

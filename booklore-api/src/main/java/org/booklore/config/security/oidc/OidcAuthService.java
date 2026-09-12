@@ -11,7 +11,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.JooqOidcSessionRepository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.oidc.OidcGroupMappingService;
@@ -25,6 +25,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.text.ParseException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -42,7 +43,7 @@ public class OidcAuthService {
     private final OidcTokenClient oidcTokenClient;
     private final OidcTokenValidator oidcTokenValidator;
     private final OidcClaimExtractor oidcClaimExtractor;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final UserProvisioningService userProvisioningService;
     private final AuthenticationService authenticationService;
     private final JooqOidcSessionRepository oidcSessionRepository;
@@ -189,9 +190,9 @@ public class OidcAuthService {
         boolean autoProvision = provisionDetails != null && provisionDetails.isEnableAutoProvisioning();
         boolean allowLocalLinking = provisionDetails != null && provisionDetails.isAllowLocalAccountLinking();
 
-        return userRepository.findByOidcIssuerAndOidcSubject(issuerUri, userClaims.subject())
+        return Optional.ofNullable(userRepository.findByOidcIssuerAndOidcSubject(issuerUri, userClaims.subject()))
                 .map(user -> syncExistingUser(user, userClaims, issuerUri))
-                .or(() -> userRepository.findByUsername(userClaims.username())
+                .or(() -> Optional.ofNullable(userRepository.findByUsername(userClaims.username()))
                         .filter(user -> user.getProvisioningMethod() == ProvisioningMethod.OIDC || allowLocalLinking)
                         .map(user -> linkExistingUser(user, userClaims, issuerUri)))
                 .orElseGet(() -> {
@@ -203,8 +204,8 @@ public class OidcAuthService {
                     ReentrantLock lock = userLocks.computeIfAbsent(userClaims.username(), _ -> new ReentrantLock());
                     lock.lock();
                     try {
-                        return userRepository.findByOidcIssuerAndOidcSubject(issuerUri, userClaims.subject())
-                                .or(() -> userRepository.findByUsername(userClaims.username()))
+                        return Optional.ofNullable(userRepository.findByOidcIssuerAndOidcSubject(issuerUri, userClaims.subject()))
+                                .or(() -> Optional.ofNullable(userRepository.findByUsername(userClaims.username())))
                                 .orElseGet(() -> {
                                     log.info("OIDC: provisioning new user '{}'", userClaims.username());
                                     BookLoreUserEntity newUser = userProvisioningService.provisionOidcUser(

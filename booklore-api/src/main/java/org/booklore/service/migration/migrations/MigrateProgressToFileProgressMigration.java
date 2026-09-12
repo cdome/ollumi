@@ -2,7 +2,7 @@ package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
@@ -23,7 +23,7 @@ public class MigrateProgressToFileProgressMigration implements Migration {
 
     private final JooqUserBookProgressRepository userBookProgressRepository;
     private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
-    private final BookAdditionalFileRepository bookFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
 
     @Override
     public String getKey() {
@@ -98,7 +98,7 @@ public class MigrateProgressToFileProgressMigration implements Migration {
             return Optional.empty();
         }
 
-        List<BookFileEntity> bookFiles = bookFileRepository.findByBookId(progress.getBookId());
+        List<BookFileEntity> bookFiles = jooqBookEntityRepository.findBookFilesByBookId(progress.getBookId());
         if (bookFiles == null || bookFiles.isEmpty()) {
             return Optional.empty();
         }

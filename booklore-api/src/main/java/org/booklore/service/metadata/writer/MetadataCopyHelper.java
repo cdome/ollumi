@@ -3,6 +3,7 @@ package org.booklore.service.metadata.writer;
 import org.booklore.model.entity.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -161,58 +162,50 @@ public class MetadataCopyHelper {
         }
     }
 
-    public void copyAuthors(boolean clear, Consumer<Set<String>> consumer) {
+    /** Same reasoning as copyMoods/copyCategories/copyTags: authors (ordered) is no longer Hibernate-managed. */
+    public void copyAuthors(boolean clear, List<String> currentAuthorNames, Consumer<List<String>> consumer) {
         if (!isLocked(metadata.getAuthorsLocked())) {
             if (clear) {
-                consumer.accept(Set.of());
-            } else if (metadata.getAuthors() != null) {
-                Set<String> names = metadata.getAuthors().stream()
-                        .map(AuthorEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(names);
+                consumer.accept(List.of());
+            } else if (currentAuthorNames != null) {
+                consumer.accept(currentAuthorNames);
             }
         }
     }
 
-    public void copyCategories(boolean clear, Consumer<Set<String>> consumer) {
+    /** Same reasoning as copyMoods: categories is no longer Hibernate-managed, caller resolves via jOOQ. */
+    public void copyCategories(boolean clear, Set<String> currentCategoryNames, Consumer<Set<String>> consumer) {
         if (!isLocked(metadata.getCategoriesLocked())) {
             if (clear) {
                 consumer.accept(Set.of());
-            } else if (metadata.getCategories() != null) {
-                Set<String> cats = metadata.getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(cats);
+            } else if (currentCategoryNames != null) {
+                consumer.accept(currentCategoryNames);
             }
         }
     }
 
-    public void copyMoods(boolean clear, Consumer<Set<String>> consumer) {
+    /**
+     * moods is no longer a Hibernate-managed collection on BookMetadataEntity: the caller resolves the
+     * current names via JooqBookMetadataRelationsRepository (this class is a plain POJO, not a Spring
+     * bean, so it cannot inject the repository itself) and passes them in.
+     */
+    public void copyMoods(boolean clear, Set<String> currentMoodNames, Consumer<Set<String>> consumer) {
         if (!isLocked(metadata.getMoodsLocked())) {
             if (clear) {
                 consumer.accept(Set.of());
-            } else if (metadata.getMoods() != null) {
-                Set<String> moods = metadata.getMoods().stream()
-                        .map(MoodEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(moods);
+            } else if (currentMoodNames != null) {
+                consumer.accept(currentMoodNames);
             }
         }
     }
 
-    public void copyTags(boolean clear, Consumer<Set<String>> consumer) {
+    /** Same reasoning as copyMoods/copyCategories: caller resolves current names via jOOQ. */
+    public void copyTags(boolean clear, Set<String> currentTagNames, Consumer<Set<String>> consumer) {
         if (!isLocked(metadata.getTagsLocked())) {
             if (clear) {
                 consumer.accept(Set.of());
-            } else if (metadata.getTags() != null) {
-                Set<String> tags = metadata.getTags().stream()
-                        .map(TagEntity::getName)
-                        .filter(n -> n != null && !n.isBlank())
-                        .collect(Collectors.toSet());
-                consumer.accept(tags);
+            } else if (currentTagNames != null) {
+                consumer.accept(currentTagNames);
             }
         }
     }

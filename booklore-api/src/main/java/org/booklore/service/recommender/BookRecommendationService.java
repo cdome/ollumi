@@ -9,7 +9,8 @@ import org.booklore.model.dto.*;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.book.BookQueryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +27,8 @@ import java.util.stream.Collectors;
 public class BookRecommendationService {
 
     private final BookSimilarityService similarityService;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookQueryService bookQueryService;
     private final BookMapper bookMapper;
     private final AuthenticationService authenticationService;
@@ -36,14 +38,17 @@ public class BookRecommendationService {
 
     @Transactional
     public List<BookRecommendation> getRecommendations(Long bookId, int limit) {
-        BookEntity book = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         Set<BookRecommendationLite> recommendations = book.getSimilarBooksJson();
         if (recommendations == null || recommendations.isEmpty()) {
             log.info("Recommendations for book ID {} are missing or empty. Computing similarity...", bookId);
             recommendations = findSimilarBookIds(bookId, limit);
             book.setSimilarBooksJson(recommendations);
-            bookRepository.save(book);
+            jooqBookRepository.updateSimilarBooksJson(bookId, recommendations);
         }
 
         Set<Long> recommendedBookIds = recommendations.stream()
@@ -91,7 +96,10 @@ public class BookRecommendationService {
     }
 
     protected List<BookRecommendation> findSimilarBooks(Long bookId, int limit) {
-        BookEntity target = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity target = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (target == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         List<BookEntity> candidates = bookQueryService.getAllFullBookEntities();
 

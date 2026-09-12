@@ -1,7 +1,8 @@
 package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.migration.Migration;
 import org.booklore.util.BookCoverUtils;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GenerateCoverHashMigration implements Migration {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
 
     @Override
     public String getKey() {
@@ -36,16 +38,17 @@ public class GenerateCoverHashMigration implements Migration {
         int offset = 0;
 
         while (true) {
-            List<BookEntity> bookBatch = bookRepository.findBooksForMigrationBatch(offset, batchSize);
+            List<BookEntity> bookBatch = jooqBookEntityRepository.findBooksForMigrationBatch(offset, batchSize);
             if (bookBatch.isEmpty()) break;
 
             for (BookEntity book : bookBatch) {
                 if (book.getBookCoverHash() == null) {
-                    book.setBookCoverHash(BookCoverUtils.generateCoverHash());
+                    String hash = BookCoverUtils.generateCoverHash();
+                    book.setBookCoverHash(hash);
+                    jooqBookRepository.updateBookCoverHash(book.getId(), hash);
                 }
             }
 
-            bookRepository.saveAll(bookBatch);
             processedCount += bookBatch.size();
             offset += batchSize;
 

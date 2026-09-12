@@ -6,13 +6,12 @@ import org.booklore.model.dto.BookReview
 import org.booklore.model.enums.MetadataProvider
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 /**
- * jOOQ read/delete access to public_book_review, replacing the JPA BookReviewRepository. Returns the
- * BookReview DTO directly (drops BookReviewMapper). The rows are still WRITTEN via the Hibernate
- * BookMetadataEntity.reviews cascade (BookReviewUpdateService), so BookReviewEntity stays; callers must
- * flush that cascade (saveAndFlush) before reading here in the same transaction.
+ * jOOQ read/write access to public_book_review, replacing the JPA BookReviewEntity/its Hibernate
+ * cascade entirely. Returns the BookReview DTO directly (drops BookReviewMapper).
  */
 @Repository
 class JooqBookReviewRepository(private val dsl: DSLContext) {
@@ -27,6 +26,22 @@ class JooqBookReviewRepository(private val dsl: DSLContext) {
     fun deleteById(id: Long): Int = dsl.deleteFrom(t).where(t.ID.eq(id)).execute()
 
     fun deleteByBookId(bookId: Long): Int = dsl.deleteFrom(t).where(t.BOOK_ID.eq(bookId)).execute()
+
+    fun insert(bookId: Long, review: BookReview) {
+        dsl.insertInto(t)
+            .set(t.BOOK_ID, bookId)
+            .set(t.METADATA_PROVIDER, review.metadataProvider?.name)
+            .set(t.REVIEWER_NAME, review.reviewerName)
+            .set(t.TITLE, review.title)
+            .set(t.RATING, review.rating?.toDouble())
+            .set(t.DATE, review.date?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+            .set(t.BODY, review.body)
+            .set(t.COUNTRY, review.country)
+            .set(t.SPOILER, review.spoiler?.let { if (it) 1.toByte() else 0.toByte() })
+            .set(t.FOLLOWERS_COUNT, review.followersCount)
+            .set(t.TEXT_REVIEWS_COUNT, review.textReviewsCount)
+            .execute()
+    }
 
     private fun toDto(r: PublicBookReviewRecord): BookReview =
         BookReview.builder()

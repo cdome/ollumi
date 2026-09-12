@@ -13,10 +13,9 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookdropFileStatus;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryPathRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileMovingHelper;
@@ -63,11 +62,11 @@ class BookDropServiceTest {
     @Mock
     private MonitoringRegistrationService monitoringRegistrationService;
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
     @Mock
-    private LibraryPathRepository libraryPathRepository;
+    private org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private BookdropMonitoringService bookdropMonitoringService;
     @Mock
@@ -108,7 +107,9 @@ class BookDropServiceTest {
         libraryEntity = new LibraryEntity();
         libraryEntity.setId(1L);
         libraryEntity.setName("Test Library");
-        libraryEntity.setLibraryPaths(List.of(libraryPathEntity));
+        when(jooqLibraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPathEntity));
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
+                .thenReturn(List.of(new org.booklore.repository.jooq.dto.LibraryPathRow(libraryPathEntity.getId(), libraryPathEntity.getPath())));
 
         bookdropFileEntity = new BookdropFileRow(
                 1L,
@@ -245,7 +246,7 @@ class BookDropServiceTest {
 
         when(bookdropFileRepository.findAllExcludingIdsFlat(any())).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class))).thenReturn(metadata);
         when(fileMovingHelper.getFileNamingPattern(libraryEntity)).thenReturn("{title}");
         when(fileMovingHelper.generateNewFilePath(anyString(), any(), anyString(), anyString()))
@@ -266,7 +267,7 @@ class BookDropServiceTest {
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(1L);
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
         try (MockedStatic<Files> filesMock = mockStatic(Files.class, withSettings().lenient())) {
             filesMock.when(() -> Files.exists(any(Path.class))).thenReturn(true);
@@ -294,7 +295,7 @@ class BookDropServiceTest {
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
-        when(libraryRepository.findById(999L)).thenReturn(Optional.empty());
+        when(libraryRepository.findById(999L)).thenReturn(null);
 
         BookMetadata metadata = new BookMetadata();
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class))).thenReturn(metadata);
@@ -406,7 +407,7 @@ class BookDropServiceTest {
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(2L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(missingFileEntity));
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
 
         BookMetadata metadata = new BookMetadata();
         metadata.setTitle("Missing Book");
@@ -438,7 +439,7 @@ class BookDropServiceTest {
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
 
         BookMetadata metadata = new BookMetadata();
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class))).thenReturn(metadata);
@@ -470,12 +471,8 @@ class BookDropServiceTest {
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
         
-        LibraryPathEntity pathEntity = new LibraryPathEntity();
-        pathEntity.setId(1L);
-        pathEntity.setPath("/books");
-        when(libraryPathRepository.findById(1L)).thenReturn(Optional.of(pathEntity));
 
         lenient().when(objectMapper.readValue(anyString(), any(Class.class))).thenReturn(new BookMetadata());
         when(fileMovingHelper.getFileNamingPattern(libraryEntity)).thenReturn("{title}");
@@ -491,10 +488,8 @@ class BookDropServiceTest {
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(1L);
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
         
-        when(bookRepository.save(any())).thenAnswer(i -> i.getArguments()[0]);
-
         doNothing().when(bookdropFileRepository).deleteById(anyLong());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();
         doNothing().when(notificationService).sendMessage(any(), any());
@@ -537,7 +532,7 @@ class BookDropServiceTest {
         request.setFiles(List.of(finalizeFile));
 
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class))).thenReturn(new BookMetadata());
         when(fileMovingHelper.getFileNamingPattern(libraryEntity)).thenReturn("{title}");
         when(fileMovingHelper.generateNewFilePath(anyString(), any(), anyString(), anyString()))
@@ -603,7 +598,7 @@ class BookDropServiceTest {
         request.setFiles(List.of(finalizeFile));
 
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
         when(objectMapper.readValue(anyString(), eq(BookMetadata.class))).thenReturn(new BookMetadata());
         when(fileMovingHelper.getFileNamingPattern(libraryEntity)).thenReturn("{title}");
         when(fileMovingHelper.generateNewFilePath(anyString(), any(), anyString(), anyString()))
@@ -618,7 +613,7 @@ class BookDropServiceTest {
 
         BookEntity bookEntity = new BookEntity();
         bookEntity.setId(1L);
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
         doNothing().when(bookdropFileRepository).deleteById(anyLong());
         doNothing().when(bookdropNotificationService).sendBookdropFileSummaryNotification();

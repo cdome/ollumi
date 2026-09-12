@@ -1,6 +1,9 @@
 package org.booklore.repository.jooq
 
 import org.booklore.jooq.tables.LibraryPath.LIBRARY_PATH
+import org.booklore.jooq.tables.records.LibraryPathRecord
+import org.booklore.model.entity.LibraryEntity
+import org.booklore.model.entity.LibraryPathEntity
 import org.booklore.repository.jooq.dto.LibraryPathRow
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
@@ -12,6 +15,54 @@ import org.springframework.stereotype.Repository
  */
 @Repository
 class JooqLibraryPathRepository(private val dsl: DSLContext) {
+
+    /** Mirrors LibraryPathRepository's inherited/derived methods. `library` is left null - traced every
+     * consumer of findById/findByLibraryId and none dereferences it, unlike findAllWithLibrary below. */
+    private fun toEntity(r: LibraryPathRecord): LibraryPathEntity =
+        LibraryPathEntity.builder().id(r.id).path(r.path).build()
+
+    fun findById(id: Long): LibraryPathEntity? =
+        dsl.selectFrom(LIBRARY_PATH).where(LIBRARY_PATH.ID.eq(id)).fetchOne()?.let(::toEntity)
+
+    fun findByLibraryId(libraryId: Long): List<LibraryPathEntity> =
+        dsl.selectFrom(LIBRARY_PATH)
+            .where(LIBRARY_PATH.LIBRARY_ID.eq(libraryId))
+            .fetch()
+            .map(::toEntity)
+
+    /** Mirrors LibraryPathRepository.findAllWithLibrary: the one consumer (LibraryHealthService) only
+     * ever reads library.getId() off the result, so library is a minimal id-only stub - not a full
+     * LIBRARY join. */
+    fun findAllWithLibrary(): List<LibraryPathEntity> =
+        dsl.selectFrom(LIBRARY_PATH)
+            .fetch()
+            .map { r -> toEntity(r).also { it.library = LibraryEntity.builder().id(r.libraryId).build() } }
+
+    fun deleteAllById(ids: Collection<Long>) {
+        if (ids.isEmpty()) return
+        dsl.deleteFrom(LIBRARY_PATH).where(LIBRARY_PATH.ID.`in`(ids)).execute()
+    }
+
+    /** Mirrors LibraryPathRepository.save(path) for a single new path; returns the generated id. */
+    fun insertLibraryPath(libraryId: Long, path: String): Long =
+        dsl.insertInto(LIBRARY_PATH)
+            .set(LIBRARY_PATH.LIBRARY_ID, libraryId)
+            .set(LIBRARY_PATH.PATH, path)
+            .returning(LIBRARY_PATH.ID)
+            .fetchOne()!!.id!!
+
+    /** Mirrors LibraryPathRepository.saveAll for a batch of new paths; no id feedback (no consumer
+     * needs the generated ids back on the passed-in entities). */
+    fun insertAll(paths: List<LibraryPathEntity>) {
+        if (paths.isEmpty()) return
+        val rows = paths.map { p ->
+            dsl.newRecord(LIBRARY_PATH).apply {
+                libraryId = p.library.id
+                path = p.path
+            }
+        }
+        dsl.batchInsert(rows).execute()
+    }
 
     /** The path of [pathId], but only if it belongs to [libraryId]; null otherwise. */
     fun findPathByIdAndLibraryId(pathId: Long, libraryId: Long): String? =

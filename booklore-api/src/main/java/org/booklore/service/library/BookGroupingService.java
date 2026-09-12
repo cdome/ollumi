@@ -6,7 +6,7 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.util.BookFileGroupingUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ public class BookGroupingService {
 
     private static final double FILELESS_MATCH_THRESHOLD = 0.85;
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
 
     public record GroupingResult(
             Map<BookEntity, List<LibraryFile>> filesToAttach,
@@ -163,7 +163,7 @@ public class BookGroupingService {
         }
 
         Long libraryPathId = file.getLibraryPathEntity().getId();
-        List<BookEntity> booksInDirectory = bookRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, fileSubPath);
+        List<BookEntity> booksInDirectory = jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, fileSubPath);
 
         List<BookEntity> activeBooksInDirectory = booksInDirectory.stream()
                 .filter(book -> book.getDeleted() == null || !book.getDeleted())
@@ -184,7 +184,7 @@ public class BookGroupingService {
     }
 
     private BookEntity findExactFilelessMatch(LibraryFile file, LibraryEntity library) {
-        List<BookEntity> filelessBooks = bookRepository.findFilelessBooksByLibraryId(library.getId());
+        List<BookEntity> filelessBooks = jooqBookEntityRepository.findFilelessBooksByLibraryId(library.getId());
         if (filelessBooks.isEmpty()) {
             return null;
         }
@@ -210,7 +210,7 @@ public class BookGroupingService {
     }
 
     private BookEntity findMatchingFilelessBook(LibraryFile file, LibraryEntity library) {
-        List<BookEntity> filelessBooks = bookRepository.findFilelessBooksByLibraryId(library.getId());
+        List<BookEntity> filelessBooks = jooqBookEntityRepository.findFilelessBooksByLibraryId(library.getId());
         if (filelessBooks.isEmpty()) {
             return null;
         }
@@ -266,7 +266,7 @@ public class BookGroupingService {
             }
             current = current.substring(0, lastSep);
 
-            List<BookEntity> booksAtLevel = bookRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, current);
+            List<BookEntity> booksAtLevel = jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(libraryPathId, current);
             for (BookEntity book : booksAtLevel) {
                 if (book.getDeleted() != null && book.getDeleted()) {
                     continue;

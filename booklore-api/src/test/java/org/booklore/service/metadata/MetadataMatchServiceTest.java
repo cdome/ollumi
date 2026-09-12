@@ -2,10 +2,8 @@ package org.booklore.service.metadata;
 
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataMatchWeights;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +34,12 @@ class MetadataMatchServiceTest {
     @Mock
     private BookQueryService bookQueryService;
 
+    @Mock
+    private org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
+
+    @Mock
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+
     @InjectMocks
     private MetadataMatchService service;
 
@@ -53,6 +57,11 @@ class MetadataMatchServiceTest {
     }
 
     private BookEntity bookWith(BookMetadataEntity metadata) {
+        // calculateMatchScore now reads categories via jOOQ keyed by bookId; give every fixture one
+        // unless the test already set a specific id.
+        if (metadata.getBookId() == null) {
+            metadata.setBookId(1L);
+        }
         BookEntity book = BookEntity.builder().metadata(metadata).build();
         return book;
     }
@@ -150,11 +159,12 @@ class MetadataMatchServiceTest {
         @Test
         void scoresMultipleFieldsProportionally() {
             stubWeights(defaultWeights);
+            when(relationsRepository.findAuthorNamesByBookId(anyLong())).thenReturn(List.of("Author"));
 
             BookMetadataEntity metadata = BookMetadataEntity.builder()
                     .title("Title")
                     .description("Desc")
-                    .authors(List.of(AuthorEntity.builder().name("Author").build()))
+                    .authorNames(List.of("Author"))
                     .build();
             BookEntity book = bookWith(metadata);
 
@@ -167,12 +177,14 @@ class MetadataMatchServiceTest {
         @Test
         void scoresAllFieldsFullyPopulated() {
             stubWeights(defaultWeights);
+            when(relationsRepository.findCategoryNamesByBookId(anyLong())).thenReturn(Set.of("Fiction"));
+            when(relationsRepository.findAuthorNamesByBookId(anyLong())).thenReturn(List.of("Author"));
 
             BookMetadataEntity metadata = BookMetadataEntity.builder()
                     .title("Title")
                     .subtitle("Subtitle")
                     .description("Description")
-                    .authors(List.of(AuthorEntity.builder().name("Author").build()))
+                    .authorNames(List.of("Author"))
                     .publisher("Publisher")
                     .publishedDate(LocalDate.now())
                     .seriesName("Series")
@@ -182,7 +194,6 @@ class MetadataMatchServiceTest {
                     .isbn10("1234567890")
                     .language("en")
                     .pageCount(300)
-                    .categories(Set.of(CategoryEntity.builder().name("Fiction").build()))
                     .amazonRating(4.5)
                     .amazonReviewCount(100)
                     .goodreadsRating(4.2)
@@ -262,7 +273,7 @@ class MetadataMatchServiceTest {
                     .build();
             stubWeights(weights);
 
-            BookEntity book = bookWith(BookMetadataEntity.builder().authors(new ArrayList<>()).build());
+            BookEntity book = bookWith(BookMetadataEntity.builder().authorNames(new ArrayList<>()).build());
             assertThat(service.calculateMatchScore(book)).isEqualTo(0f);
         }
     }
@@ -368,7 +379,7 @@ class MetadataMatchServiceTest {
             stubWeights(weights);
 
             BookEntity book = bookWith(BookMetadataEntity.builder()
-                    .authors(new ArrayList<>())
+                    .authorNames(new ArrayList<>())
                     .authorsLocked(true)
                     .build());
 
@@ -384,7 +395,9 @@ class MetadataMatchServiceTest {
             stubWeights(defaultWeights);
 
             BookEntity book1 = bookWith(BookMetadataEntity.builder().title("Book 1").build());
+            book1.setId(1L);
             BookEntity book2 = bookWith(BookMetadataEntity.builder().build());
+            book2.setId(2L);
 
             when(bookQueryService.getAllFullBookEntities()).thenReturn(List.of(book1, book2));
 
@@ -392,7 +405,8 @@ class MetadataMatchServiceTest {
 
             assertThat(book1.getMetadataMatchScore()).isGreaterThan(0f);
             assertThat(book2.getMetadataMatchScore()).isEqualTo(0f);
-            verify(bookQueryService).saveAll(List.of(book1, book2));
+            verify(jooqBookRepository).updateMetadataMatchScore(1L, book1.getMetadataMatchScore());
+            verify(jooqBookRepository).updateMetadataMatchScore(2L, book2.getMetadataMatchScore());
         }
     }
 }

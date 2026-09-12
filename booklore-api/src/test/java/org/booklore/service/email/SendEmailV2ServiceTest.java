@@ -6,7 +6,7 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.EmailRecipientV2;
 import org.booklore.model.dto.request.SendBookByEmailRequest;
 import org.booklore.model.entity.*;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqUserEmailProviderPreferenceRepository;
 import org.booklore.repository.jooq.dto.UserEmailProviderPreference;
 import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
@@ -39,7 +39,7 @@ class SendEmailV2ServiceTest {
     private JooqUserEmailProviderPreferenceRepository preferenceRepository;
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private JooqEmailRecipientV2Repository emailRecipientRepository;
@@ -109,7 +109,7 @@ class SendEmailV2ServiceTest {
     @Test
     void emailBookQuick_success() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
         when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(emailProvider);
         when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(emailRecipient);
@@ -136,7 +136,7 @@ class SendEmailV2ServiceTest {
     @Test
     void emailBookQuick_bookNotFound() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBookQuick(10L));
     }
@@ -144,7 +144,7 @@ class SendEmailV2ServiceTest {
     @Test
     void emailBookQuick_defaultProviderNotFound_noPreference() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.empty());
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBookQuick(10L));
@@ -153,7 +153,7 @@ class SendEmailV2ServiceTest {
     @Test
     void emailBookQuick_defaultProviderNotFound_providerMissing() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
         when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(null);
 
@@ -163,7 +163,7 @@ class SendEmailV2ServiceTest {
     @Test
     void emailBookQuick_defaultRecipientNotFound() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
         when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(emailProvider);
         when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(null);
@@ -181,7 +181,7 @@ class SendEmailV2ServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
@@ -214,7 +214,7 @@ class SendEmailV2ServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(null);
         when(emailProviderRepository.findSharedProviderById(100L)).thenReturn(emailProvider);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {
@@ -261,7 +261,7 @@ class SendEmailV2ServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBook(request));
     }
@@ -276,7 +276,7 @@ class SendEmailV2ServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(null);
 
         assertThrows(APIException.class, () -> sendEmailV2Service.emailBook(request));
@@ -285,7 +285,7 @@ class SendEmailV2ServiceTest {
     @Test
     void emailBookQuick_sendEmailFailure_logsError() {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(preferenceRepository.findByUserId(1L)).thenReturn(Optional.of(preference));
         when(emailProviderRepository.findAccessibleProvider(100L, 1L)).thenReturn(emailProvider);
         when(emailRecipientRepository.findDefaultEmailRecipientByUserId(1L)).thenReturn(emailRecipient);
@@ -320,7 +320,7 @@ class SendEmailV2ServiceTest {
 
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(emailProviderRepository.findByIdAndUserId(100L, 1L)).thenReturn(emailProvider);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(book);
         when(emailRecipientRepository.findByIdAndUserId(200L, 1L)).thenReturn(emailRecipient);
 
         try (MockedStatic<SecurityContextVirtualThread> securityMock = mockStatic(SecurityContextVirtualThread.class)) {

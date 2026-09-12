@@ -1,6 +1,5 @@
 package org.booklore.service.file;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.config.AppProperties;
 import org.booklore.mapper.BookMapper;
 import org.booklore.mapper.LibraryMapper;
@@ -11,10 +10,11 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
@@ -48,17 +48,16 @@ import static org.mockito.Mockito.*;
 class FileMoveServiceOrderingTest {
 
     @Mock private AppProperties appProperties;
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private JooqBookRepository jooqBookRepository;
-    @Mock private BookAdditionalFileRepository bookFileRepository;
-    @Mock private LibraryRepository libraryRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
+    @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock private FileMoveHelper fileMoveHelper;
     @Mock private MonitoringRegistrationService monitoringRegistrationService;
     @Mock private LibraryMapper libraryMapper;
     @Mock private BookMapper bookMapper;
     @Mock private NotificationService notificationService;
 
-    @Mock private EntityManager entityManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private SidecarMetadataWriter sidecarMetadataWriter;
 
@@ -67,13 +66,14 @@ class FileMoveServiceOrderingTest {
     private LibraryPathEntity libraryPath;
 
     static class TestableFileMoveService extends FileMoveService {
-        TestableFileMoveService(AppProperties appProperties, BookRepository bookRepository, JooqBookRepository jooqBookRepository, BookAdditionalFileRepository bookFileRepository,
-                                LibraryRepository libraryRepository, FileMoveHelper fileMoveHelper,
+        TestableFileMoveService(AppProperties appProperties, JooqBookEntityRepository jooqBookEntityRepository, JooqBookRepository jooqBookRepository,
+                                JooqLibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
+                                FileMoveHelper fileMoveHelper,
                                 MonitoringRegistrationService monitoringRegistrationService, LibraryMapper libraryMapper,
-                                BookMapper bookMapper, NotificationService notificationService, EntityManager entityManager,
+                                BookMapper bookMapper, NotificationService notificationService,
                                 TransactionTemplate transactionTemplate, SidecarMetadataWriter sidecarMetadataWriter) {
-            super(appProperties, bookRepository, jooqBookRepository, bookFileRepository, libraryRepository, fileMoveHelper,
-                    monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter);
+            super(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository, jooqLibraryPathRepository, fileMoveHelper,
+                    monitoringRegistrationService, libraryMapper, bookMapper, notificationService, transactionTemplate, sidecarMetadataWriter);
         }
 
         @Override
@@ -92,8 +92,9 @@ class FileMoveServiceOrderingTest {
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
 
-        service = spy(new TestableFileMoveService(appProperties, bookRepository, jooqBookRepository, bookFileRepository, libraryRepository,
-                fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter));
+        service = spy(new TestableFileMoveService(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository,
+                jooqLibraryPathRepository,
+                fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, transactionTemplate, sidecarMetadataWriter));
 
         library = new LibraryEntity();
         library.setId(1L);
@@ -102,7 +103,8 @@ class FileMoveServiceOrderingTest {
         libraryPath.setId(10L);
         libraryPath.setPath("/library");
         libraryPath.setLibrary(library);
-        library.setLibraryPaths(List.of(libraryPath));
+        when(jooqLibraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPath));
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(List.of(new LibraryPathRow(libraryPath.getId(), libraryPath.getPath())));
     }
 
     private BookEntity createBook() {
@@ -149,10 +151,10 @@ class FileMoveServiceOrderingTest {
 
         assertThat(result.isMoved()).isTrue();
 
-        InOrder inOrder = inOrder(fileMoveHelper, bookFileRepository);
+        InOrder inOrder = inOrder(fileMoveHelper, jooqBookRepository);
         inOrder.verify(fileMoveHelper).moveFileWithBackup(any());
         inOrder.verify(fileMoveHelper).commitMove(any(), any());
-        inOrder.verify(bookFileRepository).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+        inOrder.verify(jooqBookRepository).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -228,8 +230,8 @@ class FileMoveServiceOrderingTest {
 
         service.moveSingleFile(book);
 
-        InOrder inOrder = inOrder(bookFileRepository, fileMoveHelper);
-        inOrder.verify(bookFileRepository).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+        InOrder inOrder = inOrder(jooqBookRepository, fileMoveHelper);
+        inOrder.verify(jooqBookRepository).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
         inOrder.verify(fileMoveHelper).deleteEmptyParentDirsUpToLibraryFolders(any(), anySet());
     }
 
@@ -304,7 +306,7 @@ class FileMoveServiceOrderingTest {
 
         service.moveSingleFile(book);
 
-        verify(bookFileRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
+        verify(jooqBookRepository, never()).updateFileNameAndSubPath(anyLong(), anyString(), anyString());
     }
 
     @Test

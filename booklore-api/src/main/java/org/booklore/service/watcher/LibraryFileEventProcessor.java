@@ -8,8 +8,7 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.library.LibraryProcessingService;
@@ -41,9 +40,9 @@ public class LibraryFileEventProcessor {
     private static final int MIN_AUDIO_FILES_FOR_FOLDER_AUDIOBOOK = 2;
 
     private final BlockingQueue<FileEvent> eventQueue = new LinkedBlockingQueue<>();
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
-    private final BookRepository bookRepository;
+    private final org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     private final BookFileTransactionalHandler bookFileTransactionalHandler;
     private final BookFilePersistenceService bookFilePersistenceService;
     private final LibraryProcessingService libraryProcessingService;
@@ -131,8 +130,10 @@ public class LibraryFileEventProcessor {
         log.info("[PROCESS] '{}' event for '{}'{}", event.eventKind().name(), fileName,
                 event.isDirectory() ? " (directory)" : "");
 
-        LibraryEntity library = libraryRepository.findById(event.libraryId())
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(event.libraryId()));
+        LibraryEntity library = libraryRepository.findById(event.libraryId());
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(event.libraryId());
+        }
 
         // jOOQ, not library.getLibraryPaths(): this runs on the watcher thread with a detached entity.
         if (jooqLibraryPathRepository.findPathsByLibraryId(library.getId()).stream()
@@ -344,10 +345,10 @@ public class LibraryFileEventProcessor {
                     continue;
                 }
 
-                Optional<BookEntity> existing = bookRepository.findByCurrentHashIncludingRecentlyDeleted(
+                BookEntity existing = jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(
                         hash, Instant.now().minus(60, ChronoUnit.SECONDS));
-                if (existing.isPresent()) {
-                    bookFilePersistenceService.updatePathIfChanged(existing.get(), library, p, hash);
+                if (existing != null) {
+                    bookFilePersistenceService.updatePathIfChanged(existing, library, p, hash);
                     log.info("[FOLDER_CREATE] File '{}' recognized as moved file, updated existing book's path", p);
                 } else {
                     unmatched.add(p);
@@ -471,7 +472,7 @@ public class LibraryFileEventProcessor {
             LibraryPathEntity libPathEntity = bookFilePersistenceService.getLibraryPathEntityForFile(library, libPath);
 
             String relativePrefix = Path.of(libPathEntity.getPath()).relativize(folderPath).toString().replace("\\", "/");
-            List<BookEntity> booksWithFiles = bookRepository.findBooksWithFilesUnderPath(libPathEntity.getId(), relativePrefix);
+            List<BookEntity> booksWithFiles = jooqBookEntityRepository.findBooksWithFilesUnderPath(libPathEntity.getId(), relativePrefix);
 
             if (booksWithFiles.isEmpty()) {
                 log.debug("[FOLDER_DELETE] No books found under '{}'", folderPath);

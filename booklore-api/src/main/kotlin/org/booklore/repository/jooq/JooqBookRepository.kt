@@ -3,6 +3,8 @@ package org.booklore.repository.jooq
 import org.booklore.jooq.tables.Book.BOOK
 import org.booklore.jooq.tables.BookFile.BOOK_FILE
 import org.booklore.jooq.tables.BookMetadata.BOOK_METADATA
+import org.booklore.model.dto.BookRecommendationLite
+import org.booklore.model.entity.BookFileEntity
 import org.booklore.model.enums.BookFileType
 import org.booklore.repository.jooq.dto.BookCoverUpdate
 import org.jooq.Condition
@@ -10,12 +12,13 @@ import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL.*
 import org.springframework.stereotype.Repository
+import tools.jackson.databind.ObjectMapper
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 @Repository
-class JooqBookRepository(private val dsl: DSLContext) {
+class JooqBookRepository(private val dsl: DSLContext, private val objectMapper: ObjectMapper) {
 
     private val bm = BOOK_METADATA
     private val bf = BOOK_FILE
@@ -37,6 +40,24 @@ class JooqBookRepository(private val dsl: DSLContext) {
             .where(BookConditions.notDeleted())
             .and(BOOK.LIBRARY_PATH_ID.`in`(libraryPathIds))
             .fetch(BOOK.ID)
+
+    fun findBookIdByCoverHash(coverHash: String): Long? =
+        dsl.select(BOOK.ID)
+            .from(BOOK)
+            .where(BOOK.BOOK_COVER_HASH.eq(coverHash))
+            .fetchOne(BOOK.ID)
+
+    fun findBookIdsByLibraryPathIdAndFileSubPathStartingWith(libraryPathId: Long, fileSubPathPrefix: String): List<Long> {
+        val prefix = "$fileSubPathPrefix/%"
+        return dsl.selectDistinct(bf.BOOK_ID)
+            .from(bf)
+            .join(BOOK).on(BOOK.ID.eq(bf.BOOK_ID))
+            .where(BOOK.LIBRARY_PATH_ID.eq(libraryPathId))
+            .and(bf.FILE_SUB_PATH.eq(fileSubPathPrefix).or(bf.FILE_SUB_PATH.like(prefix)))
+            .and(bf.IS_BOOK.eq(1))
+            .and(BookConditions.notDeleted())
+            .fetch(bf.BOOK_ID)
+    }
 
     // ========================================================================
     // Counts
@@ -172,6 +193,277 @@ class JooqBookRepository(private val dsl: DSLContext) {
         dsl.update(BOOK)
             .set(BOOK.LIBRARY_ID, libraryId)
             .set(BOOK.LIBRARY_PATH_ID, libraryPathId)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateScannedOn(bookId: Long, scannedOn: Instant) {
+        dsl.update(BOOK)
+            .set(BOOK.SCANNED_ON, LocalDateTime.ofInstant(scannedOn, ZoneOffset.UTC))
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun markDeleted(bookIds: Collection<Long>, deletedAt: Instant) {
+        if (bookIds.isEmpty()) return
+        dsl.update(BOOK)
+            .set(BOOK.DELETED, 1.toByte())
+            .set(BOOK.DELETED_AT, LocalDateTime.ofInstant(deletedAt, ZoneOffset.UTC))
+            .where(BOOK.ID.`in`(bookIds))
+            .execute()
+    }
+
+    fun markUndeleted(bookIds: Collection<Long>) {
+        if (bookIds.isEmpty()) return
+        dsl.update(BOOK)
+            .set(BOOK.DELETED, 0.toByte())
+            .setNull(BOOK.DELETED_AT)
+            .where(BOOK.ID.`in`(bookIds))
+            .execute()
+    }
+
+    /**
+     * Restores previously soft-deleted books whose files reappeared during a library rescan - like
+     * markUndeleted, but also stamps added_on with a fresh timestamp (mirrors BookRestorationService
+     * treating a restore as a fresh addition, e.g. for "recently added" sorting).
+     */
+    fun restoreDeleted(bookIds: Collection<Long>, addedOn: Instant) {
+        if (bookIds.isEmpty()) return
+        dsl.update(BOOK)
+            .set(BOOK.DELETED, 0.toByte())
+            .setNull(BOOK.DELETED_AT)
+            .set(BOOK.ADDED_ON, LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC))
+            .where(BOOK.ID.`in`(bookIds))
+            .execute()
+    }
+
+    fun deleteByIds(bookIds: Collection<Long>): Int {
+        if (bookIds.isEmpty()) return 0
+        return dsl.deleteFrom(BOOK).where(BOOK.ID.`in`(bookIds)).execute()
+    }
+
+    /**
+     * Inserts a new book row (e.g. detaching a file into its own book, or a physical book with no
+     * library path) and returns the generated id. Only columns BookEntity.builder() would set for a
+     * bare new book are written; everything else (metadata_match_score, cover hashes, timestamps,
+     * similar_books_json) takes its DB-level NULL default, matching what an unenhanced Hibernate
+     * INSERT would also leave untouched.
+     */
+    fun insertBook(libraryId: Long, libraryPathId: Long?, addedOn: Instant): Long =
+        dsl.insertInto(BOOK)
+            .set(BOOK.LIBRARY_ID, libraryId)
+            .set(BOOK.LIBRARY_PATH_ID, libraryPathId)
+            .set(BOOK.ADDED_ON, LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC))
+            .set(BOOK.IS_PHYSICAL, 0.toByte())
+            .set(BOOK.DELETED, 0.toByte())
+            .returning(BOOK.ID)
+            .fetchOne()!!.id!!
+
+    // ========================================================================
+    // Writes: book_file CRUD (no cascade — book_file's own FK children,
+    // e.g. user_book_file_progress, are ON DELETE CASCADE at the DB level)
+    // ========================================================================
+
+    fun deleteBookFileById(bookFileId: Long) {
+        dsl.deleteFrom(bf).where(bf.ID.eq(bookFileId)).execute()
+    }
+
+    fun deleteBookFilesByIds(bookFileIds: Collection<Long>): Int {
+        if (bookFileIds.isEmpty()) return 0
+        return dsl.deleteFrom(bf).where(bf.ID.`in`(bookFileIds)).execute()
+    }
+
+    /** Mirrors BookFileRepository.reassignFilesToBook: bulk-reassigns files (already in the target's
+     * libraryPath) to a different book without touching their name/path. */
+    fun reassignFilesToBook(targetBookId: Long, fileIds: Collection<Long>) {
+        if (fileIds.isEmpty()) return
+        dsl.update(bf).set(bf.BOOK_ID, targetBookId).where(bf.ID.`in`(fileIds)).execute()
+    }
+
+    /** Reassigns a file to a different book, also updating its path/name (e.g. after a physical file move). */
+    fun reassignFileWithNewNameAndPath(bookFileId: Long, targetBookId: Long, newFileSubPath: String, newFileName: String) {
+        dsl.update(bf)
+            .set(bf.BOOK_ID, targetBookId)
+            .set(bf.FILE_SUB_PATH, newFileSubPath)
+            .set(bf.FILE_NAME, newFileName)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
+    fun insertBookFile(
+        bookId: Long,
+        fileName: String,
+        fileSubPath: String,
+        isBookFormat: Boolean,
+        folderBased: Boolean,
+        bookType: BookFileType?,
+        fileSizeKb: Long?,
+        initialHash: String?,
+        currentHash: String?,
+        description: String?,
+        addedOn: Instant
+    ): Long =
+        dsl.insertInto(bf)
+            .set(bf.BOOK_ID, bookId)
+            .set(bf.FILE_NAME, fileName)
+            .set(bf.FILE_SUB_PATH, fileSubPath)
+            .set(bf.IS_BOOK, if (isBookFormat) 1.toByte() else 0.toByte())
+            .set(bf.IS_FOLDER_BASED, if (folderBased) 1.toByte() else 0.toByte())
+            .set(bf.BOOK_TYPE, bookType?.name)
+            .set(bf.FILE_SIZE_KB, fileSizeKb)
+            .set(bf.INITIAL_HASH, initialHash)
+            .set(bf.CURRENT_HASH, currentHash)
+            .set(bf.DESCRIPTION, description)
+            .set(bf.ADDED_ON, LocalDateTime.ofInstant(addedOn, ZoneOffset.UTC))
+            .returning(bf.ID)
+            .fetchOne()!!.id!!
+
+    /** No-op if the row already has an initial_hash - mirrors "only set if never set before". */
+    fun updateInitialHashIfNull(bookFileId: Long, hash: String) {
+        dsl.update(bf)
+            .set(bf.INITIAL_HASH, hash)
+            .where(bf.ID.eq(bookFileId))
+            .and(bf.INITIAL_HASH.isNull)
+            .execute()
+    }
+
+    fun updateBookFileSizeKb(bookFileId: Long, fileSizeKb: Long) {
+        dsl.update(bf)
+            .set(bf.FILE_SIZE_KB, fileSizeKb)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
+    /**
+     * Writes every book_file scalar column (including audio-technical fields and JSON-serialized
+     * chapters) from the entity's CURRENT in-memory state, replacing the cascade flush that used to
+     * carry a processor's mutations (hash, archive type, fixed-layout, audiobook chapters, etc.) to
+     * the DB via BookCreatorService.saveConnections(). No-op if the entity has no id yet.
+     */
+    fun updateBookFileFullRow(bookFile: BookFileEntity) {
+        val id = bookFile.id ?: return
+        dsl.update(bf)
+            .set(bf.FILE_NAME, bookFile.fileName)
+            .set(bf.FILE_SUB_PATH, bookFile.fileSubPath)
+            .set(bf.IS_BOOK, if (bookFile.isBookFormat) 1.toByte() else 0.toByte())
+            .set(bf.IS_FOLDER_BASED, if (bookFile.isFolderBased) 1.toByte() else 0.toByte())
+            .set(bf.BOOK_TYPE, bookFile.bookType?.name)
+            .set(bf.IS_FIXED_LAYOUT, if (bookFile.isFixedLayout) 1.toByte() else 0.toByte())
+            .set(bf.ARCHIVE_TYPE, bookFile.archiveType?.name)
+            .set(bf.FILE_SIZE_KB, bookFile.fileSizeKb)
+            .set(bf.INITIAL_HASH, bookFile.initialHash)
+            .set(bf.CURRENT_HASH, bookFile.currentHash)
+            .set(bf.DESCRIPTION, bookFile.description)
+            .set(bf.ADDED_ON, bookFile.addedOn?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) })
+            .set(bf.DURATION_SECONDS, bookFile.durationSeconds)
+            .set(bf.BITRATE, bookFile.bitrate)
+            .set(bf.SAMPLE_RATE, bookFile.sampleRate)
+            .set(bf.CHANNELS, bookFile.channels)
+            .set(bf.CODEC, bookFile.codec)
+            .set(bf.CHAPTER_COUNT, bookFile.chapterCount)
+            .set(bf.CHAPTERS_JSON, bookFile.chapters?.takeIf { it.isNotEmpty() }?.let { objectMapper.writeValueAsString(it) })
+            .where(bf.ID.eq(id))
+            .execute()
+    }
+
+    // ========================================================================
+    // Writes: cover updates (book + book_metadata timestamp/hash columns only —
+    // no cascade, these rows already exist)
+    // ========================================================================
+
+    fun updateCoverMetadata(bookId: Long, bookCoverHash: String, now: Instant) {
+        val ts = LocalDateTime.ofInstant(now, ZoneOffset.UTC)
+        dsl.update(BOOK)
+            .set(BOOK.BOOK_COVER_HASH, bookCoverHash)
+            .set(BOOK.METADATA_UPDATED_AT, ts)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+        dsl.update(bm)
+            .set(bm.COVER_UPDATED_ON, ts)
+            .where(bm.BOOK_ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateAudiobookCoverMetadata(bookId: Long, audiobookCoverHash: String, now: Instant) {
+        val ts = LocalDateTime.ofInstant(now, ZoneOffset.UTC)
+        dsl.update(BOOK)
+            .set(BOOK.AUDIOBOOK_COVER_HASH, audiobookCoverHash)
+            .set(BOOK.METADATA_UPDATED_AT, ts)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+        dsl.update(bm)
+            .set(bm.AUDIOBOOK_COVER_UPDATED_ON, ts)
+            .where(bm.BOOK_ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateBookFileHash(bookFileId: Long, hash: String) {
+        dsl.update(bf)
+            .set(bf.CURRENT_HASH, hash)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
+    /** Mirrors BookAdditionalFileRepository.updateFileNameAndSubPath. */
+    fun updateFileNameAndSubPath(bookFileId: Long, fileName: String, fileSubPath: String) {
+        dsl.update(bf)
+            .set(bf.FILE_NAME, fileName)
+            .set(bf.FILE_SUB_PATH, fileSubPath)
+            .where(bf.ID.eq(bookFileId))
+            .execute()
+    }
+
+    fun updateBookCoverHash(bookId: Long, hash: String) {
+        dsl.update(BOOK)
+            .set(BOOK.BOOK_COVER_HASH, hash)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    /** Narrow counterpart to updateBookCoverHash - book.audiobook_cover_hash only, no metadata write. */
+    fun updateAudiobookCoverHash(bookId: Long, hash: String) {
+        dsl.update(BOOK)
+            .set(BOOK.AUDIOBOOK_COVER_HASH, hash)
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateMetadataUpdatedAt(bookId: Long, now: Instant) {
+        dsl.update(BOOK)
+            .set(BOOK.METADATA_UPDATED_AT, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateMetadataForWriteUpdatedAt(bookId: Long, now: Instant) {
+        dsl.update(BOOK)
+            .set(BOOK.METADATA_FOR_WRITE_UPDATED_AT, LocalDateTime.ofInstant(now, ZoneOffset.UTC))
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateMetadataMatchScore(bookId: Long, score: Float?) {
+        dsl.update(BOOK)
+            .set(BOOK.METADATA_MATCH_SCORE, score?.toDouble())
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    /**
+     * Writes book.similar_books_json, mirroring BookRecommendationIdsListConverter exactly: a null
+     * set writes NULL, a non-null set (even empty) writes its JSON serialization - not the same as
+     * "empty or null -> NULL" (that's AudioFileChapterListConverter's rule, a different converter).
+     */
+    fun updateSimilarBooksJson(bookId: Long, recommendations: Set<BookRecommendationLite>?) {
+        dsl.update(BOOK)
+            .set(BOOK.SIMILAR_BOOKS_JSON, recommendations?.let { objectMapper.writeValueAsString(it) })
+            .where(BOOK.ID.eq(bookId))
+            .execute()
+    }
+
+    fun updateIsPhysical(bookId: Long, physical: Boolean) {
+        dsl.update(BOOK)
+            .set(BOOK.IS_PHYSICAL, if (physical) 1.toByte() else 0.toByte())
             .where(BOOK.ID.eq(bookId))
             .execute()
     }

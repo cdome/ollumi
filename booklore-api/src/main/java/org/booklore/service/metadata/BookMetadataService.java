@@ -15,11 +15,11 @@ import org.booklore.model.dto.request.BulkMetadataUpdateRequest;
 import org.booklore.model.dto.request.FetchMetadataRequest;
 import org.booklore.model.dto.request.ToggleAllLockRequest;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.*;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookMetadataRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.book.BookQueryService;
@@ -42,7 +42,6 @@ import reactor.core.scheduler.Schedulers;
 import org.booklore.model.dto.request.IsbnLookupRequest;
 
 import java.io.File;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,12 +51,13 @@ import java.util.stream.Stream;
 @AllArgsConstructor
 public class BookMetadataService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookMapper bookMapper;
     private final BookMetadataMapper bookMetadataMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
     private final NotificationService notificationService;
-    private final BookMetadataRepository bookMetadataRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final JooqComicMetadataRepository jooqComicMetadataRepository;
     private final BookQueryService bookQueryService;
     private final AuditService auditService;
     private final Map<MetadataProvider, BookParser> parserMap;
@@ -70,7 +70,10 @@ public class BookMetadataService {
 
     @Transactional(readOnly = true)
     public Flux<BookMetadata> getProspectiveMetadataListForBookId(long bookId, FetchMetadataRequest request) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         Book book = bookMapper.toBook(bookEntity);
 
         return Flux.fromIterable(request.getProviders())
@@ -156,26 +159,17 @@ public class BookMetadataService {
         Map<String, String> fieldMapping = Map.of(
                 "thumbnailLocked", "coverLocked"
         );
-        List<BookMetadataEntity> metadataEntities = bookMetadataRepository
-                .getMetadataForBookIds(bookIds)
-                .stream()
-                .distinct()
-                .toList();
 
-        for (BookMetadataEntity metadataEntity : metadataEntities) {
-            fieldActions.forEach((field, action) -> {
-                String entityField = fieldMapping.getOrDefault(field, field);
-                try {
-                    String setterName = "set" + Character.toUpperCase(entityField.charAt(0)) + entityField.substring(1);
-                    Method setter = BookMetadataEntity.class.getMethod(setterName, Boolean.class);
-                    setter.invoke(metadataEntity, "LOCK".equalsIgnoreCase(action));
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to invoke setter for field: " + entityField + " on bookId: " + metadataEntity.getBookId(), e);
-                }
-            });
-        }
+        Map<String, Boolean> resolvedActions = new LinkedHashMap<>();
+        fieldActions.forEach((field, action) -> {
+            String entityField = fieldMapping.getOrDefault(field, field);
+            if (!JooqBookMetadataRepository.isKnownLockField(entityField)) {
+                throw new RuntimeException("Failed to invoke setter for field: " + entityField);
+            }
+            resolvedActions.put(entityField, "LOCK".equalsIgnoreCase(action));
+        });
 
-        bookMetadataRepository.saveAll(metadataEntities);
+        jooqBookMetadataRepository.updateLockFields(bookIds, resolvedActions);
     }
 
     @Transactional
@@ -185,13 +179,27 @@ public class BookMetadataService {
                 .stream()
                 .peek(book -> book.getMetadata().applyLockToAllFields(lock))
                 .toList();
-        bookRepository.saveAll(books);
+
+        List<Long> bookIds = books.stream().map(BookEntity::getId).toList();
+        jooqBookMetadataRepository.lockAllFields(bookIds, lock);
+
+        List<Long> comicBookIds = books.stream()
+                .filter(book -> book.getMetadata().getComicMetadata() != null)
+                .map(BookEntity::getId)
+                .toList();
+        if (!comicBookIds.isEmpty()) {
+            jooqComicMetadataRepository.lockAllFields(comicBookIds, lock);
+        }
+
         return books.stream().map(b -> bookMetadataMapper.toBookMetadata(b.getMetadata(), false)).collect(Collectors.toList());
     }
 
     public BookMetadata getComicInfoMetadata(long bookId) {
         log.info("Extracting ComicInfo metadata for book ID: {}", bookId);
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         var primaryFile = bookEntity.getPrimaryBookFile();
         if (primaryFile == null || primaryFile.getBookType() != BookFileType.CBX) {
             log.info("Unsupported operation for book ID {} - no file or not CBX type", bookId);
@@ -202,7 +210,10 @@ public class BookMetadataService {
 
     public BookMetadata getFileMetadata(long bookId) {
         log.info("Extracting file metadata for book ID: {}", bookId);
-        BookEntity bookEntity = bookRepository.findById(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         var primaryFile = bookEntity.getPrimaryBookFile();
         if (primaryFile == null) {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Book has no file to extract metadata from");
@@ -212,8 +223,10 @@ public class BookMetadataService {
 
     @Transactional
     public BookMetadata updateMetadata(long bookId, MetadataUpdateWrapper wrapper, boolean mergeCategories) {
-        BookEntity bookEntity = bookRepository.findByIdFull(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         MetadataUpdateContext context = MetadataUpdateContext.builder()
                 .bookEntity(bookEntity)
@@ -226,7 +239,6 @@ public class BookMetadataService {
                 .build();
 
         bookMetadataUpdater.setBookMetadata(context);
-        bookRepository.save(bookEntity);
         auditService.log(AuditAction.METADATA_UPDATED, "Book", bookId, "Updated metadata for book: " + bookEntity.getMetadata().getTitle());
         return bookMetadataMapper.toBookMetadata(bookEntity.getMetadata(), true);
     }
@@ -262,7 +274,7 @@ public class BookMetadataService {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         transactionTemplate.execute(status -> {
-            BookEntity book = bookRepository.findByIdFull(bookId).orElse(null);
+            BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
             if (book == null) {
                 log.warn("Book not found for metadata update: {}", bookId);
                 return null;

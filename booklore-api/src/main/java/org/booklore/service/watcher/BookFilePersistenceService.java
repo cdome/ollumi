@@ -8,14 +8,12 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.PermissionType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileUtils;
-import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,10 +32,8 @@ import static org.booklore.model.enums.PermissionType.MANAGE_LIBRARY;
 @AllArgsConstructor
 public class BookFilePersistenceService {
 
-    private final EntityManager entityManager;
-    private final BookRepository bookRepository;
-    private final BookFileRepository bookFileRepository;
-    private final LibraryPathRepository libraryPathRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
     private final BookMapper bookMapper;
@@ -45,7 +41,6 @@ public class BookFilePersistenceService {
     @Transactional
     public void updatePathIfChanged(BookEntity book, LibraryEntity libraryEntity, Path path, String currentHash) {
         LibraryPathEntity newLibraryPath = getLibraryPathEntityForFile(libraryEntity, path.toString());
-        newLibraryPath = entityManager.merge(newLibraryPath);
 
         String newSubPath = FileUtils.getRelativeSubPath(newLibraryPath.getPath(), path);
         String newFileName = path.getFileName().toString();
@@ -66,7 +61,9 @@ public class BookFilePersistenceService {
             matchedFile.setFileName(newFileName);
             book.setDeleted(Boolean.FALSE);
             book.setDeletedAt(null);
-            bookRepository.save(book);
+            jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), newLibraryPath.getId());
+            jooqBookRepository.updateFileNameAndSubPath(matchedFile.getId(), newFileName, newSubPath);
+            jooqBookRepository.markUndeleted(List.of(book.getId()));
             log.info("[FILE_CREATE] Updated path / undeleted existing book with hash '{}': '{}'", currentHash, path);
         } else {
             log.info("[FILE_CREATE] Book with hash '{}' already exists at same path. Skipping update.", currentHash);
@@ -97,8 +94,11 @@ public class BookFilePersistenceService {
                 .max(Comparator.comparingInt(entry -> entry.getValue().getNameCount()))
                 .map(Map.Entry::getKey)
                 .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(inputPath));
-        return libraryPathRepository.findById(match.getId())
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(inputPath));
+        LibraryPathEntity libraryPath = jooqLibraryPathRepository.findById(match.getId());
+        if (libraryPath == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(inputPath);
+        }
+        return libraryPath;
     }
 
     @Transactional
@@ -106,74 +106,65 @@ public class BookFilePersistenceService {
         if (relativeFolderPath == null) {
             throw new IllegalArgumentException("relativeFolderPath cannot be null");
         }
-        List<BookEntity> books = bookRepository.findAllByLibraryPathIdAndFileSubPathStartingWith(libraryPathId, relativeFolderPath);
-        books.forEach(book -> {
-            book.setDeleted(true);
-            book.setDeletedAt(Instant.now());
-        });
-
-        bookRepository.saveAll(books);
-        return books.size();
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<BookEntity> findByLibraryPathSubPathAndFileName(long libraryPathId, String fileSubPath, String fileName) {
-        return bookRepository.findByLibraryPath_IdAndFileSubPathAndFileName(libraryPathId, fileSubPath, fileName);
+        List<Long> bookIds = jooqBookRepository.findBookIdsByLibraryPathIdAndFileSubPathStartingWith(libraryPathId, relativeFolderPath);
+        jooqBookRepository.markDeleted(bookIds, Instant.now());
+        return bookIds.size();
     }
 
     @Transactional(readOnly = true)
     public Optional<BookFileEntity> findBookFileByLibraryPathSubPathAndFileName(long libraryPathId, String fileSubPath, String fileName) {
-        return bookFileRepository.findByLibraryPathIdAndFileSubPathAndFileName(libraryPathId, fileSubPath, fileName);
+        return Optional.ofNullable(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(libraryPathId, fileSubPath, fileName));
     }
 
     @Transactional
     public void deleteBookFile(BookFileEntity bookFile) {
-        bookFileRepository.delete(bookFile);
+        jooqBookRepository.deleteBookFileById(bookFile.getId());
     }
 
     @Transactional
     public void markBookAsDeleted(BookEntity book) {
+        Instant now = Instant.now();
         book.setDeleted(true);
-        book.setDeletedAt(Instant.now());
-        bookRepository.save(book);
-    }
-
-    @Transactional
-    public void save(BookEntity book) {
-        bookRepository.save(book);
+        book.setDeletedAt(now);
+        jooqBookRepository.markDeleted(List.of(book.getId()), now);
     }
 
     @Transactional(readOnly = true)
     public long countBookFilesByBookId(Long bookId) {
-        return bookFileRepository.countByBookId(bookId);
+        return jooqBookEntityRepository.countBookFilesByBookId(bookId);
     }
 
     @Transactional
     public void recoverFolderBook(PendingDeletionPool.BookSnapshot bookSnap, LibraryPathEntity newLibraryPath,
                                    Path folderPath, Map<Path, String> fileHashes) {
-        BookEntity book = bookRepository.findById(bookSnap.bookId()).orElse(null);
+        BookEntity book = jooqBookEntityRepository.findByIdIncludingDeleted(bookSnap.bookId());
         if (book == null) return;
 
-        book.setLibraryPath(entityManager.merge(newLibraryPath));
+        book.setLibraryPath(newLibraryPath);
         book.setDeleted(false);
         book.setDeletedAt(null);
 
         for (PendingDeletionPool.FileSnapshot fs : bookSnap.files()) {
-            bookFileRepository.findById(fs.bookFileId()).ifPresent(bf -> {
+            BookFileEntity bf = jooqBookEntityRepository.findBookFileById(fs.bookFileId());
+            if (bf != null) {
                 for (var entry : fileHashes.entrySet()) {
                     if (entry.getValue().equals(fs.currentHash())) {
                         Path filePath = entry.getKey();
                         String newSubPath = FileUtils.getRelativeSubPath(newLibraryPath.getPath(), filePath);
+                        String newFileName = filePath.getFileName().toString();
                         bf.setFileSubPath(newSubPath);
-                        bf.setFileName(filePath.getFileName().toString());
+                        bf.setFileName(newFileName);
                         bf.setCurrentHash(entry.getValue());
+                        jooqBookRepository.updateFileNameAndSubPath(bf.getId(), newFileName, newSubPath);
+                        jooqBookRepository.updateBookFileHash(bf.getId(), entry.getValue());
                         break;
                     }
                 }
-            });
+            }
         }
 
-        bookRepository.save(book);
+        jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), book.getLibraryPath().getId());
+        jooqBookRepository.markUndeleted(List.of(book.getId()));
         notificationService.sendMessageToPermissions(Topic.BOOK_ADD,
                 bookMapper.toBookWithDescription(book, false), Set.of(PermissionType.ADMIN, PermissionType.MANAGE_LIBRARY));
         log.info("[RECOVERED] Book id={} recovered from folder move", book.getId());

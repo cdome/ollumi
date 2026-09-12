@@ -6,12 +6,10 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.util.FileService;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,13 +28,10 @@ import java.util.stream.Stream;
 @Slf4j
 public class BookDeletionService {
 
-    private final BookRepository bookRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final FileService fileService;
     private final NotificationService notificationService;
-
-    @PersistenceContext
-    private final EntityManager entityManager;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteRemovedAdditionalFiles(List<Long> additionalFileIds) {
@@ -44,10 +39,7 @@ public class BookDeletionService {
             return;
         }
 
-        List<BookFileEntity> additionalFiles = bookAdditionalFileRepository.findAllById(additionalFileIds);
-        bookAdditionalFileRepository.deleteAll(additionalFiles);
-        entityManager.flush();
-        entityManager.clear();
+        jooqBookRepository.deleteBookFilesByIds(additionalFileIds);
 
         log.info("Deleted {} additional files from database", additionalFileIds.size());
     }
@@ -58,7 +50,7 @@ public class BookDeletionService {
             return;
         }
 
-        List<BookEntity> books = bookRepository.findAllById(deletedBookIds);
+        List<BookEntity> books = jooqBookEntityRepository.findAllByIdsIncludingDeleted(new LinkedHashSet<>(deletedBookIds));
         List<Long> booksToDelete = new ArrayList<>();
 
         for (BookEntity book : books) {
@@ -67,9 +59,6 @@ public class BookDeletionService {
             }
         }
 
-        entityManager.flush();
-        entityManager.clear();
-
         if (!booksToDelete.isEmpty()) {
             deleteRemovedBooks(booksToDelete);
         }
@@ -77,21 +66,18 @@ public class BookDeletionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteRemovedBooks(List<Long> bookIds) {
-        List<BookEntity> books = bookRepository.findAllById(bookIds);
-        for (BookEntity book : books) {
+        for (Long bookId : bookIds) {
             try {
-                deleteDirectoryRecursively(Path.of(fileService.getImagesFolder(book.getId())));
-                Path backupDir = Path.of(fileService.getBookMetadataBackupPath(book.getId()));
+                deleteDirectoryRecursively(Path.of(fileService.getImagesFolder(bookId)));
+                Path backupDir = Path.of(fileService.getBookMetadataBackupPath(bookId));
                 if (Files.exists(backupDir)) {
                     deleteDirectoryRecursively(backupDir);
                 }
             } catch (Exception e) {
-                log.warn("Failed to clean up files for book ID {}: {}", book.getId(), e.getMessage());
+                log.warn("Failed to clean up files for book ID {}: {}", bookId, e.getMessage());
             }
         }
-        bookRepository.deleteAll(books);
-        entityManager.flush();
-        entityManager.clear();
+        jooqBookRepository.deleteByIds(bookIds);
         notificationService.sendMessage(Topic.BOOKS_REMOVE, bookIds);
         if (bookIds.size() > 1) log.info("Books removed: {}", bookIds);
     }
@@ -104,7 +90,7 @@ public class BookDeletionService {
         }
 
         Set<BookFileType> allowed = EnumSet.copyOf(allowedFormats);
-        List<BookFileEntity> allBookFiles = bookAdditionalFileRepository.findByLibraryId(libraryEntity.getId());
+        List<BookFileEntity> allBookFiles = jooqBookEntityRepository.findBookFilesByLibraryId(libraryEntity.getId());
 
         List<BookFileEntity> disallowedFiles = allBookFiles.stream()
                 .filter(BookFileEntity::isBook)
@@ -129,9 +115,7 @@ public class BookDeletionService {
                 .filter(bookId -> remainingCounts.getOrDefault(bookId, 0L) == 0)
                 .toList();
 
-        bookAdditionalFileRepository.deleteAll(disallowedFiles);
-        entityManager.flush();
-        entityManager.clear();
+        jooqBookRepository.deleteBookFilesByIds(disallowedFiles.stream().map(BookFileEntity::getId).toList());
 
         if (!booksToDelete.isEmpty()) {
             log.info("Deleting {} books with no remaining files of allowed formats in library: {}",
@@ -153,16 +137,15 @@ public class BookDeletionService {
                 .filter(bf -> !existingFileNames.contains(bf.getFileName()))
                 .toList();
 
-        deletedBookFiles.forEach(bf -> {
-            book.getBookFiles().remove(bf);
-            bookAdditionalFileRepository.delete(bf);
-        });
+        if (!deletedBookFiles.isEmpty()) {
+            jooqBookRepository.deleteBookFilesByIds(deletedBookFiles.stream().map(BookFileEntity::getId).toList());
+            deletedBookFiles.forEach(bf -> book.getBookFiles().remove(bf));
+        }
 
         boolean hasRemainingBookFiles = book.getBookFiles().stream()
                 .anyMatch(BookFileEntity::isBook);
 
         if (hasRemainingBookFiles) {
-            bookRepository.save(book);
             log.info("Removed {} deleted book file(s) for book ID {}", deletedBookFiles.size(), book.getId());
             return true;
         }

@@ -4,8 +4,8 @@ import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.MoodEntity;
-import org.booklore.model.entity.TagEntity;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CbxComicInfoComplianceTest {
 
     private CbxMetadataWriter writer;
+    private JooqBookMetadataRelationsRepository relationsRepository;
     private Path tempDir;
 
     @BeforeEach
@@ -47,7 +48,10 @@ class CbxComicInfoComplianceTest {
         settings.setMetadataPersistenceSettings(persistence);
         Mockito.when(appSettingService.getAppSettings()).thenReturn(settings);
 
-        writer = new CbxMetadataWriter(appSettingService);
+        relationsRepository = Mockito.mock(JooqBookMetadataRelationsRepository.class);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of());
+        JooqComicMetadataRepository comicRelationsRepository = Mockito.mock(JooqComicMetadataRepository.class);
+        writer = new CbxMetadataWriter(appSettingService, relationsRepository, comicRelationsRepository);
         tempDir = Files.createTempDirectory("compliance_test_");
     }
 
@@ -70,6 +74,8 @@ class CbxComicInfoComplianceTest {
         File cbz = createDummyCbz("compliance.cbz");
         
         BookMetadataEntity metadata = new BookMetadataEntity();
+        
+        metadata.setBookId(1L);
         metadata.setTitle("The Boys #70 - The Bloody Doors Off, Part 5");
         metadata.setSeriesName("The Boys");
         metadata.setSeriesNumber(70f);
@@ -78,15 +84,8 @@ class CbxComicInfoComplianceTest {
         metadata.setPageCount(170);
         metadata.setDescription("<p><i>On his own and out of options, Hughie resorts to extreme measures...</i></p>");
         
-        Set<TagEntity> tags = new HashSet<>();
-        TagEntity t1 = new TagEntity(); t1.setName("Superhero");
-        tags.add(t1);
-        metadata.setTags(tags);
-        
-        Set<MoodEntity> moods = new HashSet<>();
-        MoodEntity m1 = new MoodEntity(); m1.setName("Dark");
-        moods.add(m1);
-        metadata.setMoods(moods);
+        Mockito.when(relationsRepository.findTagNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Superhero"));
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Dark"));
         
         metadata.setHardcoverBookId("547027");
         metadata.setIsbn13("9781606903735");

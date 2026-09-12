@@ -18,7 +18,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -46,10 +47,9 @@ public class ReadingProgressService {
 
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final JooqUserBookFileProgressRepository userBookFileProgressRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final BookFileRepository bookFileRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateService koboReadingStateService;
     private final HardcoverSyncService hardcoverSyncService;
@@ -203,8 +203,10 @@ public class ReadingProgressService {
 
     @Transactional
     public void updateReadProgress(ReadProgressRequest request) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(request.getBookId())
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(request.getBookId()));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(request.getBookId());
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(request.getBookId());
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         BookLoreUserEntity userEntity = findUserOrThrow(user.getId());
         Instant now = Instant.now();
@@ -232,8 +234,10 @@ public class ReadingProgressService {
 
                 saveToUserBookFileProgress(userEntity, fileProgress, now);
 
-                BookFileEntity bookFile = bookFileRepository.findById(fileProgress.bookFileId())
-                        .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book file not found"));
+                BookFileEntity bookFile = jooqBookEntityRepository.findBookFileById(fileProgress.bookFileId());
+                if (bookFile == null) {
+                    throw ApiError.GENERIC_NOT_FOUND.createException("Book file not found");
+                }
                 updateProgressFromFileProgress(progress, bookFile.getBookType(), fileProgress);
             } else {
                 BookFileEntity primaryFile = book.getPrimaryBookFile();
@@ -299,8 +303,10 @@ public class ReadingProgressService {
                 .findByUserIdAndBookFileId(user.getId(), fileProgress.bookFileId())
                 .orElseGet(UserBookFileProgressRow::new);
 
-        BookFileEntity bookFile = bookFileRepository.findById(fileProgress.bookFileId())
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book file not found"));
+        BookFileEntity bookFile = jooqBookEntityRepository.findBookFileById(fileProgress.bookFileId());
+        if (bookFile == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("Book file not found");
+        }
 
         entity.setUserId(user.getId());
         entity.setBookFileId(bookFile.getId());
@@ -506,7 +512,10 @@ public class ReadingProgressService {
     }
 
     private BookLoreUserEntity findUserOrThrow(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        BookLoreUserEntity user = userRepository.findById(userId);
+        if (user == null) {
+            throw new UsernameNotFoundException("User not found with ID: " + userId);
+        }
+        return user;
     }
 }

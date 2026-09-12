@@ -8,7 +8,7 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.user.DefaultSettingInitializer;
@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
 class AuthenticationServiceTest {
 
     @Mock private AppProperties appProperties;
-    @Mock private UserRepository userRepository;
+    @Mock private JooqUserRepository userRepository;
     @Mock private JooqRefreshTokenRepository refreshTokenRepository;
     @Mock private UserProvisioningService userProvisioningService;
     @Mock private PasswordEncoder passwordEncoder;
@@ -87,7 +87,7 @@ class AuthenticationServiceTest {
 
         var permissions = UserPermissionsEntity.builder().permissionAdmin(false).build();
         var user = BookLoreUserEntity.builder().username("regularuser").permissions(permissions).build();
-        when(userRepository.findByUsername("regularuser")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsername("regularuser")).thenReturn(user);
 
         var request = new UserLoginRequest();
         request.setUsername("regularuser");
@@ -103,7 +103,7 @@ class AuthenticationServiceTest {
         var appSettings = new AppSettings();
         appSettings.setOidcForceOnlyMode(true);
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
-        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("unknown")).thenReturn(null);
 
         var request = new UserLoginRequest();
         request.setUsername("unknown");
@@ -128,7 +128,7 @@ class AuthenticationServiceTest {
                 .permissions(permissions)
                 .build();
 
-        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsername("admin")).thenReturn(user);
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
@@ -158,7 +158,7 @@ class AuthenticationServiceTest {
                 .permissions(permissions)
                 .build();
 
-        when(userRepository.findByUsername("normaluser")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsername("normaluser")).thenReturn(user);
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");

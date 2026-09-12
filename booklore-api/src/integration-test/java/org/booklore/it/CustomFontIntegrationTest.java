@@ -51,7 +51,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanListSeededFont() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME);
         CustomFont font = seedFont(admin.getId());
 
         ResponseEntity<List<Map<String, Object>>> response = rest.exchange(
@@ -78,7 +78,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanDownloadSeededFontFile() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME);
         CustomFont font = seedFont(admin.getId());
 
         ResponseEntity<byte[]> response = rest.exchange(
@@ -103,7 +103,7 @@ public class CustomFontIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanDeleteSeededFont() throws Exception {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity admin = userRepository.findByUsername(ADMIN_USERNAME);
         CustomFont font = seedFont(admin.getId());
 
         ResponseEntity<Void> deleteResponse = rest.exchange(

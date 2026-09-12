@@ -1,20 +1,17 @@
 package org.booklore.it;
 
 import org.booklore.it.util.AuthTestHelper;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.AuthorRepository;
-import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookMetadataRepository;
-import org.booklore.repository.CategoryRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqReadingSessionRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.junit.jupiter.api.Test;
@@ -50,16 +47,13 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
     private JooqUserBookProgressRepository userBookProgressRepository;
 
     @Autowired
-    private BookMetadataRepository bookMetadataRepository;
+    private JooqBookMetadataRepository jooqBookMetadataRepository;
 
     @Autowired
-    private CategoryRepository categoryRepository;
+    private JooqBookMetadataRelationsRepository relationsRepository;
 
     @Autowired
-    private AuthorRepository authorRepository;
-
-    @Autowired
-    private BookFileRepository bookFileRepository;
+    private JooqBookRepository jooqBookRepository;
 
     private static final int CURRENT_YEAR = LocalDate.now(ZoneId.systemDefault()).getYear();
     private static final int CURRENT_MONTH = LocalDate.now(ZoneId.systemDefault()).getMonthValue();
@@ -596,10 +590,9 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = data.createBook(library, title);
         BookMetadataEntity metadata = book.getMetadata();
-        CategoryEntity category = categoryRepository.save(CategoryEntity.builder().name(categoryName + " " + UUID.randomUUID()).build());
-        metadata.setCategories(new HashSet<>(Set.of(category)));
+        relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
         metadata.setPageCount(300);
-        bookMetadataRepository.save(metadata);
+        jooqBookMetadataRepository.updateFullRow(metadata);
         return book;
     }
 
@@ -607,12 +600,10 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = data.createBook(library, title);
         BookMetadataEntity metadata = book.getMetadata();
-        CategoryEntity category = categoryRepository.save(CategoryEntity.builder().name(categoryName + " " + UUID.randomUUID()).build());
-        AuthorEntity author = authorRepository.save(AuthorEntity.builder().name(authorName).build());
-        metadata.setCategories(new HashSet<>(Set.of(category)));
-        metadata.setAuthors(new ArrayList<>(List.of(author)));
+        relationsRepository.setAuthorsForBook(metadata.getBookId(), List.of(authorName));
+        relationsRepository.setCategoriesForBook(metadata.getBookId(), Set.of(categoryName + " " + UUID.randomUUID()));
         metadata.setPageCount(300);
-        bookMetadataRepository.save(metadata);
+        jooqBookMetadataRepository.updateFullRow(metadata);
         return book;
     }
 
@@ -642,7 +633,10 @@ public class UserStatsIntegrationTest extends RestApiIntegrationTest {
                 .isFixedLayout(false)
                 .durationSeconds(3600L)
                 .build();
-        bookFileRepository.save(file);
+        Long id = jooqBookRepository.insertBookFile(book.getId(), file.getFileName(), file.getFileSubPath(),
+                file.isBookFormat(), file.isFolderBased(), file.getBookType(), null, null, null, null, Instant.now());
+        file.setId(id);
+        jooqBookRepository.updateBookFileFullRow(file);
     }
 
     private void createReadingSession(BookLoreUserEntity user, BookEntity book, BookFileType bookType,

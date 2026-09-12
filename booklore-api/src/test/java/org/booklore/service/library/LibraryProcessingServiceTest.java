@@ -1,14 +1,17 @@
 package org.booklore.service.library;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.exception.APIException;
 import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.task.options.RescanLibraryContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,11 +36,15 @@ import static org.mockito.Mockito.*;
 class LibraryProcessingServiceTest {
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
+    @Mock
+    private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
+    @Mock
+    private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     private NotificationService notificationService;
-    @Mock
-    private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock
     private FileAsBookProcessor fileAsBookProcessor;
     @Mock
@@ -48,8 +55,6 @@ class LibraryProcessingServiceTest {
     private LibraryFileHelper libraryFileHelper;
     @Mock
     private BookGroupingService bookGroupingService;
-    @Mock
-    private EntityManager entityManager;
 
     private LibraryProcessingService libraryProcessingService;
 
@@ -57,14 +62,15 @@ class LibraryProcessingServiceTest {
     void setUp() {
         libraryProcessingService = new LibraryProcessingService(
                 libraryRepository,
+                jooqBookEntityRepository,
+                jooqBookRepository,
+                jooqLibraryPathRepository,
                 notificationService,
-                bookAdditionalFileRepository,
                 fileAsBookProcessor,
                 bookRestorationService,
                 bookDeletionService,
                 libraryFileHelper,
-                bookGroupingService,
-                entityManager
+                bookGroupingService
         );
     }
 
@@ -86,9 +92,9 @@ class LibraryProcessingServiceTest {
         existingBook.setBookFiles(List.of(existingBookFile));
         existingBook.getPrimaryBookFile().setFileSubPath("");
         existingBook.getPrimaryBookFile().setFileName("book1.epub");
-        libraryEntity.setBookEntities(List.of(existingBook));
 
-        when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
 
         LibraryFile existingFile = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -105,7 +111,7 @@ class LibraryProcessingServiceTest {
                 .build();
 
         when(libraryFileHelper.getLibraryFiles(libraryEntity)).thenReturn(List.of(existingFile, newFile));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         // Mock grouping service to pass through the files
         when(bookGroupingService.groupForInitialScan(anyList(), eq(libraryEntity)))
@@ -147,9 +153,9 @@ class LibraryProcessingServiceTest {
         existingBook.setBookFiles(List.of(existingBookFile));
         existingBook.getPrimaryBookFile().setFileSubPath("");
         existingBook.getPrimaryBookFile().setFileName("book1.epub");
-        libraryEntity.setBookEntities(List.of(existingBook));
 
-        when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
 
         LibraryFile existingFile = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -159,7 +165,7 @@ class LibraryProcessingServiceTest {
                 .build();
 
         when(libraryFileHelper.getLibraryFiles(libraryEntity)).thenReturn(List.of(existingFile));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForInitialScan(anyList(), eq(libraryEntity))).thenReturn(Collections.emptyMap());
 
         libraryProcessingService.processLibrary(libraryId);
@@ -176,13 +182,13 @@ class LibraryProcessingServiceTest {
         LibraryEntity libraryEntity = new LibraryEntity();
         libraryEntity.setId(libraryId);
         libraryEntity.setName("Test Library");
-        libraryEntity.setBookEntities(Collections.emptyList());
 
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath("/library");
 
-        when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         LibraryFile newFile1 = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -198,7 +204,7 @@ class LibraryProcessingServiceTest {
                 .build();
 
         when(libraryFileHelper.getLibraryFiles(libraryEntity)).thenReturn(List.of(newFile1, newFile2));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForInitialScan(anyList(), eq(libraryEntity)))
                 .thenAnswer(invocation -> {
                     List<LibraryFile> files = invocation.getArgument(0);
@@ -223,13 +229,13 @@ class LibraryProcessingServiceTest {
         LibraryEntity libraryEntity = new LibraryEntity();
         libraryEntity.setId(libraryId);
         libraryEntity.setName("Test Library");
-        libraryEntity.setBookEntities(Collections.emptyList());
 
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath("/library");
 
-        when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         LibraryFile newFileInSub = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -239,7 +245,7 @@ class LibraryProcessingServiceTest {
                 .build();
 
         when(libraryFileHelper.getLibraryFiles(libraryEntity)).thenReturn(List.of(newFileInSub));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForInitialScan(anyList(), eq(libraryEntity)))
                 .thenAnswer(invocation -> {
                     List<LibraryFile> files = invocation.getArgument(0);
@@ -267,13 +273,13 @@ class LibraryProcessingServiceTest {
         LibraryEntity libraryEntity = new LibraryEntity();
         libraryEntity.setId(libraryId);
         libraryEntity.setName("Test Library");
-        libraryEntity.setBookEntities(Collections.emptyList());
 
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath("/library");
 
-        when(libraryRepository.findById(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
 
         LibraryFile additionalFileAsLibraryFile = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -291,7 +297,7 @@ class LibraryProcessingServiceTest {
         additionalFileEntity.setFileName("extra.pdf");
 
         when(libraryFileHelper.getLibraryFiles(libraryEntity)).thenReturn(List.of(additionalFileAsLibraryFile));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(List.of(additionalFileEntity));
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(List.of(additionalFileEntity));
         when(bookGroupingService.groupForInitialScan(anyList(), eq(libraryEntity))).thenReturn(Collections.emptyMap());
 
         libraryProcessingService.processLibrary(libraryId);
@@ -315,7 +321,6 @@ class LibraryProcessingServiceTest {
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath(accessiblePath.toString());
-        libraryEntity.setLibraryPaths(List.of(pathEntity));
 
         BookEntity book = new BookEntity();
         book.setId(11L);
@@ -344,9 +349,12 @@ class LibraryProcessingServiceTest {
         image.setBookFormat(false);
 
         book.setBookFiles(List.of(epub, pdf, image));
-        libraryEntity.setBookEntities(List.of(book));
 
-        when(libraryRepository.findByIdWithBooks(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
+        when(jooqBookRepository.countByLibraryId(libraryId)).thenReturn(1L);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(book));
 
         // Only epub exists on disk, pdf was removed
         LibraryFile epubOnDisk = LibraryFile.builder()
@@ -358,7 +366,7 @@ class LibraryProcessingServiceTest {
 
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(List.of(epubOnDisk));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(List.of(epub, pdf, image));
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(List.of(epub, pdf, image));
         when(bookGroupingService.groupForRescan(anyList(), eq(libraryEntity)))
                 .thenReturn(new BookGroupingService.GroupingResult(Collections.emptyMap(), Collections.emptyMap()));
 
@@ -382,10 +390,10 @@ class LibraryProcessingServiceTest {
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath(nonExistentPath.toString());
-        libraryEntity.setLibraryPaths(List.of(pathEntity));
-        libraryEntity.setBookEntities(Collections.emptyList());
 
-        when(libraryRepository.findByIdWithBooks(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
 
         RescanLibraryContext context = RescanLibraryContext.builder().libraryId(libraryId).build();
 
@@ -410,7 +418,6 @@ class LibraryProcessingServiceTest {
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath(accessiblePath.toString());
-        libraryEntity.setLibraryPaths(List.of(pathEntity));
 
         BookEntity existingBook = new BookEntity();
         existingBook.setId(1L);
@@ -420,9 +427,11 @@ class LibraryProcessingServiceTest {
         existingBook.setBookFiles(List.of(existingBookFile));
         existingBook.getPrimaryBookFile().setFileSubPath("");
         existingBook.getPrimaryBookFile().setFileName("book1.epub");
-        libraryEntity.setBookEntities(List.of(existingBook));
 
-        when(libraryRepository.findByIdWithBooks(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
+        when(jooqBookRepository.countByLibraryId(libraryId)).thenReturn(1L);
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(Collections.emptyList());
 
         RescanLibraryContext context = RescanLibraryContext.builder().libraryId(libraryId).build();
@@ -448,7 +457,6 @@ class LibraryProcessingServiceTest {
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath(accessiblePath.toString());
-        libraryEntity.setLibraryPaths(List.of(pathEntity));
 
         BookEntity existingBook = new BookEntity();
         existingBook.setId(1L);
@@ -458,7 +466,6 @@ class LibraryProcessingServiceTest {
         existingBook.setBookFiles(List.of(existingBookFile));
         existingBook.getPrimaryBookFile().setFileSubPath("");
         existingBook.getPrimaryBookFile().setFileName("book1.epub");
-        libraryEntity.setBookEntities(List.of(existingBook));
 
         LibraryFile fileOnDisk = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -467,10 +474,13 @@ class LibraryProcessingServiceTest {
                 .fileName("book1.epub")
                 .build();
 
-        when(libraryRepository.findByIdWithBooks(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(List.of(fileOnDisk));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForRescan(anyList(), eq(libraryEntity)))
                 .thenReturn(new BookGroupingService.GroupingResult(Collections.emptyMap(), Collections.emptyMap()));
 
@@ -494,13 +504,15 @@ class LibraryProcessingServiceTest {
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath(accessiblePath.toString());
-        libraryEntity.setLibraryPaths(List.of(pathEntity));
-        libraryEntity.setBookEntities(Collections.emptyList());
 
-        when(libraryRepository.findByIdWithBooks(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
+        when(jooqBookRepository.countByLibraryId(libraryId)).thenReturn(0L);
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(Collections.emptyList());
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForRescan(anyList(), eq(libraryEntity)))
                 .thenReturn(new BookGroupingService.GroupingResult(Collections.emptyMap(), Collections.emptyMap()));
 
@@ -512,7 +524,7 @@ class LibraryProcessingServiceTest {
     }
 
     @Test
-    void rescanLibrary_shouldRefetchLibraryAfterEntityManagerClear(@TempDir Path tempDir) throws IOException {
+    void rescanLibrary_shouldRefetchLibraryAfterCleanup(@TempDir Path tempDir) throws IOException {
 
         long libraryId = 1L;
         Path accessiblePath = tempDir.resolve("accessible");
@@ -535,14 +547,10 @@ class LibraryProcessingServiceTest {
         LibraryEntity libraryEntity = new LibraryEntity();
         libraryEntity.setId(libraryId);
         libraryEntity.setName("Test Library");
-        libraryEntity.setLibraryPaths(new ArrayList<>(List.of(pathEntity)));
-        libraryEntity.setBookEntities(new ArrayList<>(List.of(existingBook)));
 
         LibraryEntity freshLibraryEntity = new LibraryEntity();
         freshLibraryEntity.setId(libraryId);
         freshLibraryEntity.setName("Test Library");
-        freshLibraryEntity.setLibraryPaths(new ArrayList<>(List.of(pathEntity)));
-        freshLibraryEntity.setBookEntities(new ArrayList<>(List.of(existingBook)));
 
         LibraryFile fileOnDisk = LibraryFile.builder()
                 .libraryEntity(libraryEntity)
@@ -551,12 +559,15 @@ class LibraryProcessingServiceTest {
                 .fileName("book (with parens).epub")
                 .build();
 
-        when(libraryRepository.findByIdWithBooks(libraryId))
-                .thenReturn(Optional.of(libraryEntity))
-                .thenReturn(Optional.of(freshLibraryEntity)); // Second call returns fresh entity
+        when(libraryRepository.findById(libraryId))
+                .thenReturn(libraryEntity)
+                .thenReturn(freshLibraryEntity); // Second call returns fresh entity
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(existingBook));
         when(libraryFileHelper.getAllLibraryFiles(any(LibraryEntity.class))).thenReturn(List.of(fileOnDisk));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForRescan(anyList(), any(LibraryEntity.class)))
                 .thenReturn(new BookGroupingService.GroupingResult(Collections.emptyMap(), Collections.emptyMap()));
 
@@ -564,8 +575,110 @@ class LibraryProcessingServiceTest {
 
         libraryProcessingService.rescanLibrary(context);
 
-        verify(libraryRepository, times(2)).findByIdWithBooks(libraryId);
+        verify(libraryRepository, times(2)).findById(libraryId);
 
         verify(bookGroupingService).groupForRescan(eq(Collections.emptyList()), any(LibraryEntity.class));
+    }
+
+    // ========== autoAttachFile ==========
+
+    @Test
+    void autoAttachFile_fileAlreadyExists_skipsInsert(@TempDir Path tempDir) {
+        LibraryPathEntity libraryPath = new LibraryPathEntity();
+        libraryPath.setId(1L);
+        libraryPath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(libraryPath)
+                .fileSubPath("books")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .build();
+        BookEntity book = BookEntity.builder().id(5L).libraryPath(libraryPath).build();
+
+        when(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(1L, "books", "book.epub"))
+                .thenReturn(new BookFileEntity());
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        verifyNoInteractions(jooqBookRepository, fileAsBookProcessor);
+    }
+
+    @Test
+    void autoAttachFile_filelessBook_setsLibraryPathAndInsertsFile(@TempDir Path tempDir) throws IOException {
+        Files.createFile(tempDir.resolve("book.epub"));
+        LibraryPathEntity libraryPath = new LibraryPathEntity();
+        libraryPath.setId(1L);
+        libraryPath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(libraryPath)
+                .fileSubPath("")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .folderBased(false)
+                .build();
+        LibraryEntity library = LibraryEntity.builder().id(9L).build();
+        BookEntity book = BookEntity.builder().id(5L).library(library).libraryPath(null).build();
+
+        when(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(1L, "", "book.epub"))
+                .thenReturn(null);
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        assertThat(book.getLibraryPath()).isEqualTo(libraryPath);
+        verify(jooqBookRepository).updateLibrary(5L, 9L, 1L);
+        verify(jooqBookRepository).insertBookFile(
+                eq(5L), eq("book.epub"), eq(""), eq(true), eq(false), eq(BookFileType.EPUB),
+                anyLong(), anyString(), anyString(), isNull(), any());
+        verify(fileAsBookProcessor).generateCoverFromAdditionalFile(book, file);
+    }
+
+    @Test
+    void autoAttachFile_differentLibraryPath_warnsAndSkips(@TempDir Path tempDir) {
+        LibraryPathEntity bookPath = new LibraryPathEntity();
+        bookPath.setId(1L);
+        LibraryPathEntity filePath = new LibraryPathEntity();
+        filePath.setId(2L);
+        filePath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(filePath)
+                .fileSubPath("books")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .build();
+        BookEntity book = BookEntity.builder().id(5L).libraryPath(bookPath).build();
+
+        when(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(2L, "books", "book.epub"))
+                .thenReturn(null);
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        assertThat(book.getLibraryPath()).isEqualTo(bookPath);
+        verifyNoInteractions(jooqBookRepository, fileAsBookProcessor);
+    }
+
+    @Test
+    void autoAttachFile_sameLibraryPath_insertsWithoutUpdatingLibrary(@TempDir Path tempDir) throws IOException {
+        Files.createFile(tempDir.resolve("book.epub"));
+        LibraryPathEntity libraryPath = new LibraryPathEntity();
+        libraryPath.setId(1L);
+        libraryPath.setPath(tempDir.toString());
+        LibraryFile file = LibraryFile.builder()
+                .libraryPathEntity(libraryPath)
+                .fileSubPath("")
+                .fileName("book.epub")
+                .bookFileType(BookFileType.EPUB)
+                .folderBased(false)
+                .build();
+        BookEntity book = BookEntity.builder().id(5L).libraryPath(libraryPath).build();
+
+        when(jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(1L, "", "book.epub"))
+                .thenReturn(null);
+
+        libraryProcessingService.autoAttachFile(book, file);
+
+        verify(jooqBookRepository, never()).updateLibrary(anyLong(), anyLong(), anyLong());
+        verify(jooqBookRepository).insertBookFile(
+                eq(5L), eq("book.epub"), eq(""), eq(true), eq(false), eq(BookFileType.EPUB),
+                anyLong(), anyString(), anyString(), isNull(), any());
     }
 }

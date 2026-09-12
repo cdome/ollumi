@@ -7,11 +7,9 @@ import org.apache.pdfbox.pdmodel.common.PDMetadata;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.MoodEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.extractor.PdfMetadataExtractor;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PdfMetadataWriterTest {
 
     private PdfMetadataWriter writer;
+    private JooqBookMetadataRelationsRepository relationsRepository;
     private PdfMetadataExtractor extractor;
     private Path tempDir;
 
@@ -53,7 +52,9 @@ class PdfMetadataWriterTest {
         settings.setMetadataPersistenceSettings(persistence);
         Mockito.when(appSettingService.getAppSettings()).thenReturn(settings);
 
-        writer = new PdfMetadataWriter(appSettingService);
+        relationsRepository = Mockito.mock(JooqBookMetadataRelationsRepository.class);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of());
+        writer = new PdfMetadataWriter(appSettingService, relationsRepository);
         extractor = new PdfMetadataExtractor();
         tempDir = Files.createTempDirectory("pdf_writer_test_");
     }
@@ -89,11 +90,8 @@ class PdfMetadataWriterTest {
         meta.setLanguage("en");
         meta.setPageCount(754);
         
-        List<AuthorEntity> authors = new ArrayList<>();
-        AuthorEntity author = new AuthorEntity();
-        author.setName("Jason C McDonald");
-        authors.add(author);
-        meta.setAuthors(authors);
+        Mockito.when(relationsRepository.findAuthorNamesByBookId(Mockito.anyLong()))
+                .thenReturn(List.of("Jason C McDonald"));
 
         writer.saveMetadataToFile(pdf, meta, null, null);
 
@@ -288,19 +286,9 @@ class PdfMetadataWriterTest {
 
         BookMetadataEntity meta = createBasicMetadata();
         
-        Set<TagEntity> tags = new HashSet<>();
-        TagEntity tag1 = new TagEntity(); tag1.setName("Python");
-        TagEntity tag2 = new TagEntity(); tag2.setName("Programming");
-        tags.add(tag1);
-        tags.add(tag2);
-        meta.setTags(tags);
-        
-        Set<MoodEntity> moods = new HashSet<>();
-        MoodEntity mood1 = new MoodEntity(); mood1.setName("Educational");
-        MoodEntity mood2 = new MoodEntity(); mood2.setName("Technical");
-        moods.add(mood1);
-        moods.add(mood2);
-        meta.setMoods(moods);
+        Mockito.when(relationsRepository.findTagNamesByBookId(Mockito.anyLong()))
+                .thenReturn(Set.of("Python", "Programming"));
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Educational", "Technical"));
 
         writer.saveMetadataToFile(pdf, meta, null, null);
 
@@ -384,6 +372,7 @@ class PdfMetadataWriterTest {
 
     private BookMetadataEntity createBasicMetadata() {
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("Test Book");
         return meta;
     }

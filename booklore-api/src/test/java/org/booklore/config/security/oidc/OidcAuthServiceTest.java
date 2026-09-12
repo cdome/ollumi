@@ -9,7 +9,7 @@ import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.jooq.JooqOidcSessionRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.oidc.OidcGroupMappingService;
@@ -39,7 +39,7 @@ class OidcAuthServiceTest {
     @Mock private OidcTokenClient oidcTokenClient;
     @Mock private OidcTokenValidator oidcTokenValidator;
     @Mock private OidcClaimExtractor oidcClaimExtractor;
-    @Mock private UserRepository userRepository;
+    @Mock private JooqUserRepository userRepository;
     @Mock private UserProvisioningService userProvisioningService;
     @Mock private AuthenticationService authenticationService;
     @Mock private JooqOidcSessionRepository oidcSessionRepository;
@@ -82,7 +82,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(expectedResponse);
 
@@ -158,7 +158,7 @@ class OidcAuthServiceTest {
         when(oidcTokenValidator.validateIdToken("id-token", ISSUER_URI, CLIENT_ID, NONCE, null))
                 .thenReturn(claims);
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -182,7 +182,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn("8");
         when(authenticationService.loginUser(user, 8 * 3_600_000L)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -207,7 +207,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn("not-a-number");
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -231,7 +231,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -277,7 +277,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -306,8 +306,8 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.empty());
-        when(userRepository.findByUsername("jdoe")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(null);
+        when(userRepository.findByUsername("jdoe")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -334,8 +334,8 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.empty());
-        when(userRepository.findByUsername("jdoe")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(null);
+        when(userRepository.findByUsername("jdoe")).thenReturn(user);
 
         assertThatThrownBy(() -> oidcAuthService.exchangeCodeForTokens(CODE, CODE_VERIFIER, REDIRECT_URI, NONCE, mockRequest()))
                 .isInstanceOf(APIException.class)
@@ -360,8 +360,8 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-new")).thenReturn(Optional.empty());
-        when(userRepository.findByUsername("newuser")).thenReturn(Optional.empty());
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-new")).thenReturn(null);
+        when(userRepository.findByUsername("newuser")).thenReturn(null);
         when(userProvisioningService.provisionOidcUser("newuser", "newuser@example.com", "New User", "sub-new", ISSUER_URI, null, provisionDetails))
                 .thenReturn(newUser);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
@@ -390,8 +390,8 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-unknown")).thenReturn(Optional.empty());
-        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-unknown")).thenReturn(null);
+        when(userRepository.findByUsername("unknown")).thenReturn(null);
 
         assertThatThrownBy(() -> oidcAuthService.exchangeCodeForTokens(CODE, CODE_VERIFIER, REDIRECT_URI, NONCE, mockRequest()))
                 .isInstanceOf(APIException.class)
@@ -418,7 +418,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -448,7 +448,7 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -477,8 +477,8 @@ class OidcAuthServiceTest {
                 .thenReturn(claims);
         when(oidcTokenClient.fetchUserInfo("access-token", ISSUER_URI)).thenReturn(Map.of());
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.empty());
-        when(userRepository.findByUsername("jdoe")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(null);
+        when(userRepository.findByUsername("jdoe")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -505,7 +505,7 @@ class OidcAuthServiceTest {
         when(oidcTokenValidator.validateIdToken("id-token", ISSUER_URI, CLIENT_ID, NONCE, null))
                 .thenReturn(claims);
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 
@@ -528,7 +528,7 @@ class OidcAuthServiceTest {
         when(oidcTokenValidator.validateIdToken("id-token", ISSUER_URI, CLIENT_ID, NONCE, null))
                 .thenReturn(claims);
         when(oidcClaimExtractor.extractClaims(eq(claims), any(), eq(Map.of()))).thenReturn(userClaims);
-        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(Optional.of(user));
+        when(userRepository.findByOidcIssuerAndOidcSubject(ISSUER_URI, "sub-123")).thenReturn(user);
         when(appSettingService.getSettingValue("oidc_session_duration_hours")).thenReturn(null);
         when(authenticationService.loginUser(user)).thenReturn(ResponseEntity.ok(Map.of()));
 

@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.dto.OidcSession;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.websocket.Topic;
@@ -39,7 +39,7 @@ public class BackchannelLogoutService {
     private final AppSettingService appSettingService;
     private final OidcTokenValidator oidcTokenValidator;
     private final JooqOidcSessionRepository oidcSessionRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqRefreshTokenRepository refreshTokenRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
@@ -90,7 +90,7 @@ public class BackchannelLogoutService {
         for (OidcSession session : sessions) {
             oidcSessionRepository.revokeById(session.getId());
 
-            BookLoreUserEntity user = userRepository.findById(session.getUserId()).orElse(null);
+            BookLoreUserEntity user = userRepository.findById(session.getUserId());
             if (user == null) {
                 continue;
             }

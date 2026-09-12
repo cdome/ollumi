@@ -117,4 +117,199 @@ class JooqBookMetadataRelationsRepository(private val dsl: DSLContext) {
         if (existing != null) return existing
         return dsl.insertInto(MOOD).set(MOOD.NAME, name).returning(MOOD.ID).fetchOne()!!.id!!
     }
+
+    // ========================================================================
+    // Mood master-row maintenance (consolidate/delete admin flows in MetadataManagementService).
+    // ========================================================================
+
+    /** Book ids whose mood junction references [name] (case-insensitive, matching JPA findByNameIgnoreCase). */
+    fun findBookIdsByMoodNameIgnoreCase(name: String): List<Long> =
+        dsl.select(bmm.BOOK_ID)
+            .from(bmm).join(MOOD).on(MOOD.ID.eq(bmm.MOOD_ID))
+            .where(MOOD.NAME.equalIgnoreCase(name))
+            .fetch(bmm.BOOK_ID)
+
+    /**
+     * Ensures a mood master row exists with exactly this casing of [name]: renames an existing
+     * case-insensitive match, or inserts a new row. Mirrors the JPA consolidate flow's
+     * findByNameIgnoreCase(name).map(existing -> existing.setName(name)).orElseGet(create).
+     */
+    fun renameOrCreateMood(name: String) {
+        val existingId = dsl.select(MOOD.ID).from(MOOD).where(MOOD.NAME.equalIgnoreCase(name)).fetchOne(MOOD.ID)
+        if (existingId != null) {
+            dsl.update(MOOD).set(MOOD.NAME, name).where(MOOD.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(MOOD).set(MOOD.NAME, name).execute()
+        }
+    }
+
+    /** Deletes the mood master row by exact name. Call only once no book references it any more. */
+    fun deleteMoodByName(name: String): Int =
+        dsl.deleteFrom(MOOD).where(MOOD.NAME.eq(name)).execute()
+
+    fun countAllMoods(): Long = dsl.fetchCount(MOOD).toLong()
+
+    // ========================================================================
+    // Writes — replace a book's category junction rows (masters are shared, upserted by name).
+    // Replaces the JPA cascade of BookMetadataEntity.categories. Callers compute the final desired
+    // set (merge/replace/clear semantics) and call setCategoriesForBook.
+    // ========================================================================
+
+    fun clearCategoriesForBook(bookId: Long) {
+        dsl.deleteFrom(bcm).where(bcm.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setCategoriesForBook(bookId: Long, categoryNames: Collection<String>) {
+        dsl.deleteFrom(bcm).where(bcm.BOOK_ID.eq(bookId)).execute()
+        categoryNames.asSequence()
+            .filter { it.isNotBlank() }
+            .map { upsertCategoryId(it) }
+            .distinct()
+            .forEach { categoryId ->
+                dsl.insertInto(bcm).set(bcm.BOOK_ID, bookId).set(bcm.CATEGORY_ID, categoryId).execute()
+            }
+    }
+
+    /** Find-or-create the category master row by name (name is UNIQUE), returning its id. */
+    private fun upsertCategoryId(name: String): Long {
+        val existing = dsl.select(CATEGORY.ID).from(CATEGORY).where(CATEGORY.NAME.eq(name)).fetchOne(CATEGORY.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(CATEGORY).set(CATEGORY.NAME, name).returning(CATEGORY.ID).fetchOne()!!.id!!
+    }
+
+    // ========================================================================
+    // Category master-row maintenance (consolidate/delete admin flows in MetadataManagementService).
+    // ========================================================================
+
+    /** Book ids whose category junction references [name] (case-insensitive, matching JPA findByNameIgnoreCase). */
+    fun findBookIdsByCategoryNameIgnoreCase(name: String): List<Long> =
+        dsl.select(bcm.BOOK_ID)
+            .from(bcm).join(CATEGORY).on(CATEGORY.ID.eq(bcm.CATEGORY_ID))
+            .where(CATEGORY.NAME.equalIgnoreCase(name))
+            .fetch(bcm.BOOK_ID)
+
+    /** Ensures a category master row exists with exactly this casing of [name] (rename or insert). */
+    fun renameOrCreateCategory(name: String) {
+        val existingId = dsl.select(CATEGORY.ID).from(CATEGORY).where(CATEGORY.NAME.equalIgnoreCase(name)).fetchOne(CATEGORY.ID)
+        if (existingId != null) {
+            dsl.update(CATEGORY).set(CATEGORY.NAME, name).where(CATEGORY.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(CATEGORY).set(CATEGORY.NAME, name).execute()
+        }
+    }
+
+    /** Deletes the category master row by exact name. Call only once no book references it any more. */
+    fun deleteCategoryByName(name: String): Int =
+        dsl.deleteFrom(CATEGORY).where(CATEGORY.NAME.eq(name)).execute()
+
+    fun countAllCategories(): Long = dsl.fetchCount(CATEGORY).toLong()
+
+    // ========================================================================
+    // Writes — replace a book's tag junction rows (masters are shared, upserted by name).
+    // ========================================================================
+
+    fun clearTagsForBook(bookId: Long) {
+        dsl.deleteFrom(btm).where(btm.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setTagsForBook(bookId: Long, tagNames: Collection<String>) {
+        dsl.deleteFrom(btm).where(btm.BOOK_ID.eq(bookId)).execute()
+        tagNames.asSequence()
+            .filter { it.isNotBlank() }
+            .map { upsertTagId(it) }
+            .distinct()
+            .forEach { tagId ->
+                dsl.insertInto(btm).set(btm.BOOK_ID, bookId).set(btm.TAG_ID, tagId).execute()
+            }
+    }
+
+    /** Find-or-create the tag master row by name (name is UNIQUE), returning its id. */
+    private fun upsertTagId(name: String): Long {
+        val existing = dsl.select(TAG.ID).from(TAG).where(TAG.NAME.eq(name)).fetchOne(TAG.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(TAG).set(TAG.NAME, name).returning(TAG.ID).fetchOne()!!.id!!
+    }
+
+    // ========================================================================
+    // Tag master-row maintenance (consolidate/delete admin flows in MetadataManagementService).
+    // ========================================================================
+
+    fun findBookIdsByTagNameIgnoreCase(name: String): List<Long> =
+        dsl.select(btm.BOOK_ID)
+            .from(btm).join(TAG).on(TAG.ID.eq(btm.TAG_ID))
+            .where(TAG.NAME.equalIgnoreCase(name))
+            .fetch(btm.BOOK_ID)
+
+    fun renameOrCreateTag(name: String) {
+        val existingId = dsl.select(TAG.ID).from(TAG).where(TAG.NAME.equalIgnoreCase(name)).fetchOne(TAG.ID)
+        if (existingId != null) {
+            dsl.update(TAG).set(TAG.NAME, name).where(TAG.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(TAG).set(TAG.NAME, name).execute()
+        }
+    }
+
+    fun deleteTagByName(name: String): Int =
+        dsl.deleteFrom(TAG).where(TAG.NAME.eq(name)).execute()
+
+    fun countAllTags(): Long = dsl.fetchCount(TAG).toLong()
+
+    // ========================================================================
+    // Writes — replace a book's author junction rows. Unlike mood/category/tag, authors are ORDERED
+    // (a List, not a Set) with a persisted sort_order, so every call rewrites sort_order 0..n-1 for the
+    // given order, not just an unordered upsert. Replaces the JPA cascade of BookMetadataEntity.authors.
+    // ========================================================================
+
+    fun clearAuthorsForBook(bookId: Long) {
+        dsl.deleteFrom(bam).where(bam.BOOK_ID.eq(bookId)).execute()
+    }
+
+    fun setAuthorsForBook(bookId: Long, authorNames: List<String>) {
+        dsl.deleteFrom(bam).where(bam.BOOK_ID.eq(bookId)).execute()
+        var sortOrder = 0
+        val seen = HashSet<Long>()
+        for (name in authorNames) {
+            if (name.isBlank()) continue
+            val authorId = upsertAuthorId(name)
+            if (!seen.add(authorId)) continue
+            dsl.insertInto(bam).set(bam.BOOK_ID, bookId).set(bam.AUTHOR_ID, authorId).set(bam.SORT_ORDER, sortOrder).execute()
+            sortOrder++
+        }
+    }
+
+    /** Find-or-create the author master row by name (name is UNIQUE), returning its id. */
+    private fun upsertAuthorId(name: String): Long {
+        val existing = dsl.select(AUTHOR.ID).from(AUTHOR).where(AUTHOR.NAME.eq(name)).fetchOne(AUTHOR.ID)
+        if (existing != null) return existing
+        return dsl.insertInto(AUTHOR).set(AUTHOR.NAME, name).returning(AUTHOR.ID).fetchOne()!!.id!!
+    }
+
+    // ========================================================================
+    // Author master-row maintenance (consolidate/delete admin flows in MetadataManagementService, and
+    // the inverse lookup AuthorMetadataService.deleteAuthors needs now that the mappedBy collection on
+    // AuthorEntity is gone).
+    // ========================================================================
+
+    fun findBookIdsByAuthorNameIgnoreCase(name: String): List<Long> =
+        dsl.select(bam.BOOK_ID)
+            .from(bam).join(AUTHOR).on(AUTHOR.ID.eq(bam.AUTHOR_ID))
+            .where(AUTHOR.NAME.equalIgnoreCase(name))
+            .fetch(bam.BOOK_ID)
+
+    fun findBookIdsByAuthorId(authorId: Long): List<Long> =
+        dsl.select(bam.BOOK_ID).from(bam).where(bam.AUTHOR_ID.eq(authorId)).fetch(bam.BOOK_ID)
+
+    fun renameOrCreateAuthor(name: String) {
+        val existingId = dsl.select(AUTHOR.ID).from(AUTHOR).where(AUTHOR.NAME.equalIgnoreCase(name)).fetchOne(AUTHOR.ID)
+        if (existingId != null) {
+            dsl.update(AUTHOR).set(AUTHOR.NAME, name).where(AUTHOR.ID.eq(existingId)).execute()
+        } else {
+            dsl.insertInto(AUTHOR).set(AUTHOR.NAME, name).execute()
+        }
+    }
+
+    fun deleteAuthorByName(name: String): Int =
+        dsl.deleteFrom(AUTHOR).where(AUTHOR.NAME.eq(name)).execute()
+
+    fun countAllAuthors(): Long = dsl.fetchCount(AUTHOR).toLong()
 }

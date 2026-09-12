@@ -8,11 +8,11 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
 import org.booklore.service.kobo.KoboReadingStateBuilder;
 import org.booklore.service.kobo.KoboReadingStateService;
@@ -50,10 +50,10 @@ class KoboReadingStateServiceTest {
     private JooqUserBookProgressRepository progressRepository;
     
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     
     @Mock
     private AuthenticationService authenticationService;
@@ -124,8 +124,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
         ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -164,8 +164,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
         ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -208,7 +208,7 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(999L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(999L)).thenReturn(null);
 
         assertDoesNotThrow(() -> service.saveReadingState(List.of(readingState)));
         verify(progressRepository, never()).save(any());
@@ -324,8 +324,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
         ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -352,8 +352,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
         ArgumentCaptor<UserBookProgressRow> progressCaptor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -592,8 +592,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
         when(fileProgressRepository.findByUserIdAndBookFileId(1L, 10L)).thenReturn(Optional.empty());
 
@@ -628,8 +628,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
         ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -671,8 +671,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
         when(fileProgressRepository.findByUserIdAndBookFileId(1L, 10L)).thenReturn(Optional.of(fileProgress));
 
@@ -761,8 +761,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
         ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -791,8 +791,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
         ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -820,8 +820,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.empty());
 
         ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -850,8 +850,8 @@ class KoboReadingStateServiceTest {
                 .build();
 
         when(repository.findByEntitlementIdAndUserId(entitlementId, 1L)).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(1L, 100L)).thenReturn(Optional.of(existingProgress));
 
         ArgumentCaptor<UserBookProgressRow> captor = ArgumentCaptor.forClass(UserBookProgressRow.class);
@@ -878,9 +878,9 @@ class KoboReadingStateServiceTest {
         book2.setId(200L);
 
         when(repository.findByEntitlementIdAndUserId(anyString(), eq(1L))).thenReturn(null);
-        when(bookRepository.findById(100L)).thenReturn(Optional.of(testBook));
-        when(bookRepository.findById(200L)).thenReturn(Optional.of(book2));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUserEntity));
+        when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(testBook);
+        when(jooqBookEntityRepository.findByIdFull(200L)).thenReturn(book2);
+        when(userRepository.findById(1L)).thenReturn(testUserEntity);
         when(progressRepository.findByUserIdAndBookId(eq(1L), anyLong())).thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenReturn(new UserBookProgressRow());
 

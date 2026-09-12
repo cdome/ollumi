@@ -2,11 +2,7 @@ package org.booklore.util;
 
 import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.BookMetadata;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
-import org.booklore.model.entity.MoodEntity;
-import org.booklore.model.entity.TagEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -85,22 +81,10 @@ public class MetadataChangeDetectorTest {
                 .moodsLocked(false)
                 .tagsLocked(false)
                 .reviewsLocked(false)
-                .authors(List.of(
-                        AuthorEntity.builder().id(1L).name("Author One").build(),
-                        AuthorEntity.builder().id(2L).name("Author Two").build()
-                ))
-                .categories(Set.of(
-                        CategoryEntity.builder().id(1L).name("Fiction").build(),
-                        CategoryEntity.builder().id(2L).name("Mystery").build()
-                ))
-                .moods(Set.of(
-                        MoodEntity.builder().id(1L).name("Dark").build(),
-                        MoodEntity.builder().id(2L).name("Suspenseful").build()
-                ))
-                .tags(Set.of(
-                        TagEntity.builder().id(1L).name("Thriller").build(),
-                        TagEntity.builder().id(2L).name("Bestseller").build()
-                ))
+                .authorNames(List.of("Author One", "Author Two"))
+                .categoryNames(Set.of("Fiction", "Mystery"))
+                .moodNames(Set.of("Dark", "Suspenseful"))
+                .tagNames(Set.of("Thriller", "Bestseller"))
                 .build();
 
         newMeta = BookMetadata.builder()
@@ -315,13 +299,13 @@ public class MetadataChangeDetectorTest {
                 .title("Original Title")
                 .subtitle("Original Subtitle")
                 .publisher("Original Publisher")
-                .authors(null) // null authors, this is what we're testing
+                .authorNames(null) // null authors, this is what we're testing
                 .authorsLocked(false)
-                .categories(Set.of(CategoryEntity.builder().id(1L).name("Fiction").build()))
+                .categoryNames(Set.of("Fiction"))
                 .categoriesLocked(false)
-                .moods(Set.of(MoodEntity.builder().id(1L).name("Dark").build()))
+                .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
-                .tags(Set.of(TagEntity.builder().id(1L).name("Thriller").build()))
+                .tagNames(Set.of("Thriller"))
                 .tagsLocked(false)
                 .titleLocked(false)
                 .subtitleLocked(false)
@@ -363,13 +347,13 @@ public class MetadataChangeDetectorTest {
         BookMetadataEntity testExisting = BookMetadataEntity.builder()
                 .bookId(1L)
                 .title("Test Title")
-                .authors(List.of()) // empty set, what we're testing
+                .authorNames(List.of()) // empty set, what we're testing
                 .authorsLocked(false)
-                .categories(Set.of(CategoryEntity.builder().id(1L).name("Fiction").build()))
+                .categoryNames(Set.of("Fiction"))
                 .categoriesLocked(false)
-                .moods(Set.of(MoodEntity.builder().id(1L).name("Dark").build()))
+                .moodNames(Set.of("Dark"))
                 .moodsLocked(false)
-                .tags(Set.of(TagEntity.builder().id(1L).name("Tag").build()))
+                .tagNames(Set.of("Tag"))
                 .tagsLocked(false)
                 .titleLocked(false)
                 .subtitleLocked(false)
@@ -672,13 +656,13 @@ public class MetadataChangeDetectorTest {
         BookMetadataEntity testExisting = BookMetadataEntity.builder()
                 .bookId(1L)
                 .title("Test")
-                .authors(List.of())
+                .authorNames(List.of())
                 .authorsLocked(false)
-                .categories(Set.of())
+                .categoryNames(Set.of())
                 .categoriesLocked(false)
-                .moods(Set.of())
+                .moodNames(Set.of())
                 .moodsLocked(false)
-                .tags(Set.of())
+                .tagNames(Set.of())
                 .tagsLocked(false)
                 .titleLocked(false)
                 .subtitleLocked(false)

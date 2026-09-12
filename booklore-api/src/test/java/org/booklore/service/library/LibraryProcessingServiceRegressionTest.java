@@ -1,12 +1,14 @@
 package org.booklore.service.library;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.task.options.RescanLibraryContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,11 +32,15 @@ import static org.mockito.Mockito.*;
 class LibraryProcessingServiceRegressionTest {
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
+    @Mock
+    private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
+    @Mock
+    private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     private NotificationService notificationService;
-    @Mock
-    private BookAdditionalFileRepository bookAdditionalFileRepository;
     @Mock
     private FileAsBookProcessor fileAsBookProcessor;
     @Mock
@@ -45,8 +51,6 @@ class LibraryProcessingServiceRegressionTest {
     private LibraryFileHelper libraryFileHelper;
     @Mock
     private BookGroupingService bookGroupingService;
-    @Mock
-    private EntityManager entityManager;
 
     private LibraryProcessingService libraryProcessingService;
 
@@ -54,14 +58,15 @@ class LibraryProcessingServiceRegressionTest {
     void setUp() {
         libraryProcessingService = new LibraryProcessingService(
                 libraryRepository,
+                jooqBookEntityRepository,
+                jooqBookRepository,
+                jooqLibraryPathRepository,
                 notificationService,
-                bookAdditionalFileRepository,
                 fileAsBookProcessor,
                 bookRestorationService,
                 bookDeletionService,
                 libraryFileHelper,
-                bookGroupingService,
-                entityManager
+                bookGroupingService
         );
     }
 
@@ -78,7 +83,6 @@ class LibraryProcessingServiceRegressionTest {
         LibraryPathEntity pathEntity = new LibraryPathEntity();
         pathEntity.setId(10L);
         pathEntity.setPath(accessiblePath.toString());
-        libraryEntity.setLibraryPaths(List.of(pathEntity));
 
         // Create a fileless book (e.g., physical book)
         BookEntity filelessBook = new BookEntity();
@@ -86,9 +90,10 @@ class LibraryProcessingServiceRegressionTest {
         filelessBook.setLibraryPath(pathEntity);
         filelessBook.setBookFiles(Collections.emptyList());
 
-        libraryEntity.setBookEntities(List.of(filelessBook));
-
-        when(libraryRepository.findByIdWithBooks(libraryId)).thenReturn(Optional.of(libraryEntity));
+        when(libraryRepository.findById(libraryId)).thenReturn(libraryEntity);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(libraryId))
+                .thenReturn(List.of(new LibraryPathRow(pathEntity.getId(), pathEntity.getPath())));
+        when(jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId)).thenReturn(List.of(filelessBook));
         when(libraryFileHelper.getAllLibraryFiles(libraryEntity)).thenReturn(List.of(
             LibraryFile.builder()
                 .libraryPathEntity(pathEntity)
@@ -97,7 +102,7 @@ class LibraryProcessingServiceRegressionTest {
                 .build()
         ));
         when(libraryFileHelper.filterByAllowedFormats(anyList(), any())).thenAnswer(inv -> inv.getArgument(0));
-        when(bookAdditionalFileRepository.findByLibraryId(libraryId)).thenReturn(Collections.emptyList());
+        when(jooqBookEntityRepository.findBookFilesByLibraryId(libraryId)).thenReturn(Collections.emptyList());
         when(bookGroupingService.groupForRescan(anyList(), any(LibraryEntity.class)))
                 .thenReturn(new BookGroupingService.GroupingResult(Collections.emptyMap(), Collections.emptyMap()));
 

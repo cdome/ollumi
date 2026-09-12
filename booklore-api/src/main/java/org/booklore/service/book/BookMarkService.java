@@ -4,12 +4,12 @@ import org.booklore.config.BookmarkProperties;
 import org.booklore.model.dto.BookMark;
 import org.booklore.model.dto.CreateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -25,8 +25,8 @@ import java.util.Optional;
 public class BookMarkService {
 
     private final JooqBookMarkRepository bookMarkRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final BookmarkProperties bookmarkProperties;
 
@@ -52,7 +52,7 @@ public class BookMarkService {
             validateNoDuplicateBookmark(request.getCfi(), request.getBookId(), userId);
         }
 
-        if (!bookRepository.existsById(request.getBookId())) {
+        if (!jooqBookEntityRepository.existsById(request.getBookId())) {
             throw new EntityNotFoundException("Book not found: " + request.getBookId());
         }
         if (!userRepository.existsById(userId)) {

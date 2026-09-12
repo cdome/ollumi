@@ -7,8 +7,6 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.FileProcessStatus;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.metadata.MetadataMatchService;
@@ -28,8 +26,6 @@ import java.util.Optional;
 @Slf4j
 public abstract class AbstractFileProcessor implements BookFileProcessor {
 
-    protected final BookRepository bookRepository;
-    protected final BookAdditionalFileRepository bookAdditionalFileRepository;
     protected final BookCreatorService bookCreatorService;
     protected final BookMapper bookMapper;
     protected final MetadataMatchService metadataMatchService;
@@ -37,15 +33,11 @@ public abstract class AbstractFileProcessor implements BookFileProcessor {
     protected final SidecarMetadataWriter sidecarMetadataWriter;
 
 
-    protected AbstractFileProcessor(BookRepository bookRepository,
-                                    BookAdditionalFileRepository bookAdditionalFileRepository,
-                                    BookCreatorService bookCreatorService,
+    protected AbstractFileProcessor(BookCreatorService bookCreatorService,
                                     BookMapper bookMapper,
                                     FileService fileService,
                                     MetadataMatchService metadataMatchService,
                                     SidecarMetadataWriter sidecarMetadataWriter) {
-        this.bookRepository = bookRepository;
-        this.bookAdditionalFileRepository = bookAdditionalFileRepository;
         this.bookCreatorService = bookCreatorService;
         this.bookMapper = bookMapper;
         this.metadataMatchService = metadataMatchService;

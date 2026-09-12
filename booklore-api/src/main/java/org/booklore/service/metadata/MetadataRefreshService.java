@@ -19,8 +19,8 @@ import org.booklore.model.enums.MetadataFetchTaskStatus;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
 import org.booklore.service.NotificationService;
@@ -47,7 +47,7 @@ import static org.booklore.model.enums.MetadataProvider.*;
 @Service
 public class MetadataRefreshService {
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqMetadataFetchJobRepository metadataFetchJobRepository;
     private final BookMapper bookMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
@@ -55,7 +55,7 @@ public class MetadataRefreshService {
     private final AppSettingService appSettingService;
     private final Map<MetadataProvider, BookParser> parserMap;
     private final ObjectMapper objectMapper;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final PlatformTransactionManager transactionManager;
     private final AuthenticationService authenticationService;
@@ -105,7 +105,7 @@ public class MetadataRefreshService {
 
                 int finalCompletedCount = completedCount;
                 txTemplate.execute(status -> {
-                    BookEntity book = bookRepository.findAllWithMetadataByIds(Collections.singleton(bookId))
+                    BookEntity book = jooqBookEntityRepository.findAllWithMetadataByIds(Collections.singleton(bookId))
                             .stream().findFirst()
                             .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
                     try {
@@ -168,7 +168,6 @@ public class MetadataRefreshService {
                         log.error("Metadata update failed for book: {}", getBookIdentifier(book), e);
                         sendBatchProgressNotification(jobId, finalCompletedCount, totalBooks, String.format("Failed to process: %s - %s", book.getMetadata().getTitle(), e.getMessage()), MetadataFetchTaskStatus.ERROR, isReviewMode);
                     }
-                    bookRepository.saveAndFlush(book);
                     return null;
                 });
                 completedCount++;
@@ -751,7 +750,10 @@ public class MetadataRefreshService {
         }
         return switch (refreshType) {
             case LIBRARY -> {
-                LibraryEntity libraryEntity = libraryRepository.findById(request.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(request.getLibraryId()));
+                LibraryEntity libraryEntity = libraryRepository.findById(request.getLibraryId());
+                if (libraryEntity == null) {
+                    throw ApiError.LIBRARY_NOT_FOUND.createException(request.getLibraryId());
+                }
                 yield jooqBookRepository.findBookIdsByLibraryId(libraryEntity.getId());
             }
             case BOOKS -> request.getBookIds();

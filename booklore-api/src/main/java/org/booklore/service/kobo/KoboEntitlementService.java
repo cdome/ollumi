@@ -11,7 +11,6 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.KoboBookFormat;
 import org.booklore.model.enums.KoboReadStatus;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.ShelfRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
@@ -43,10 +42,11 @@ public class KoboEntitlementService {
     private final AppSettingService appSettingService;
     private final KoboCompatibilityService koboCompatibilityService;
     private final JooqUserBookProgressRepository progressRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final JooqKoboReadingStateRepository readingStateRepository;
     private final AuthenticationService authenticationService;
     private final KoboReadingStateBuilder readingStateBuilder;
-    private final ShelfRepository shelfRepository;
+    private final org.booklore.repository.jooq.JooqShelfRepository jooqShelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
     private final MagicShelfBookService magicShelfBookService;
     private final KoboSettingsService koboSettingsService;
@@ -115,18 +115,23 @@ public class KoboEntitlementService {
 
     public List<KoboTagWrapper> generateTags() {
         Long userId = authenticationService.getAuthenticatedUser().getId();
-        Set<Long> koboBookIDs = shelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName())
-                .orElseThrow(() -> new NoSuchElementException("Kobo shelf not found for user: " + userId))
-                .getBookEntities().stream().filter(koboCompatibilityService::isBookSupportedForKobo)
+        ShelfEntity koboShelfEntity = jooqShelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
+        if (koboShelfEntity == null) {
+            throw new NoSuchElementException("Kobo shelf not found for user: " + userId);
+        }
+        Long koboShelfId = koboShelfEntity.getId();
+        Set<Long> koboShelfBookIds = jooqShelfRepository.findBookIdsByShelfId(koboShelfId);
+        Set<Long> koboBookIDs = bookQueryService.findAllWithMetadataByIds(koboShelfBookIds).stream()
+                .filter(koboCompatibilityService::isBookSupportedForKobo)
                 .map(BookEntity::getId)
                 .collect(Collectors.toSet());
 
         List<KoboTagWrapper> tags = new ArrayList<>();
         // Shelves
-        shelfRepository.findByUserId(userId).stream()
+        jooqShelfRepository.findByUserId(userId).stream()
                 .filter(shelf -> !Objects.equals(shelf.getName(), ShelfType.KOBO.getName()))
                 .map(shelf -> buildKoboTag("BL-S-" + shelf.getId(), shelf.getName(), null, null,
-                        shelf.getBookEntities().stream().map(BookEntity::getId).toList(), koboBookIDs))
+                        jooqShelfRepository.findBookIdsByShelfId(shelf.getId()).stream().toList(), koboBookIDs))
                 .forEach(tags::add);
 
         // Magic Shelves
@@ -288,13 +293,9 @@ public class KoboEntitlementService {
                 .imprint(metadata.getPublisher())
                 .build();
 
-        List<String> authors = Optional.ofNullable(metadata.getAuthors())
-                .map(list -> list.stream().map(AuthorEntity::getName).toList())
-                .orElse(Collections.emptyList());
+        List<String> authors = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
 
-        List<String> categories = Optional.ofNullable(metadata.getCategories())
-                .map(list -> list.stream().map(CategoryEntity::getName).toList())
-                .orElse(Collections.emptyList());
+        List<String> categories = new ArrayList<>(relationsRepository.findCategoryNamesByBookId(metadata.getBookId()));
 
         KoboBookMetadata.Series series = null;
         if (metadata.getSeriesName() != null && !metadata.getSeriesName().isBlank()) {

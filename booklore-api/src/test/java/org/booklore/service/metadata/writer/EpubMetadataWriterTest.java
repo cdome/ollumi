@@ -3,7 +3,6 @@ package org.booklore.service.metadata.writer;
 import org.booklore.model.MetadataClearFlags;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
@@ -42,6 +41,7 @@ import static org.mockito.Mockito.when;
 class EpubMetadataWriterTest {
 
     private EpubMetadataWriter writer;
+    private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private BookMetadataEntity metadata;
     private BookEntity bookEntity;
     private AppSettingService appSettingService;
@@ -66,12 +66,13 @@ class EpubMetadataWriterTest {
         when(appSettings.getMetadataPersistenceSettings()).thenReturn(metadataPersistenceSettings);
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
 
-        writer = new EpubMetadataWriter(appSettingService);
+        relationsRepository = org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class);
+        org.mockito.Mockito.when(relationsRepository.findMoodNamesByBookId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Set.of());
+        org.mockito.Mockito.when(relationsRepository.findAuthorNamesByBookId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(List.of("Test Author"));
+        writer = new EpubMetadataWriter(appSettingService, relationsRepository);
         metadata = new BookMetadataEntity();
+        metadata.setBookId(1L);
         metadata.setTitle("Test Book");
-        AuthorEntity author = new AuthorEntity();
-        author.setName("Test Author");
-        metadata.setAuthors(List.of(author));
 
         bookEntity = new BookEntity();
         LibraryPathEntity libraryPath = new LibraryPathEntity();
@@ -172,10 +173,9 @@ class EpubMetadataWriterTest {
             File epubFile = createEpubWithOpf(initialOpfContent, "test-whitespace-" + System.nanoTime() + ".epub");
 
             BookMetadataEntity newMeta = new BookMetadataEntity();
+            newMeta.setBookId(1L);
             newMeta.setTitle("Updated Title");
-            AuthorEntity author = new AuthorEntity();
-            author.setName("Updated Author");
-            newMeta.setAuthors(List.of(author));
+            org.mockito.Mockito.when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Updated Author"));
 
             writer.saveMetadataToFile(epubFile, newMeta, null, new MetadataClearFlags());
             String contentAfterFirstSave = readOpfContent(epubFile);

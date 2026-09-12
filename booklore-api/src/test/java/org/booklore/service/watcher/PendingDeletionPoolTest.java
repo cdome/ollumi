@@ -3,10 +3,11 @@ package org.booklore.service.watcher;
 import org.booklore.mapper.BookMapper;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
+import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,8 +29,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PendingDeletionPoolTest {
 
-    @Mock private BookRepository bookRepository;
-    @Mock private BookFileRepository bookFileRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private NotificationService notificationService;
     @Mock private BookMapper bookMapper;
 
@@ -48,6 +49,7 @@ class PendingDeletionPoolTest {
 
         book = BookEntity.builder()
                 .id(10L)
+                .library(LibraryEntity.builder().id(5L).build())
                 .libraryPath(libraryPath)
                 .deleted(false)
                 .build();
@@ -152,14 +154,14 @@ class PendingDeletionPoolTest {
         ScheduledFuture<?> timer = mock(ScheduledFuture.class);
         pool.addFileDeletion(Path.of("/library/subfolder/test.epub"), 1L, bookFile, book, timer);
 
-        when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
-        when(bookFileRepository.countByBookId(10L)).thenReturn(1L);
+        when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
+        when(jooqBookEntityRepository.countBookFilesByBookId(10L)).thenReturn(1L);
 
         pool.expireFileDeletion(Path.of("/library/subfolder/test.epub"));
 
         assertThat(book.getDeleted()).isTrue();
         assertThat(book.getDeletedAt()).isNotNull();
-        verify(bookRepository).save(book);
+        verify(jooqBookRepository).markDeleted(List.of(10L), book.getDeletedAt());
     }
 
     @Test
@@ -167,13 +169,13 @@ class PendingDeletionPoolTest {
         ScheduledFuture<?> timer = mock(ScheduledFuture.class);
         pool.addFileDeletion(Path.of("/library/subfolder/test.epub"), 1L, bookFile, book, timer);
 
-        when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
-        when(bookFileRepository.countByBookId(10L)).thenReturn(3L);
-        when(bookFileRepository.findById(100L)).thenReturn(Optional.of(bookFile));
+        when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
+        when(jooqBookEntityRepository.countBookFilesByBookId(10L)).thenReturn(3L);
+        when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(bookFile);
 
         pool.expireFileDeletion(Path.of("/library/subfolder/test.epub"));
 
-        verify(bookFileRepository).delete(bookFile);
+        verify(jooqBookRepository).deleteBookFileById(100L);
         assertThat(book.getDeleted()).isFalse();
     }
 
@@ -184,12 +186,12 @@ class PendingDeletionPoolTest {
         ScheduledFuture<?> timer = mock(ScheduledFuture.class);
         pool.addFolderDeletion(Path.of("/library/subfolder"), 1L, List.of(book), timer);
 
-        when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
 
         pool.expireFolderDeletion(Path.of("/library/subfolder"));
 
         assertThat(book.getDeleted()).isTrue();
-        verify(bookRepository).save(book);
+        verify(jooqBookRepository).markDeleted(List.of(10L), book.getDeletedAt());
     }
 
     @Test
@@ -207,8 +209,8 @@ class PendingDeletionPoolTest {
         pool.addFileDeletion(Path.of("/library/subfolder/test.epub"), 1L, bookFile, book, timer);
         var match = pool.matchByHash("abc123").orElseThrow();
 
-        when(bookRepository.findById(10L)).thenReturn(Optional.of(book));
-        when(bookFileRepository.findById(100L)).thenReturn(Optional.of(bookFile));
+        when(jooqBookEntityRepository.findByIdIncludingDeleted(10L)).thenReturn(book);
+        when(jooqBookEntityRepository.findBookFileById(100L)).thenReturn(bookFile);
 
         LibraryPathEntity newPath = new LibraryPathEntity();
         newPath.setId(2L);
@@ -221,6 +223,9 @@ class PendingDeletionPoolTest {
         assertThat(book.getLibraryPath()).isEqualTo(newPath);
         assertThat(bookFile.getFileSubPath()).isEqualTo("newSub");
         assertThat(bookFile.getFileName()).isEqualTo("renamed.epub");
-        verify(bookRepository).save(book);
+        verify(jooqBookRepository).updateLibrary(10L, 5L, 2L);
+        verify(jooqBookRepository).markUndeleted(List.of(10L));
+        verify(jooqBookRepository).updateFileNameAndSubPath(100L, "renamed.epub", "newSub");
+        verify(jooqBookRepository).updateBookFileHash(100L, "abc123");
     }
 }

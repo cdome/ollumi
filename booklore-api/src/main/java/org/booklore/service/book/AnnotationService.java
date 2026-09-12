@@ -5,10 +5,10 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.Annotation;
 import org.booklore.model.dto.CreateAnnotationRequest;
 import org.booklore.model.dto.UpdateAnnotationRequest;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqAnnotationRepository;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -24,8 +24,8 @@ import java.util.Optional;
 public class AnnotationService {
 
     private final JooqAnnotationRepository annotationRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)
@@ -44,7 +44,7 @@ public class AnnotationService {
         Long userId = getCurrentUserId();
         validateNoDuplicateAnnotation(request.getCfi(), request.getBookId(), userId);
 
-        if (!bookRepository.existsById(request.getBookId())) {
+        if (!jooqBookEntityRepository.existsById(request.getBookId())) {
             throw new EntityNotFoundException("Book not found: " + request.getBookId());
         }
         if (!userRepository.existsById(userId)) {

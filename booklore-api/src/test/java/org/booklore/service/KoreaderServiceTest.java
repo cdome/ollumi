@@ -12,8 +12,7 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.repository.jooq.dto.KoreaderUserRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.service.hardcover.HardcoverSyncService;
@@ -40,9 +39,9 @@ class KoreaderServiceTest {
     @Mock
     JooqUserBookProgressRepository progressRepo;
     @Mock
-    BookRepository bookRepo;
+    org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
-    UserRepository userRepo;
+    JooqUserRepository userRepo;
     @Mock
     JooqKoreaderUserRepository koreaderUserRepo;
     @Mock
@@ -106,7 +105,7 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(99L);
-        when(bookRepo.findByCurrentHash("h")).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("h")).thenReturn(book);
         var prog = new UserBookProgressRow();
         prog.setKoreaderProgress("p");
         prog.setKoreaderProgressPercent(0.5F);
@@ -122,7 +121,7 @@ class KoreaderServiceTest {
     @Test
     void getProgress_bookNotFound() {
         when(details.isSyncEnabled()).thenReturn(true);
-        when(bookRepo.findByCurrentHash("h")).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByCurrentHash("h")).thenReturn(null);
         assertThrows(APIException.class, () -> service.getProgress("h"));
     }
 
@@ -131,8 +130,7 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(77L);
-        when(bookRepo.findByCurrentHash("h"))
-                .thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("h")).thenReturn(book);
         when(progressRepo.findByUserIdAndBookId(anyLong(), anyLong()))
                 .thenReturn(Optional.empty());
         assertThrows(APIException.class, () -> service.getProgress("h"));
@@ -149,7 +147,7 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(100L);
-        when(bookRepo.findByCurrentHash("hash123")).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("hash123")).thenReturn(book);
 
         var prog = new UserBookProgressRow();
         prog.setKoreaderProgress("progress/path");
@@ -171,7 +169,7 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(101L);
-        when(bookRepo.findByCurrentHash("hash456")).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("hash456")).thenReturn(book);
 
         var prog = new UserBookProgressRow();
         prog.setKoreaderProgress("progress/path2");
@@ -192,10 +190,10 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(7L);
-        when(bookRepo.findByCurrentHash("h")).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("h")).thenReturn(book);
         var user = new BookLoreUserEntity();
         user.setId(42L);
-        when(userRepo.findById(42L)).thenReturn(Optional.of(user));
+        when(userRepo.findById(42L)).thenReturn(user);
         when(progressRepo.findByUserIdAndBookId(42L, 7L))
                 .thenReturn(Optional.empty());
 
@@ -218,10 +216,10 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(8L);
-        when(bookRepo.findByCurrentHash("h")).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("h")).thenReturn(book);
         var user = new BookLoreUserEntity();
         user.setId(42L);
-        when(userRepo.findById(42L)).thenReturn(Optional.of(user));
+        when(userRepo.findById(42L)).thenReturn(user);
         var existing = new UserBookProgressRow();
         when(progressRepo.findByUserIdAndBookId(42L, 8L))
                 .thenReturn(Optional.of(existing));
@@ -240,10 +238,10 @@ class KoreaderServiceTest {
         when(details.isSyncEnabled()).thenReturn(true);
         var book = new BookEntity();
         book.setId(8L);
-        when(bookRepo.findByCurrentHash("h")).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByCurrentHash("h")).thenReturn(book);
         var user = new BookLoreUserEntity();
         user.setId(42L);
-        when(userRepo.findById(42L)).thenReturn(Optional.of(user));
+        when(userRepo.findById(42L)).thenReturn(user);
         var existing = new UserBookProgressRow();
         existing.setKoreaderProgressPercent(0.4F);
         existing.setReadStatus(ReadStatus.READING);

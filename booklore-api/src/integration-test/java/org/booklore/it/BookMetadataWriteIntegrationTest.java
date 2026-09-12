@@ -3,6 +3,7 @@ package org.booklore.it;
 import org.booklore.it.util.AuthTestHelper;
 import org.booklore.model.MetadataUpdateWrapper;
 import org.booklore.model.dto.BookMetadata;
+import org.booklore.model.dto.ComicMetadata;
 import org.booklore.model.dto.request.BulkMetadataUpdateRequest;
 import org.booklore.model.dto.request.DeleteMetadataRequest;
 import org.booklore.model.dto.request.MergeMetadataRequest;
@@ -16,7 +17,6 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.Lock;
 import org.booklore.model.enums.MergeMetadataType;
-import org.booklore.repository.BookRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -37,9 +37,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
 
-    @Autowired
-    private BookRepository bookRepository;
-
     private LibraryEntity createLibrary() throws Exception {
         Path tempDir = Files.createTempDirectory("metadata-it-");
         return data.createLibrary("MetadataWriteLib " + UUID.randomUUID(), tempDir);
@@ -48,7 +45,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
     private BookEntity createPhantomBook(LibraryEntity library, String title) throws Exception {
         BookEntity book = BookEntity.builder()
                 .library(library)
-                .libraryPath(library.getLibraryPaths().get(0))
+                .libraryPath(data.getFirstLibraryPath(library))
                 .addedOn(Instant.now())
                 .scannedOn(Instant.now())
                 .deleted(false)
@@ -72,10 +69,10 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
                 .build();
         book.setBookFiles(new ArrayList<>(List.of(file)));
 
-        Path libraryRoot = Path.of(library.getLibraryPaths().get(0).getPath());
+        Path libraryRoot = Path.of(data.getFirstLibraryPath(library).getPath());
         Files.createFile(libraryRoot.resolve(fileName));
 
-        return bookRepository.save(book);
+        return data.insertBook(book);
     }
 
     @Test
@@ -111,6 +108,63 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> metadata = (Map<String, Object>) getResponse.getBody().get("metadata");
         assertThat(metadata.get("title")).isEqualTo(newTitle);
+    }
+
+    @Test
+    void adminCanAddComicMetadataToBookWithNoneYet() throws Exception {
+        // Regression test: BookMetadataUpdater.updateComicMetadataIfNeeded creates a brand-new
+        // ComicMetadataEntity for a book that has none yet, then writes its character/team/
+        // location/creator relations via jOOQ on the same connection, keyed by
+        // comic_metadata.book_id. That row must be saveAndFlush()'d (not just save()'d) before
+        // the jOOQ writes run, or the FK on comic_metadata_*_mapping fails - this exercises that
+        // exact "no comic metadata yet" path end to end against a real database.
+        AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
+        LibraryEntity library = createLibrary();
+        BookEntity book = createPhantomBook(library, "Comic Metadata Book " + UUID.randomUUID());
+
+        ComicMetadata comicMetadata = ComicMetadata.builder()
+                .issueNumber("5")
+                .volumeName("Vol 1")
+                .characters(Set.of("Peter Parker", "Mary Jane"))
+                .teams(Set.of("Avengers"))
+                .locations(Set.of("New York City"))
+                .pencillers(Set.of("John Romita Jr."))
+                .inkers(Set.of("Klaus Janson"))
+                .build();
+        BookMetadata updated = BookMetadata.builder()
+                .title(book.getMetadata().getTitle())
+                .comicMetadata(comicMetadata)
+                .build();
+        MetadataUpdateWrapper request = MetadataUpdateWrapper.builder()
+                .metadata(updated)
+                .build();
+
+        ResponseEntity<Map> response = rest.exchange(
+                baseUrl() + "/api/v1/books/" + book.getId() + "/metadata",
+                HttpMethod.PUT,
+                auth.bearerEntity(request, tokens.accessToken()),
+                Map.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<Map> getResponse = rest.exchange(
+                baseUrl() + "/api/v1/books/" + book.getId(),
+                HttpMethod.GET,
+                auth.bearerEntity(tokens.accessToken()),
+                Map.class
+        );
+        assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> metadata = (Map<String, Object>) getResponse.getBody().get("metadata");
+        Map<String, Object> comic = (Map<String, Object>) metadata.get("comicMetadata");
+        assertThat(comic).isNotNull();
+        assertThat(comic.get("issueNumber")).isEqualTo("5");
+        assertThat(comic.get("volumeName")).isEqualTo("Vol 1");
+        assertThat((List<String>) comic.get("characters")).containsExactlyInAnyOrder("Peter Parker", "Mary Jane");
+        assertThat((List<String>) comic.get("teams")).containsExactly("Avengers");
+        assertThat((List<String>) comic.get("locations")).containsExactly("New York City");
+        assertThat((List<String>) comic.get("pencillers")).containsExactly("John Romita Jr.");
+        assertThat((List<String>) comic.get("inkers")).containsExactly("Klaus Janson");
     }
 
     @Test

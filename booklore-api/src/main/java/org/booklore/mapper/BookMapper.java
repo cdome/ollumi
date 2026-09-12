@@ -3,6 +3,7 @@ package org.booklore.mapper;
 import org.booklore.model.dto.*;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Context;
 import org.mapstruct.Mapper;
@@ -10,64 +11,44 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 import org.mapstruct.ReportingPolicy;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Mapper(componentModel = "spring", uses = {BookMetadataMapper.class, ShelfMapper.class, AdditionalFileMapper.class, ComicMetadataMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
-public interface BookMapper {
+@Mapper(componentModel = "spring", uses = {BookMetadataMapper.class, AdditionalFileMapper.class, ComicMetadataMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public abstract class BookMapper {
+
+    @Autowired
+    protected JooqShelfRepository shelfRepository;
 
     @Mapping(source = "library.id", target = "libraryId")
     @Mapping(source = "library.name", target = "libraryName")
     @Mapping(source = "libraryPath", target = "libraryPath", qualifiedByName = "mapLibraryPathIdOnly")
     @Mapping(source = "metadata", target = "metadata")
-    @Mapping(source = "shelves", target = "shelves")
     @Mapping(source = "bookFiles", target = "primaryFile", qualifiedByName = "mapPrimaryFile")
     @Mapping(source = "bookFiles", target = "alternativeFormats", qualifiedByName = "mapAlternativeFormats")
     @Mapping(source = "bookFiles", target = "supplementaryFiles", qualifiedByName = "mapSupplementaryFiles")
-    Book toBook(BookEntity bookEntity);
+    public abstract Book toBook(BookEntity bookEntity);
 
     @Mapping(source = "library.id", target = "libraryId")
     @Mapping(source = "library.name", target = "libraryName")
     @Mapping(source = "libraryPath", target = "libraryPath", qualifiedByName = "mapLibraryPathIdOnly")
     @Mapping(source = "metadata", target = "metadata")
-    @Mapping(source = "shelves", target = "shelves")
     @Mapping(source = "bookFiles", target = "primaryFile", qualifiedByName = "mapPrimaryFile")
     @Mapping(source = "bookFiles", target = "alternativeFormats", qualifiedByName = "mapAlternativeFormats")
     @Mapping(source = "bookFiles", target = "supplementaryFiles", qualifiedByName = "mapSupplementaryFiles")
-    Book toBookWithDescription(BookEntity bookEntity, @Context boolean includeDescription);
+    public abstract Book toBookWithDescription(BookEntity bookEntity, @Context boolean includeDescription);
 
-    default List<String> mapAuthors(List<AuthorEntity> authors) {
-        if (authors == null) return null;
-        return authors.stream()
-                .map(AuthorEntity::getName)
-                .toList();
-    }
-
-    default Set<String> mapCategories(Set<CategoryEntity> categories) {
-        if (categories == null) return null;
-        return categories.stream()
-                .map(CategoryEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
-    default Set<String> mapMoods(Set<MoodEntity> moods) {
-        if (moods == null) return null;
-        return moods.stream()
-                .map(MoodEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
-    default Set<String> mapTags(Set<TagEntity> tags) {
-        if (tags == null) return null;
-        return tags.stream()
-                .map(TagEntity::getName)
-                .collect(Collectors.toSet());
+    /** shelves is no longer a Hibernate-managed collection; read via jOOQ instead. */
+    @AfterMapping
+    protected void mapShelves(BookEntity bookEntity, @MappingTarget Book book) {
+        book.setShelves(shelfRepository.findShelvesByBookId(bookEntity.getId()));
     }
 
     @Named("mapLibraryPathIdOnly")
-    default LibraryPath mapLibraryPathIdOnly(LibraryPathEntity entity) {
+    protected LibraryPath mapLibraryPathIdOnly(LibraryPathEntity entity) {
         if (entity == null) return null;
         return LibraryPath.builder()
                 .id(entity.getId())
@@ -75,7 +56,7 @@ public interface BookMapper {
     }
 
     @Named("mapPrimaryFile")
-    default BookFile mapPrimaryFile(List<BookFileEntity> bookFiles) {
+    protected BookFile mapPrimaryFile(List<BookFileEntity> bookFiles) {
         if (bookFiles == null || bookFiles.isEmpty()) {
             return null;
         }
@@ -84,7 +65,7 @@ public interface BookMapper {
     }
 
     @Named("mapAlternativeFormats")
-    default List<BookFile> mapAlternativeFormats(List<BookFileEntity> bookFiles) {
+    protected List<BookFile> mapAlternativeFormats(List<BookFileEntity> bookFiles) {
         if (bookFiles == null) return null;
         return bookFiles.stream()
                 .filter(bf -> bf.isBook())
@@ -94,7 +75,7 @@ public interface BookMapper {
     }
 
     @Named("mapSupplementaryFiles")
-    default List<BookFile> mapSupplementaryFiles(List<BookFileEntity> bookFiles) {
+    protected List<BookFile> mapSupplementaryFiles(List<BookFileEntity> bookFiles) {
         if (bookFiles == null)
             return null;
         return bookFiles.stream()
@@ -103,7 +84,7 @@ public interface BookMapper {
                 .toList();
     }
 
-    default BookFileEntity getPrimaryBookFile(List<BookFileEntity> bookFiles) {
+    protected BookFileEntity getPrimaryBookFile(List<BookFileEntity> bookFiles) {
         if (bookFiles == null || bookFiles.isEmpty()) return null;
 
         List<BookFileEntity> bookFormats = bookFiles.stream()
@@ -128,7 +109,7 @@ public interface BookMapper {
         return firstBook;
     }
 
-    default BookFile toBookFile(BookFileEntity entity) {
+    protected BookFile toBookFile(BookFileEntity entity) {
         if (entity == null) return null;
         return BookFile.builder()
                 .id(entity.getId())
@@ -147,7 +128,7 @@ public interface BookMapper {
                 .build();
     }
 
-    default String extractExtension(BookFileEntity entity) {
+    protected String extractExtension(BookFileEntity entity) {
         if (entity == null) return null;
         String fileName;
         if (entity.isFolderBased()) {
@@ -162,7 +143,7 @@ public interface BookMapper {
     }
 
     @AfterMapping
-    default void mapAudiobookMetadata(BookEntity bookEntity, @MappingTarget Book book) {
+    protected void mapAudiobookMetadata(BookEntity bookEntity, @MappingTarget Book book) {
         if (book.getMetadata() == null) {
             return;
         }

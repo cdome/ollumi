@@ -9,9 +9,9 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.event.BookEventBroadcaster;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.fileprocessor.BookFileProcessor;
@@ -44,9 +44,9 @@ public class FileAsBookProcessor {
     private final BookEventBroadcaster bookEventBroadcaster;
     private final BookFileProcessorRegistry processorRegistry;
     private final KoboAutoShelfService koboAutoShelfService;
-    private final BookRepository bookRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final FileService fileService;
     private final MetadataExtractorFactory metadataExtractorFactory;
     private final AudiobookMetadataExtractor audiobookMetadataExtractor;
@@ -69,8 +69,11 @@ public class FileAsBookProcessor {
 
     private LibraryEntity ensureManaged(LibraryEntity entity) {
         if (entity.getId() == null) return entity;
-        return libraryRepository.findById(entity.getId())
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(entity.getId()));
+        LibraryEntity managed = libraryRepository.findById(entity.getId());
+        if (managed == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(entity.getId());
+        }
+        return managed;
     }
 
     private void processGroupWithErrorHandling(List<LibraryFile> group, LibraryEntity libraryEntity) {
@@ -114,7 +117,11 @@ public class FileAsBookProcessor {
                 .toList();
 
         if (!additionalFiles.isEmpty()) {
-            BookEntity bookEntity = bookRepository.getReferenceById(result.getBook().getId());
+            BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(result.getBook().getId());
+            if (bookEntity == null) {
+                log.warn("Book id={} not found right after processing; skipping additional files", result.getBook().getId());
+                return;
+            }
             for (LibraryFile additionalFile : additionalFiles) {
                 createAdditionalBookFile(bookEntity, additionalFile);
             }
@@ -135,12 +142,11 @@ public class FileAsBookProcessor {
                 }).thenComparing(LibraryFile::getFileName));
     }
 
-    private void createAdditionalBookFile(BookEntity bookEntity, LibraryFile file) {
-        Optional<BookFileEntity> existing = bookAdditionalFileRepository
-                .findByLibraryPath_IdAndFileSubPathAndFileName(
-                        file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
+    void createAdditionalBookFile(BookEntity bookEntity, LibraryFile file) {
+        BookFileEntity existing = jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(
+                file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
 
-        if (existing.isPresent()) {
+        if (existing != null) {
             log.debug("Additional file already exists: {}", file.getFileName());
             return;
         }
@@ -155,21 +161,19 @@ public class FileAsBookProcessor {
             fileSizeKb = FileUtils.getFileSizeInKb(file.getFullPath());
         }
 
-        BookFileEntity additionalFile = BookFileEntity.builder()
-                .book(bookEntity)
-                .fileName(file.getFileName())
-                .fileSubPath(file.getFileSubPath())
-                .isBookFormat(true)
-                .folderBased(file.isFolderBased())
-                .bookType(file.getBookFileType())
-                .fileSizeKb(fileSizeKb)
-                .initialHash(hash)
-                .currentHash(hash)
-                .addedOn(Instant.now())
-                .build();
-
         try {
-            bookAdditionalFileRepository.save(additionalFile);
+            jooqBookRepository.insertBookFile(
+                    bookEntity.getId(),
+                    file.getFileName(),
+                    file.getFileSubPath(),
+                    true,
+                    file.isFolderBased(),
+                    file.getBookFileType(),
+                    fileSizeKb,
+                    hash,
+                    hash,
+                    null,
+                    Instant.now());
             log.info("Attached additional format {} to book: {}", file.getFileName(), bookEntity.getPrimaryBookFile().getFileName());
             generateCoverFromAdditionalFile(bookEntity, file);
         } catch (Exception e) {
@@ -238,9 +242,11 @@ public class FileAsBookProcessor {
                 originalImage.flush();
 
                 if (saved) {
-                    bookEntity.getMetadata().setAudiobookCoverUpdatedOn(Instant.now());
-                    bookEntity.setAudiobookCoverHash(BookCoverUtils.generateCoverHash());
-                    bookRepository.save(bookEntity);
+                    Instant now = Instant.now();
+                    String hash = BookCoverUtils.generateCoverHash();
+                    bookEntity.getMetadata().setAudiobookCoverUpdatedOn(now);
+                    bookEntity.setAudiobookCoverHash(hash);
+                    jooqBookRepository.updateAudiobookCoverMetadata(bookEntity.getId(), hash, now);
                     log.info("Generated audiobook cover from additional file: {}", audioFile.getFileName());
                 }
             }
@@ -280,8 +286,9 @@ public class FileAsBookProcessor {
 
                 if (saved) {
                     FileService.setBookCoverPath(bookEntity.getMetadata());
-                    bookEntity.setBookCoverHash(BookCoverUtils.generateCoverHash());
-                    bookRepository.save(bookEntity);
+                    String hash = BookCoverUtils.generateCoverHash();
+                    bookEntity.setBookCoverHash(hash);
+                    jooqBookRepository.updateCoverMetadata(bookEntity.getId(), hash, bookEntity.getMetadata().getCoverUpdatedOn());
                     log.info("Generated ebook cover from additional file: {}", ebookFile.getFileName());
                 }
             }

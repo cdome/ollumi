@@ -14,7 +14,7 @@ import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.model.enums.UserPermission;
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.user.DefaultSettingInitializer;
 import org.booklore.service.user.UserProvisioningService;
@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.service.audit.AuditService;
 import org.booklore.util.RequestUtils;
@@ -40,7 +39,7 @@ public class AuthenticationService {
     private String dummyPasswordHash;
 
     private final AppProperties appProperties;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqRefreshTokenRepository refreshTokenRepository;
     private final UserProvisioningService userProvisioningService;
     private final PasswordEncoder passwordEncoder;
@@ -52,7 +51,7 @@ public class AuthenticationService {
 
     public AuthenticationService(
             AppProperties appProperties,
-            UserRepository userRepository,
+            JooqUserRepository userRepository,
             JooqRefreshTokenRepository refreshTokenRepository,
             UserProvisioningService userProvisioningService,
             PasswordEncoder passwordEncoder,
@@ -128,7 +127,7 @@ public class AuthenticationService {
     @Transactional
     public ResponseEntity<Map<String, String>> loginUser(UserLoginRequest loginRequest) {
         if (appSettingService.getAppSettings().isOidcForceOnlyMode()) {
-            BookLoreUserEntity oidcCheckUser = userRepository.findByUsername(loginRequest.getUsername()).orElse(null);
+            BookLoreUserEntity oidcCheckUser = userRepository.findByUsername(loginRequest.getUsername());
             if (oidcCheckUser == null || !oidcCheckUser.getPermissions().isPermissionAdmin()) {
                 throw ApiError.OIDC_ONLY_MODE.createException();
             }
@@ -139,7 +138,7 @@ public class AuthenticationService {
         authRateLimitService.checkLoginRateLimit(ip);
         authRateLimitService.checkLoginRateLimitByUsername(username);
 
-        BookLoreUserEntity user = userRepository.findByUsername(username).orElse(null);
+        BookLoreUserEntity user = userRepository.findByUsername(username);
 
         if (user == null) {
             // Constant-time dummy BCrypt check prevents timing-based user enumeration:
@@ -169,16 +168,16 @@ public class AuthenticationService {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Remote-User header is missing");
         }
 
-        Optional<BookLoreUserEntity> user = userRepository.findByUsername(username);
-        if (user.isEmpty() && appProperties.getRemoteAuth().isCreateNewUsers()) {
-            user = Optional.of(userProvisioningService.provisionRemoteUserFromHeaders(name, username, email, groups));
+        BookLoreUserEntity user = userRepository.findByUsername(username);
+        if (user == null && appProperties.getRemoteAuth().isCreateNewUsers()) {
+            user = userProvisioningService.provisionRemoteUserFromHeaders(name, username, email, groups);
         }
 
-        if (user.isEmpty()) {
+        if (user == null) {
             throw ApiError.INTERNAL_SERVER_ERROR.createException("User not found and remote user creation is disabled");
         }
 
-        return loginUser(user.get());
+        return loginUser(user);
     }
 
     public ResponseEntity<Map<String, String>> loginUser(BookLoreUserEntity user) {
@@ -217,8 +216,10 @@ public class AuthenticationService {
             throw ApiError.INVALID_CREDENTIALS.createException("Invalid or expired refresh token");
         }
 
-        BookLoreUserEntity user = userRepository.findById(storedToken.getUserId())
-                .orElseThrow(() -> ApiError.INVALID_CREDENTIALS.createException("Refresh token user not found"));
+        BookLoreUserEntity user = userRepository.findById(storedToken.getUserId());
+        if (user == null) {
+            throw ApiError.INVALID_CREDENTIALS.createException("Refresh token user not found");
+        }
 
         refreshTokenRepository.revokeById(storedToken.getId(), Instant.now());
 

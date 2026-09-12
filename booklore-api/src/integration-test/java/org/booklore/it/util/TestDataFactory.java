@@ -3,15 +3,17 @@ package org.booklore.it.util;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.*;
 import org.booklore.model.dto.OpdsUserV2;
-import org.booklore.repository.AuthorRepository;
-import org.booklore.repository.BookMetadataRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.CategoryRepository;
-import org.booklore.repository.LibraryPathRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
-import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -28,43 +30,43 @@ import java.util.UUID;
 @Component
 public class TestDataFactory {
 
-    private final LibraryRepository libraryRepository;
-    private final LibraryPathRepository libraryPathRepository;
-    private final BookRepository bookRepository;
-    private final BookMetadataRepository bookMetadataRepository;
-    private final ShelfRepository shelfRepository;
-    private final AuthorRepository authorRepository;
-    private final CategoryRepository categoryRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository libraryPathRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqShelfRepository jooqShelfRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
+    private final JooqAuthorRepository jooqAuthorRepository;
     private final JooqOpdsUserV2Repository opdsUserRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public TestDataFactory(LibraryRepository libraryRepository,
-                           LibraryPathRepository libraryPathRepository,
-                           BookRepository bookRepository,
-                           BookMetadataRepository bookMetadataRepository,
-                           ShelfRepository shelfRepository,
-                           AuthorRepository authorRepository,
-                           CategoryRepository categoryRepository,
+    public TestDataFactory(JooqLibraryRepository libraryRepository,
+                           JooqLibraryPathRepository libraryPathRepository,
+                           JooqBookRepository jooqBookRepository,
+                           JooqBookMetadataRepository jooqBookMetadataRepository,
+                           JooqBookEntityRepository jooqBookEntityRepository,
+                           JooqShelfRepository jooqShelfRepository,
+                           JooqUserLibraryRepository jooqUserLibraryRepository,
+                           JooqAuthorRepository jooqAuthorRepository,
                            JooqOpdsUserV2Repository opdsUserRepository,
-                           UserRepository userRepository,
+                           JooqUserRepository userRepository,
                            PasswordEncoder passwordEncoder) {
         this.libraryRepository = libraryRepository;
         this.libraryPathRepository = libraryPathRepository;
-        this.bookRepository = bookRepository;
-        this.bookMetadataRepository = bookMetadataRepository;
-        this.shelfRepository = shelfRepository;
-        this.authorRepository = authorRepository;
-        this.categoryRepository = categoryRepository;
+        this.jooqBookRepository = jooqBookRepository;
+        this.jooqBookMetadataRepository = jooqBookMetadataRepository;
+        this.jooqBookEntityRepository = jooqBookEntityRepository;
+        this.jooqShelfRepository = jooqShelfRepository;
+        this.jooqUserLibraryRepository = jooqUserLibraryRepository;
+        this.jooqAuthorRepository = jooqAuthorRepository;
         this.opdsUserRepository = opdsUserRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     public LibraryEntity createLibrary(String name, Path rootDir) {
-        LibraryPathEntity path = new LibraryPathEntity();
-        path.setPath(rootDir.toAbsolutePath().toString());
-
         LibraryEntity library = LibraryEntity.builder()
                 .name(name)
                 .watch(false)
@@ -73,10 +75,24 @@ public class TestDataFactory {
                 .formatPriority(new ArrayList<>(List.of(BookFileType.EPUB, BookFileType.PDF, BookFileType.CBX)))
                 .build();
 
-        path.setLibrary(library);
-        library.setLibraryPaths(new ArrayList<>(List.of(path)));
+        library = libraryRepository.save(library);
 
-        return libraryRepository.save(library);
+        LibraryPathEntity path = new LibraryPathEntity();
+        path.setPath(rootDir.toAbsolutePath().toString());
+        path.setLibrary(library);
+        long pathId = libraryPathRepository.insertLibraryPath(library.getId(), path.getPath());
+        path.setId(pathId);
+
+        return library;
+    }
+
+    /** The first (and typically only) configured path of [library], loaded fresh via jOOQ. */
+    public LibraryPathEntity getFirstLibraryPath(LibraryEntity library) {
+        List<LibraryPathEntity> paths = libraryPathRepository.findByLibraryId(library.getId());
+        if (paths.isEmpty()) {
+            throw new IllegalStateException("Library " + library.getId() + " has no configured paths");
+        }
+        return paths.get(0);
     }
 
     public LibraryEntity createLibrary(String name, String pathStr) {
@@ -99,20 +115,49 @@ public class TestDataFactory {
                 .build();
         book.setMetadata(metadata);
 
-        return bookRepository.save(book);
+        return insertBook(book);
+    }
+
+    /** Persists an in-memory book graph (book + metadata + bookFiles, built via builders the same way
+     * the JPA cascade used to accept) via jOOQ inserts, returning the fully-hydrated persisted entity -
+     * a stand-in for the old bookRepository.save(book) cascade. */
+    public BookEntity insertBook(BookEntity book) {
+        Long libraryId = book.getLibrary().getId();
+        Long libraryPathId = book.getLibraryPath() != null ? book.getLibraryPath().getId() : null;
+        long bookId = jooqBookRepository.insertBook(libraryId, libraryPathId, book.getAddedOn());
+        if (book.getScannedOn() != null) {
+            jooqBookRepository.updateScannedOn(bookId, book.getScannedOn());
+        }
+
+        if (book.getMetadata() != null) {
+            jooqBookMetadataRepository.insertRow(bookId, book.getMetadata());
+        }
+
+        if (book.getBookFiles() != null) {
+            for (BookFileEntity file : book.getBookFiles()) {
+                Long fileId = jooqBookRepository.insertBookFile(
+                        bookId, file.getFileName(), file.getFileSubPath(), file.isBookFormat(),
+                        file.isFolderBased(), file.getBookType(), file.getFileSizeKb(),
+                        file.getInitialHash(), file.getCurrentHash(), file.getDescription(), Instant.now());
+                file.setId(fileId);
+                jooqBookRepository.updateBookFileFullRow(file);
+            }
+        }
+
+        return jooqBookEntityRepository.findByIdFull(bookId);
     }
 
     public void assignLibraryToUser(BookLoreUserEntity user, LibraryEntity library) {
-        Set<LibraryEntity> libraries = new HashSet<>(user.getLibraries());
-        libraries.add(library);
-        user.setLibraries(libraries);
-        userRepository.save(user);
+        Set<Long> libraryIds = new HashSet<>(jooqUserLibraryRepository.findLibraryIdsByUserId(user.getId()));
+        libraryIds.add(library.getId());
+        jooqUserLibraryRepository.setLibrariesForUser(user.getId(), libraryIds);
     }
 
     public BookEntity createBookWithFile(LibraryEntity library, String title, BookFileType bookType, Path fixtureFile) throws IOException {
         String extension = primaryExtension(bookType);
         String subPath = "books";
-        Path libraryDir = Path.of(library.getLibraryPaths().get(0).getPath());
+        LibraryPathEntity libraryPath = getFirstLibraryPath(library);
+        Path libraryDir = Path.of(libraryPath.getPath());
         Path targetDir = libraryDir.resolve(subPath);
         Files.createDirectories(targetDir);
         String fileName = title + "." + extension;
@@ -123,7 +168,7 @@ public class TestDataFactory {
 
         BookEntity book = BookEntity.builder()
                 .library(library)
-                .libraryPath(library.getLibraryPaths().get(0))
+                .libraryPath(libraryPath)
                 .addedOn(Instant.now())
                 .scannedOn(Instant.now())
                 .deleted(false)
@@ -148,7 +193,7 @@ public class TestDataFactory {
                 .build();
         book.setBookFiles(List.of(bookFile));
 
-        return bookRepository.save(book);
+        return insertBook(book);
     }
 
     private String primaryExtension(BookFileType bookType) {
@@ -159,9 +204,8 @@ public class TestDataFactory {
         };
     }
 
-    public AuthorEntity createAuthor(String name) {
-        AuthorEntity author = AuthorEntity.builder().name(name).build();
-        return authorRepository.save(author);
+    public AuthorRow createAuthor(String name) {
+        return jooqAuthorRepository.save(new AuthorRow(null, name, null, null, false, false, false, false));
     }
 
     public ShelfEntity createShelf(BookLoreUserEntity user, String name, boolean isPublic) {
@@ -170,14 +214,11 @@ public class TestDataFactory {
                 .name(name)
                 .isPublic(isPublic)
                 .build();
-        return shelfRepository.save(shelf);
+        return jooqShelfRepository.save(shelf);
     }
 
     public void addBookToShelf(BookEntity book, ShelfEntity shelf) {
-        // BookShelfMapping was dropped; book_shelf_mapping is now written through the
-        // ShelfEntity <-> BookEntity @ManyToMany join table.
-        shelf.getBookEntities().add(book);
-        shelfRepository.save(shelf);
+        jooqShelfRepository.assignShelfToBook(book.getId(), shelf.getId());
     }
 
     public OpdsUserV2 createOpdsUser(BookLoreUserEntity user, String username, String rawPassword) {

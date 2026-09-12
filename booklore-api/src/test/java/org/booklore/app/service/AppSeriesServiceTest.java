@@ -384,7 +384,7 @@ class AppSeriesServiceTest {
                         .seriesName(b.getMetadata().getSeriesName())
                         .seriesNumber(b.getMetadata().getSeriesNumber())
                         .coverUpdatedOn(b.getMetadata().getCoverUpdatedOn())
-                        .authors(b.getMetadata().getAuthors().stream().map(AuthorEntity::getName).toList())
+                        .authors(b.getMetadata().getAuthorNames())
                         .build())
                 .toList();
         when(jooqAppBookSummaryRepository.findSummariesByIds(anyCollection(), any())).thenReturn(summaries);
@@ -404,16 +404,13 @@ class AppSeriesServiceTest {
     }
 
     private BookEntity buildBook(Long id, String seriesName, Float seriesNumber, String authorName) {
-        AuthorEntity author = new AuthorEntity();
-        author.setName(authorName);
-
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .bookId(id)
                 .title(seriesName + " #" + seriesNumber.intValue())
                 .seriesName(seriesName)
                 .seriesNumber(seriesNumber)
                 .coverUpdatedOn(Instant.now())
-                .authors(List.of(author))
+                .authorNames(List.of(authorName))
                 .build();
 
         BookFileEntity bookFile = BookFileEntity.builder()

@@ -13,7 +13,9 @@ import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
@@ -26,9 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,8 +39,12 @@ import java.util.Set;
 @Service
 public class BookFileDetachmentService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final org.booklore.repository.jooq.JooqLibraryPathRepository libraryPathRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final BookMapper bookMapper;
@@ -49,8 +54,10 @@ public class BookFileDetachmentService {
 
     @Transactional
     public DetachBookFileResponse detachBookFile(Long bookId, Long fileId, boolean copyMetadata) {
-        BookEntity sourceBook = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity sourceBook = jooqBookEntityRepository.findByIdFull(bookId);
+        if (sourceBook == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         BookFileEntity targetFile = sourceBook.getBookFiles().stream()
                 .filter(f -> f.getId().equals(fileId))
@@ -79,12 +86,6 @@ public class BookFileDetachmentService {
         LibraryPathEntity newLibraryPath = resolveLibraryPath(sourceBook, fileDiskPath);
         String newFileSubPath = computeFileSubPath(newLibraryPath, fileDiskPath);
 
-        BookEntity newBook = BookEntity.builder()
-                .library(sourceBook.getLibrary())
-                .libraryPath(newLibraryPath)
-                .addedOn(Instant.now())
-                .build();
-
         BookMetadataEntity newMetadata;
         if (copyMetadata) {
             newMetadata = copyMetadataFrom(sourceBook.getMetadata());
@@ -93,26 +94,57 @@ public class BookFileDetachmentService {
             String title = deriveTitle(targetFile.getFileName());
             newMetadata.setTitle(title);
         }
-        newMetadata.setBook(newBook);
-        newBook.setMetadata(newMetadata);
 
-        sourceBook.getBookFiles().remove(targetFile);
-        targetFile.setFileSubPath(newFileSubPath);
-        targetFile.setBook(newBook);
+        // Read the relations to copy (if any) before insert, so search_text can be computed once
+        // with the final author list rather than inserted-then-patched the way the old Hibernate
+        // cascade version needed (its @PrePersist hook fired before authorNames was ever set).
+        Set<String> sourceMoods = Collections.emptySet();
+        Set<String> sourceCategories = Collections.emptySet();
+        Set<String> sourceTags = Collections.emptySet();
+        List<String> sourceAuthors = Collections.emptyList();
+        if (copyMetadata) {
+            sourceMoods = relationsRepository.findMoodNamesByBookId(sourceBook.getId());
+            sourceCategories = relationsRepository.findCategoryNamesByBookId(sourceBook.getId());
+            sourceTags = relationsRepository.findTagNamesByBookId(sourceBook.getId());
+            sourceAuthors = relationsRepository.findAuthorNamesByBookId(sourceBook.getId());
+        }
+        newMetadata.setAuthorNames(sourceAuthors);
+        newMetadata.updateSearchText();
 
-        newBook = bookRepository.saveAndFlush(newBook);
+        // newMetadata is never associated with a BookEntity via .setBook()/.book(...) - Hibernate
+        // bytecode enhancement (enableAssociationManagement) would otherwise silently enroll it in
+        // a managed parent's cascade=ALL collection the moment that association field is set, and
+        // this row is never going through JPA persist() at all.
+        long newBookId = jooqBookRepository.insertBook(sourceBook.getLibrary().getId(), newLibraryPath.getId(), Instant.now());
+        jooqBookMetadataRepository.insertRow(newBookId, newMetadata);
+        jooqBookRepository.reassignFileWithNewNameAndPath(targetFile.getId(), newBookId, newFileSubPath, targetFile.getFileName());
+
+        if (copyMetadata) {
+            if (!sourceMoods.isEmpty()) {
+                relationsRepository.setMoodsForBook(newBookId, sourceMoods);
+            }
+            if (!sourceCategories.isEmpty()) {
+                relationsRepository.setCategoriesForBook(newBookId, sourceCategories);
+            }
+            if (!sourceTags.isEmpty()) {
+                relationsRepository.setTagsForBook(newBookId, sourceTags);
+            }
+            if (!sourceAuthors.isEmpty()) {
+                relationsRepository.setAuthorsForBook(newBookId, sourceAuthors);
+            }
+        }
 
         try {
-            bookCoverService.regenerateCover(newBook.getId());
+            bookCoverService.regenerateCover(newBookId);
         } catch (Exception e) {
-            log.warn("Failed to generate cover for detached book {}: {}", newBook.getId(), e.getMessage());
+            log.warn("Failed to generate cover for detached book {}: {}", newBookId, e.getMessage());
         }
 
         auditService.log(AuditAction.BOOK_FILE_DETACHED, "Book", bookId,
-                "Detached file '" + targetFile.getFileName() + "' from book " + bookId + " to new book " + newBook.getId());
+                "Detached file '" + targetFile.getFileName() + "' from book " + bookId + " to new book " + newBookId);
 
         Book sourceBookDto = getUpdatedBook(sourceBook.getId());
-        Book newBookDto = getUpdatedBook(newBook.getId());
+        Book newBookDto = getUpdatedBook(newBookId);
 
         return new DetachBookFileResponse(sourceBookDto, newBookDto);
     }
@@ -161,19 +193,6 @@ public class BookFileDetachmentService {
         copy.setAgeRating(source.getAgeRating());
         copy.setContentRating(source.getContentRating());
 
-        if (source.getAuthors() != null) {
-            copy.setAuthors(new ArrayList<>(source.getAuthors()));
-        }
-        if (source.getCategories() != null) {
-            copy.setCategories(new HashSet<>(source.getCategories()));
-        }
-        if (source.getMoods() != null) {
-            copy.setMoods(new HashSet<>(source.getMoods()));
-        }
-        if (source.getTags() != null) {
-            copy.setTags(new HashSet<>(source.getTags()));
-        }
-
         return copy;
     }
 
@@ -187,7 +206,7 @@ public class BookFileDetachmentService {
 
     private LibraryPathEntity resolveLibraryPath(BookEntity sourceBook, Path fileDiskPath) {
         Path normalizedFilePath = fileDiskPath.toAbsolutePath().normalize();
-        return sourceBook.getLibrary().getLibraryPaths().stream()
+        return libraryPathRepository.findByLibraryId(sourceBook.getLibrary().getId()).stream()
                 .map(lp -> Map.entry(lp, Paths.get(lp.getPath()).toAbsolutePath().normalize()))
                 .filter(entry -> normalizedFilePath.startsWith(entry.getValue()))
                 .max(Comparator.comparingInt(entry -> entry.getValue().getNameCount()))
@@ -206,8 +225,10 @@ public class BookFileDetachmentService {
 
     private Book getUpdatedBook(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity refreshedBook = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity refreshedBook = jooqBookEntityRepository.findByIdFull(bookId);
+        if (refreshedBook == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
                 .orElse(new UserBookProgressRow());

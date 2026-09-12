@@ -13,12 +13,12 @@ import org.booklore.model.dto.Library;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.AppBookConditions;
 import org.booklore.repository.jooq.JooqAppBookDetailRepository;
 import org.booklore.repository.jooq.JooqAppBookRepository;
 import org.booklore.repository.jooq.JooqAppBookSummaryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.opds.MagicShelfBookService;
@@ -43,12 +43,12 @@ public class AppBookService {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 50;
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqAppBookRepository jooqAppBookRepository;
     private final JooqAppBookSummaryRepository jooqAppBookSummaryRepository;
     private final JooqAppBookDetailRepository jooqAppBookDetailRepository;
     private final JooqUserBookProgressRepository userBookProgressRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final AuthenticationService authenticationService;
     private final MagicShelfBookService magicShelfBookService;
 
@@ -335,8 +335,10 @@ public class AppBookService {
 
         // Validate shelf access
         if (shelfId != null) {
-            ShelfEntity shelf = shelfRepository.findById(shelfId)
-                    .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+            ShelfEntity shelf = shelfRepository.findById(shelfId);
+            if (shelf == null) {
+                throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+            }
             if (!shelf.isPublic() && !shelf.getUser().getId().equals(userId)) {
                 throw ApiError.FORBIDDEN.createException("Access denied to shelf " + shelfId);
             }
@@ -437,8 +439,10 @@ public class AppBookService {
         Long userId = user.getId();
         Set<Long> accessibleLibraryIds = getAccessibleLibraryIds(user);
 
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         validateLibraryAccess(accessibleLibraryIds, book.getLibrary().getId());
 
@@ -512,8 +516,10 @@ public class AppBookService {
         }
 
         if (shelfId != null) {
-            ShelfEntity shelf = shelfRepository.findById(shelfId)
-                    .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+            ShelfEntity shelf = shelfRepository.findById(shelfId);
+            if (shelf == null) {
+                throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+            }
             if (!shelf.isPublic() && !shelf.getUser().getId().equals(userId)) {
                 throw ApiError.FORBIDDEN.createException("Access denied to shelf " + shelfId);
             }

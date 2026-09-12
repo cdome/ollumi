@@ -7,7 +7,7 @@ import org.booklore.model.dto.response.AudiobookTrack;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookFileRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.metadata.extractor.AudiobookMetadataExtractor;
 import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
@@ -45,7 +45,7 @@ class AudioMetadataServiceTest {
     AudiobookMetadataExtractor audiobookMetadataExtractor;
 
     @Mock
-    BookFileRepository bookFileRepository;
+    JooqBookRepository jooqBookRepository;
 
     @Mock
     org.booklore.repository.jooq.JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
@@ -680,7 +680,7 @@ class AudioMetadataServiceTest {
         assertEquals("Chapter 1", info.getChapters().get(0).getTitle());
         assertEquals("Chapter 2", info.getChapters().get(1).getTitle());
 
-        verify(bookFileRepository).save(bookFileEntity);
+        verify(jooqBookRepository).updateBookFileFullRow(bookFileEntity);
         assertNotNull(bookFileEntity.getChapters());
         assertEquals(2, bookFileEntity.getChapters().size());
         assertEquals(2, bookFileEntity.getChapterCount());
@@ -703,7 +703,7 @@ class AudioMetadataServiceTest {
         assertEquals("Full Audiobook", info.getChapters().get(0).getTitle());
         assertEquals(7200000L, info.getChapters().get(0).getEndTimeMs());
 
-        verify(bookFileRepository).save(bookFileEntity);
+        verify(jooqBookRepository).updateBookFileFullRow(bookFileEntity);
     }
 
     @Test
@@ -772,6 +772,6 @@ class AudioMetadataServiceTest {
         AudiobookInfo info = audioMetadataService.getMetadata(bookFileEntity, audioPath);
 
         assertNotNull(info);
-        verify(bookFileRepository, never()).save(any());
+        verify(jooqBookRepository, never()).updateBookFileFullRow(any());
     }
 }

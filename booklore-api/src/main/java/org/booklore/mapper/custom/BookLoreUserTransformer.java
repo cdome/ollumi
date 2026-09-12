@@ -7,14 +7,18 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.settings.SidebarSortOption;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
+import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.UserPermission;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.repository.jooq.dto.UserSettingRow;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -25,6 +29,8 @@ public class BookLoreUserTransformer {
     private final ObjectMapper objectMapper;
     private final LibraryMapper libraryMapper;
     private final JooqUserSettingRepository userSettingRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
 
     public BookLoreUser toDTO(BookLoreUserEntity userEntity) {
         BookLoreUser.UserPermissions permissions = new BookLoreUser.UserPermissions();
@@ -83,15 +89,13 @@ public class BookLoreUserTransformer {
         }
 
         bookLoreUser.setUserSettings(userSettings);
-        if (userEntity.getLibraries() != null) {
-            bookLoreUser.setAssignedLibraries(
-                    userEntity.getLibraries().stream()
-                            .map(libraryMapper::toLibrary)
-                            .collect(Collectors.toList())
-            );
-        } else {
-            bookLoreUser.setAssignedLibraries(Collections.emptyList());
-        }
+        List<Long> libraryIds = new ArrayList<>(jooqUserLibraryRepository.findLibraryIdsByUserId(userEntity.getId()));
+        List<LibraryEntity> libraries = libraryRepository.findAllById(libraryIds);
+        bookLoreUser.setAssignedLibraries(
+                libraries.stream()
+                        .map(libraryMapper::toLibrary)
+                        .collect(Collectors.toList())
+        );
         bookLoreUser.setProvisioningMethod(userEntity.getProvisioningMethod());
         return bookLoreUser;
     }

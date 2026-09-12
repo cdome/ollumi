@@ -10,7 +10,7 @@ import org.booklore.repository.jooq.dto.EmailProviderV2Row;
 import org.booklore.model.dto.EmailRecipientV2;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqEmailProviderV2Repository;
 import org.booklore.repository.jooq.JooqEmailRecipientV2Repository;
 import org.booklore.repository.jooq.JooqUserEmailProviderPreferenceRepository;
@@ -40,7 +40,7 @@ public class SendEmailV2Service {
 
     private final JooqEmailProviderV2Repository emailProviderRepository;
     private final JooqUserEmailProviderPreferenceRepository preferenceRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqEmailRecipientV2Repository emailRecipientRepository;
     private final NotificationService notificationService;
     private final AuthenticationService authenticationService;
@@ -48,7 +48,10 @@ public class SendEmailV2Service {
 
     public void emailBookQuick(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         EmailProviderV2Row defaultEmailProvider = getDefaultEmailProvider();
         EmailRecipientV2 defaultEmailRecipient = emailRecipientRepository.findDefaultEmailRecipientByUserId(user.getId());
         if (defaultEmailRecipient == null) {
@@ -67,7 +70,10 @@ public class SendEmailV2Service {
         if (emailProvider == null) {
             throw ApiError.EMAIL_PROVIDER_NOT_FOUND.createException(request.getProviderId());
         }
-        BookEntity book = bookRepository.findByIdWithBookFiles(request.getBookId()).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(request.getBookId()));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(request.getBookId());
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(request.getBookId());
+        }
         EmailRecipientV2 emailRecipient = emailRecipientRepository.findByIdAndUserId(request.getRecipientId(), user.getId());
         if (emailRecipient == null) {
             throw ApiError.EMAIL_RECIPIENT_NOT_FOUND.createException(request.getRecipientId());

@@ -2,7 +2,6 @@ package org.booklore.app.mapper;
 
 import org.booklore.app.dto.AppBookDetail;
 import org.booklore.app.dto.AppBookFile;
-import org.booklore.app.dto.AppBookSummary;
 import org.booklore.app.dto.AppLibrarySummary;
 import org.booklore.app.dto.AppMagicShelfSummary;
 import org.booklore.app.dto.AppShelfSummary;
@@ -16,86 +15,15 @@ import org.mapstruct.*;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface AppBookMapper {
 
-    @Mapping(target = "id", source = "book.id")
-    @Mapping(target = "title", source = "book.metadata.title")
-    @Mapping(target = "authors", source = "book.metadata.authors", qualifiedByName = "mapAuthors")
-    @Mapping(target = "thumbnailUrl", source = "book", qualifiedByName = "mapThumbnailUrl")
-    @Mapping(target = "readStatus", source = "progress.readStatus")
-    @Mapping(target = "personalRating", source = "progress.personalRating")
-    @Mapping(target = "seriesName", source = "book.metadata.seriesName")
-    @Mapping(target = "seriesNumber", source = "book.metadata.seriesNumber")
-    @Mapping(target = "libraryId", source = "book.library.id")
-    @Mapping(target = "addedOn", source = "book.addedOn")
-    @Mapping(target = "lastReadTime", source = "progress.lastReadTime")
-    @Mapping(target = "readProgress", source = "progress", qualifiedByName = "mapReadProgress")
-    @Mapping(target = "primaryFileType", source = "book", qualifiedByName = "mapPrimaryFileType")
-    @Mapping(target = "coverUpdatedOn", source = "book.metadata.coverUpdatedOn")
-    @Mapping(target = "audiobookCoverUpdatedOn", source = "book.metadata.audiobookCoverUpdatedOn")
-    @Mapping(target = "isPhysical", source = "book.isPhysical")
-    AppBookSummary toSummary(BookEntity book, UserBookProgressRow progress);
-
-    @Mapping(target = "id", source = "book.id")
-    @Mapping(target = "title", source = "book.metadata.title")
-    @Mapping(target = "authors", source = "book.metadata.authors", qualifiedByName = "mapAuthors")
-    @Mapping(target = "thumbnailUrl", source = "book", qualifiedByName = "mapThumbnailUrl")
-    @Mapping(target = "readStatus", source = "progress.readStatus")
-    @Mapping(target = "personalRating", source = "progress.personalRating")
-    @Mapping(target = "seriesName", source = "book.metadata.seriesName")
-    @Mapping(target = "seriesNumber", source = "book.metadata.seriesNumber")
-    @Mapping(target = "libraryId", source = "book.library.id")
-    @Mapping(target = "addedOn", source = "book.addedOn")
-    @Mapping(target = "lastReadTime", source = "progress.lastReadTime")
-    @Mapping(target = "subtitle", source = "book.metadata.subtitle")
-    @Mapping(target = "description", source = "book.metadata.description")
-    @Mapping(target = "categories", source = "book.metadata.categories", qualifiedByName = "mapCategories")
-    @Mapping(target = "publisher", source = "book.metadata.publisher")
-    @Mapping(target = "publishedDate", source = "book.metadata.publishedDate")
-    @Mapping(target = "pageCount", source = "book.metadata.pageCount")
-    @Mapping(target = "isbn13", source = "book.metadata.isbn13")
-    @Mapping(target = "language", source = "book.metadata.language")
-    @Mapping(target = "goodreadsRating", source = "book.metadata.goodreadsRating")
-    @Mapping(target = "goodreadsReviewCount", source = "book.metadata.goodreadsReviewCount")
-    @Mapping(target = "libraryName", source = "book.library.name")
-    @Mapping(target = "shelves", source = "book.shelves", qualifiedByName = "mapShelves")
-    @Mapping(target = "readProgress", source = "progress", qualifiedByName = "mapReadProgress")
-    @Mapping(target = "primaryFileType", source = "book", qualifiedByName = "mapPrimaryFileType")
-    @Mapping(target = "coverUpdatedOn", source = "book.metadata.coverUpdatedOn")
-    @Mapping(target = "audiobookCoverUpdatedOn", source = "book.metadata.audiobookCoverUpdatedOn")
-    @Mapping(target = "isPhysical", source = "book.isPhysical")
-    @Mapping(target = "fileTypes", source = "book", qualifiedByName = "mapFileTypes")
-    @Mapping(target = "files", source = "book", qualifiedByName = "mapFiles")
-    @Mapping(target = "epubProgress", source = "progress", qualifiedByName = "mapEpubProgress")
-    @Mapping(target = "pdfProgress", source = "progress", qualifiedByName = "mapPdfProgress")
-    @Mapping(target = "cbxProgress", source = "progress", qualifiedByName = "mapCbxProgress")
-    @Mapping(target = "audiobookProgress", source = "fileProgress", qualifiedByName = "mapAudiobookProgress")
-    @Mapping(target = "koreaderProgress", source = "progress", qualifiedByName = "mapKoreaderProgress")
-    AppBookDetail toDetail(BookEntity book, UserBookProgressRow progress, UserBookFileProgressRow fileProgress);
-
-    @Named("mapAuthors")
-    default List<String> mapAuthors(List<AuthorEntity> authors) {
-        if (authors == null || authors.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return authors.stream()
-                .map(AuthorEntity::getName)
-                .toList();
-    }
-
-    @Named("mapCategories")
-    default Set<String> mapCategories(Set<CategoryEntity> categories) {
-        if (categories == null || categories.isEmpty()) {
-            return Collections.emptySet();
-        }
-        return categories.stream()
-                .map(CategoryEntity::getName)
-                .collect(Collectors.toSet());
-    }
+    // toSummary/toDetail were superseded by the jOOQ read model (JooqAppBookSummaryRepository /
+    // JooqAppBookDetailRepository, Phase 9) and had zero remaining callers; deleted along with
+    // mapCategories, which existed only to support toDetail's categories mapping and referenced the
+    // now-removed BookMetadataEntity.categories Hibernate collection via CategoryEntity.
 
     @Named("mapThumbnailUrl")
     default String mapThumbnailUrl(BookEntity book) {
@@ -105,17 +33,7 @@ public interface AppBookMapper {
         return "/api/books/" + book.getId() + "/cover";
     }
 
-    @Named("mapShelves")
-    default List<AppShelfSummary> mapShelves(Set<ShelfEntity> shelves) {
-        if (shelves == null || shelves.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return shelves.stream()
-                .map(this::toShelfSummary)
-                .collect(Collectors.toList());
-    }
-
-    default AppShelfSummary toShelfSummary(ShelfEntity shelf) {
+    default AppShelfSummary toShelfSummaryFromEntity(ShelfEntity shelf) {
         if (shelf == null) {
             return null;
         }
@@ -319,19 +237,6 @@ public interface AppBookMapper {
                 .bookCount(bookCount)
                 .allowedFormats(library.getAllowedFormats())
                 .paths(paths)
-                .build();
-    }
-
-    default AppShelfSummary toShelfSummaryFromEntity(ShelfEntity shelf) {
-        if (shelf == null) {
-            return null;
-        }
-        return AppShelfSummary.builder()
-                .id(shelf.getId())
-                .name(shelf.getName())
-                .icon(shelf.getIcon())
-                .bookCount(shelf.getBookCount())
-                .publicShelf(shelf.isPublic())
                 .build();
     }
 

@@ -8,7 +8,10 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.DetachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.audit.AuditService;
@@ -31,7 +34,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookFileDetachmentServiceTest {
 
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
+    @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
+    @Mock private JooqLibraryPathRepository libraryPathRepository;
     @Mock private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
@@ -39,6 +45,7 @@ class BookFileDetachmentServiceTest {
     @Mock private BookService bookService;
     @Mock private AuditService auditService;
     @Mock private BookCoverService bookCoverService;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @InjectMocks
     private BookFileDetachmentService service;
@@ -59,7 +66,7 @@ class BookFileDetachmentServiceTest {
                 .path("/tmp/test-library")
                 .build();
 
-        library.setLibraryPaths(new ArrayList<>(List.of(libraryPath)));
+        lenient().when(libraryPathRepository.findByLibraryId(1L)).thenReturn(new ArrayList<>(List.of(libraryPath)));
     }
 
     private BookEntity createBook(Long id) {
@@ -71,6 +78,7 @@ class BookFileDetachmentServiceTest {
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .book(book)
+                .bookId(id)
                 .title("Test Book " + id)
                 .build();
         book.setMetadata(metadata);
@@ -87,6 +95,7 @@ class BookFileDetachmentServiceTest {
                 .isBookFormat(isBookFormat)
                 .bookType(type)
                 .build();
+        book.getBookFiles().add(file);
         return file;
     }
 
@@ -107,27 +116,21 @@ class BookFileDetachmentServiceTest {
         BookFileEntity primaryFile = createBookFile(10L, book, true, BookFileType.EPUB);
         BookFileEntity altFile = createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-        when(bookRepository.saveAndFlush(any(BookEntity.class))).thenAnswer(inv -> {
-            BookEntity saved = inv.getArgument(0);
-            saved.setId(2L);
-            return saved;
-        });
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
+        when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         DetachBookFileResponse response = service.detachBookFile(1L, 11L, true);
 
         assertThat(response).isNotNull();
-        assertThat(book.getBookFiles()).hasSize(1);
-        assertThat(book.getBookFiles().getFirst().getId()).isEqualTo(10L);
         verify(auditService).log(eq(org.booklore.model.enums.AuditAction.BOOK_FILE_DETACHED), anyString(), eq(1L), anyString());
-        verify(bookRepository).saveAndFlush(argThat(newBook -> {
-            assertThat(newBook.getBookFiles()).hasSize(1);
-            assertThat(newBook.getMetadata().getTitle()).isEqualTo("Test Book 1");
+        verify(jooqBookMetadataRepository).insertRow(eq(2L), argThat(metadata -> {
+            assertThat(metadata.getTitle()).isEqualTo("Test Book 1");
             return true;
         }));
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(11L, 2L, "", "file-11.pdf");
     }
 
     @Test
@@ -136,20 +139,16 @@ class BookFileDetachmentServiceTest {
         createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-        when(bookRepository.saveAndFlush(any(BookEntity.class))).thenAnswer(inv -> {
-            BookEntity saved = inv.getArgument(0);
-            saved.setId(2L);
-            return saved;
-        });
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
+        when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         service.detachBookFile(1L, 11L, false);
 
-        verify(bookRepository).saveAndFlush(argThat(newBook -> {
-            assertThat(newBook.getMetadata().getTitle()).isEqualTo("file-11");
+        verify(jooqBookMetadataRepository).insertRow(eq(2L), argThat(metadata -> {
+            assertThat(metadata.getTitle()).isEqualTo("file-11");
             return true;
         }));
     }
@@ -161,22 +160,19 @@ class BookFileDetachmentServiceTest {
         BookFileEntity suppFile = createBookFile(11L, book, false, BookFileType.PDF);
         suppFile.setFileName("notes.txt");
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-        when(bookRepository.saveAndFlush(any(BookEntity.class))).thenAnswer(inv -> {
-            BookEntity saved = inv.getArgument(0);
-            saved.setId(2L);
-            return saved;
-        });
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
+        when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         service.detachBookFile(1L, 11L, false);
 
-        assertThat(book.getBookFiles()).hasSize(1);
-        verify(bookRepository).saveAndFlush(argThat(newBook -> {
-            assertThat(newBook.getBookFiles()).hasSize(1);
-            assertThat(newBook.getBookFiles().getFirst().getFileName()).isEqualTo("notes.txt");
+        // fileName itself is never touched by the reassignment call, so "notes.txt" staying intact
+        // is implicit in reassigning by id rather than rebuilding the file.
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(11L, 2L, "", "notes.txt");
+        verify(jooqBookMetadataRepository).insertRow(eq(2L), argThat(metadata -> {
+            assertThat(metadata.getTitle()).isEqualTo("notes");
             return true;
         }));
     }
@@ -187,21 +183,18 @@ class BookFileDetachmentServiceTest {
         BookFileEntity primaryFile = createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-        when(bookRepository.saveAndFlush(any(BookEntity.class))).thenAnswer(inv -> {
-            BookEntity saved = inv.getArgument(0);
-            saved.setId(2L);
-            return saved;
-        });
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
+        when(jooqBookRepository.insertBook(eq(1L), eq(1L), any())).thenReturn(2L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(createBook(2L));
 
         service.detachBookFile(1L, 10L, false);
 
-        assertThat(book.getBookFiles()).hasSize(1);
-        assertThat(book.getBookFiles().getFirst().getId()).isEqualTo(11L);
-        assertThat(book.getBookFiles().getFirst().isBookFormat()).isTrue();
+        // Which file remains primary on the source book is BookEntity.getPrimaryBookFile()'s own
+        // format-priority logic over freshly-read DB state - this test only verifies detachment
+        // reassigned the correct file (10L, not 11L).
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(10L, 2L, "", "file-10.epub");
     }
 
     @Test
@@ -212,7 +205,7 @@ class BookFileDetachmentServiceTest {
         assertThat(book.getBookFiles()).hasSize(1);
         assertThat(file.isBookFormat()).isTrue();
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 10L, false))
                 .isInstanceOf(APIException.class)
@@ -225,7 +218,7 @@ class BookFileDetachmentServiceTest {
         createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, true, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 99L, false))
                 .isInstanceOf(APIException.class)
@@ -234,7 +227,7 @@ class BookFileDetachmentServiceTest {
 
     @Test
     void rejectDetach_bookNotFound() {
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 10L, false))
                 .isInstanceOf(APIException.class)
@@ -247,7 +240,7 @@ class BookFileDetachmentServiceTest {
         createBookFile(10L, book, true, BookFileType.EPUB);
         createBookFile(11L, book, false, BookFileType.PDF);
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() -> service.detachBookFile(1L, 10L, false))
                 .isInstanceOf(APIException.class)
@@ -261,29 +254,22 @@ class BookFileDetachmentServiceTest {
                 .library(library)
                 .path("/tmp/test-library/folder-2")
                 .build();
-        library.getLibraryPaths().add(libraryPath2);
+        when(libraryPathRepository.findByLibraryId(1L)).thenReturn(List.of(libraryPath, libraryPath2));
 
         BookEntity book = createBook(1L);
         BookFileEntity primaryFile = createBookFile(10L, book, true, BookFileType.EPUB);
         BookFileEntity altFile = createBookFile(11L, book, true, BookFileType.PDF);
         altFile.setFileSubPath("folder-2");
 
-        when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
-        when(bookRepository.saveAndFlush(any(BookEntity.class))).thenAnswer(inv -> {
-            BookEntity saved = inv.getArgument(0);
-            saved.setId(2L);
-            return saved;
-        });
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
+        when(jooqBookRepository.insertBook(eq(1L), eq(2L), any())).thenReturn(3L);
 
         setupMocksForGetUpdatedBook();
-        when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(createBook(2L)));
+        when(jooqBookEntityRepository.findByIdFull(3L)).thenReturn(createBook(3L));
 
         service.detachBookFile(1L, 11L, false);
 
-        verify(bookRepository).saveAndFlush(argThat(newBook -> {
-            assertThat(newBook.getLibraryPath().getId()).isEqualTo(2L);
-            assertThat(newBook.getBookFiles().getFirst().getFileSubPath()).isEmpty();
-            return true;
-        }));
+        verify(jooqBookRepository).insertBook(eq(1L), eq(2L), any());
+        verify(jooqBookRepository).reassignFileWithNewNameAndPath(11L, 3L, "", "file-11.pdf");
     }
 }
