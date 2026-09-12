@@ -1,6 +1,6 @@
 package org.booklore.service;
 
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookMetadata;

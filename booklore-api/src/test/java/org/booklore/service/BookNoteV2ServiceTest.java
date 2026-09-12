@@ -10,7 +10,7 @@ import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import org.booklore.service.book.BookNoteV2Service;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

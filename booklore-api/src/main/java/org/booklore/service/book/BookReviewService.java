@@ -1,6 +1,6 @@
 package org.booklore.service.book;
 
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;

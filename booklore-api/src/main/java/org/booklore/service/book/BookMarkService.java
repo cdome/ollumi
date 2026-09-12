@@ -9,7 +9,7 @@ import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

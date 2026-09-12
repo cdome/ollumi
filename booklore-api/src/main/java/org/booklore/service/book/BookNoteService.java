@@ -8,7 +8,7 @@ import org.booklore.model.dto.CreateBookNoteRequest;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

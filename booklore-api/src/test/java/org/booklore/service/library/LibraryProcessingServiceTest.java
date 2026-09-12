@@ -1,6 +1,5 @@
 package org.booklore.service.library;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.exception.APIException;
 import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
@@ -56,8 +55,6 @@ class LibraryProcessingServiceTest {
     private LibraryFileHelper libraryFileHelper;
     @Mock
     private BookGroupingService bookGroupingService;
-    @Mock
-    private EntityManager entityManager;
 
     private LibraryProcessingService libraryProcessingService;
 
@@ -73,8 +70,7 @@ class LibraryProcessingServiceTest {
                 bookRestorationService,
                 bookDeletionService,
                 libraryFileHelper,
-                bookGroupingService,
-                entityManager
+                bookGroupingService
         );
     }
 
@@ -528,7 +524,7 @@ class LibraryProcessingServiceTest {
     }
 
     @Test
-    void rescanLibrary_shouldRefetchLibraryAfterEntityManagerClear(@TempDir Path tempDir) throws IOException {
+    void rescanLibrary_shouldRefetchLibraryAfterCleanup(@TempDir Path tempDir) throws IOException {
 
         long libraryId = 1L;
         Path accessiblePath = tempDir.resolve("accessible");

@@ -4,7 +4,7 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqPdfAnnotationRepository;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

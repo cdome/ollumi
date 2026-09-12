@@ -1,7 +1,5 @@
 package org.booklore.service.library;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
@@ -48,8 +46,6 @@ public class LibraryProcessingService {
     private final BookDeletionService bookDeletionService;
     private final LibraryFileHelper libraryFileHelper;
     private final BookGroupingService bookGroupingService;
-    @PersistenceContext
-    private final EntityManager entityManager;
 
     @Transactional
     public void processLibrary(long libraryId) {
@@ -113,8 +109,7 @@ public class LibraryProcessingService {
         }
         bookRestorationService.restoreDeletedBooks(allLibraryFiles);
         bookDeletionService.purgeDisallowedFormats(libraryEntity);
-        entityManager.clear();
-        // Re-fetch library entity to get fresh state after entity manager was cleared
+        // Re-fetch library entity to get fresh state
         libraryEntity = libraryRepository.findById(context.getLibraryId());
         if (libraryEntity == null) {
             throw ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId());

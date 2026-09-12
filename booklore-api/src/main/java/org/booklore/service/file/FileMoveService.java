@@ -1,6 +1,5 @@
 package org.booklore.service.file;
 
-import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.AppProperties;
@@ -48,7 +47,6 @@ public class FileMoveService {
     private final LibraryMapper libraryMapper;
     private final BookMapper bookMapper;
     private final NotificationService notificationService;
-    private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
     private final SidecarMetadataWriter sidecarMetadataWriter;
 
@@ -235,8 +233,6 @@ public class FileMoveService {
             } catch (Exception e) {
                 log.warn("Failed to move sidecar files for book ID {}: {}", bookId, e.getMessage());
             }
-
-            entityManager.clear();
 
             BookEntity fresh = jooqBookEntityRepository.findByIdFull(bookId);
             if (fresh == null) {

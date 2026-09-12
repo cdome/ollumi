@@ -1,6 +1,5 @@
 package org.booklore.service.file;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.config.AppProperties;
 import org.booklore.mapper.BookMapper;
 import org.booklore.mapper.LibraryMapper;
@@ -54,7 +53,6 @@ class FileMoveServiceTest {
     @Mock private LibraryMapper libraryMapper;
     @Mock private BookMapper bookMapper;
     @Mock private NotificationService notificationService;
-    @Mock private EntityManager entityManager;
     @Mock private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
     @Mock private SidecarMetadataWriter sidecarMetadataWriter;
 
@@ -67,11 +65,11 @@ class FileMoveServiceTest {
                                 JooqLibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
                                 FileMoveHelper fileMoveHelper,
                                 MonitoringRegistrationService monitoringRegistrationService, LibraryMapper libraryMapper,
-                                BookMapper bookMapper, NotificationService notificationService, EntityManager entityManager,
+                                BookMapper bookMapper, NotificationService notificationService,
                                 org.springframework.transaction.support.TransactionTemplate transactionTemplate,
                                 SidecarMetadataWriter sidecarMetadataWriter) {
             super(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository, jooqLibraryPathRepository, fileMoveHelper,
-                    monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter);
+                    monitoringRegistrationService, libraryMapper, bookMapper, notificationService, transactionTemplate, sidecarMetadataWriter);
         }
 
         @Override
@@ -93,7 +91,7 @@ class FileMoveServiceTest {
 
         service = spy(new TestableFileMoveService(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository,
                 jooqLibraryPathRepository,
-                fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter));
+                fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, transactionTemplate, sidecarMetadataWriter));
 
         library = new LibraryEntity();
         library.setId(1L);
@@ -895,26 +893,6 @@ class FileMoveServiceTest {
             verify(notificationService).sendMessage(eq(Topic.BOOK_UPDATE), any());
         }
 
-        @Test
-        @DisplayName("clears entity manager after move")
-        void clearsEntityManager() throws IOException {
-            BookFileEntity epub = createBookFile(1L, "Book.epub", "path", true, false);
-            BookEntity book = createBook(List.of(epub));
-            Path target = Paths.get("/target/new/NewName.epub");
-
-            mockBulkMoveSetup(book, target);
-
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
-
-            service.bulkMoveFiles(request);
-
-            verify(entityManager).clear();
-        }
     }
 
     @Nested

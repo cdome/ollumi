@@ -1,6 +1,5 @@
 package org.booklore.service.file;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.config.AppProperties;
 import org.booklore.mapper.BookMapper;
 import org.booklore.mapper.LibraryMapper;
@@ -59,7 +58,6 @@ class FileMoveServiceOrderingTest {
     @Mock private BookMapper bookMapper;
     @Mock private NotificationService notificationService;
 
-    @Mock private EntityManager entityManager;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private SidecarMetadataWriter sidecarMetadataWriter;
 
@@ -72,10 +70,10 @@ class FileMoveServiceOrderingTest {
                                 JooqLibraryRepository libraryRepository, JooqLibraryPathRepository jooqLibraryPathRepository,
                                 FileMoveHelper fileMoveHelper,
                                 MonitoringRegistrationService monitoringRegistrationService, LibraryMapper libraryMapper,
-                                BookMapper bookMapper, NotificationService notificationService, EntityManager entityManager,
+                                BookMapper bookMapper, NotificationService notificationService,
                                 TransactionTemplate transactionTemplate, SidecarMetadataWriter sidecarMetadataWriter) {
             super(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository, jooqLibraryPathRepository, fileMoveHelper,
-                    monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter);
+                    monitoringRegistrationService, libraryMapper, bookMapper, notificationService, transactionTemplate, sidecarMetadataWriter);
         }
 
         @Override
@@ -96,7 +94,7 @@ class FileMoveServiceOrderingTest {
 
         service = spy(new TestableFileMoveService(appProperties, jooqBookEntityRepository, jooqBookRepository, libraryRepository,
                 jooqLibraryPathRepository,
-                fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, entityManager, transactionTemplate, sidecarMetadataWriter));
+                fileMoveHelper, monitoringRegistrationService, libraryMapper, bookMapper, notificationService, transactionTemplate, sidecarMetadataWriter));
 
         library = new LibraryEntity();
         library.setId(1L);
