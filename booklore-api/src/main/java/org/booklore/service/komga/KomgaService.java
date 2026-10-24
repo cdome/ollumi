@@ -9,8 +9,8 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
 import org.booklore.service.appsettings.AppSettingService;
@@ -37,9 +37,9 @@ import java.util.stream.Collectors;
 public class KomgaService {
 
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
-    private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final KomgaMapper komgaMapper;
     private final MagicShelfService magicShelfService;
     private final CbxReaderService cbxReaderService;
@@ -53,8 +53,10 @@ public class KomgaService {
     }
 
     public KomgaLibraryDto getLibraryById(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> new RuntimeException("Library not found"));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw new RuntimeException("Library not found");
+        }
         return komgaMapper.toKomgaLibraryDto(library);
     }
 
@@ -112,7 +114,7 @@ public class KomgaService {
                     seriesBooks = loadBooksPreservingOrder(seriesBookIds);
                 } else {
                     // For all libraries, need to load all books and filter (less common case)
-                    List<BookEntity> allBooks = bookRepository.findAllWithMetadata();
+                    List<BookEntity> allBooks = jooqBookEntityRepository.findAllWithMetadata();
                     seriesBooks = allBooks.stream()
                             .filter(book -> komgaMapper.getBookSeriesName(book).equals(seriesName))
                             .collect(Collectors.toList());
@@ -156,7 +158,7 @@ public class KomgaService {
         String seriesSlug = parts[1];
         
         // Get books matching the series - optimized to query by series name
-        List<BookEntity> allSeriesBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> allSeriesBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         
         // Find the series name that matches this slug
         List<BookEntity> seriesBooks = allSeriesBooks.stream()
@@ -187,7 +189,7 @@ public class KomgaService {
         String seriesSlug = parts[1];
         
         // Get all books for the library once
-        List<BookEntity> allBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> allBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         
         // Filter and sort books for this series
         List<BookEntity> seriesBooks = allBooks.stream()
@@ -249,9 +251,9 @@ public class KomgaService {
         List<BookEntity> books;
         
         if (libraryId != null) {
-            books = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+            books = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         } else {
-            books = bookRepository.findAllWithMetadata();
+            books = jooqBookEntityRepository.findAllWithMetadata();
         }
         
         // Manual pagination
@@ -281,15 +283,19 @@ public class KomgaService {
     }
 
     public KomgaBookDto getBookById(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found");
+        }
         return komgaMapper.toKomgaBookDto(book);
     }
 
     public List<KomgaPageDto> getBookPages(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
-        
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found");
+        }
+
         BookMetadataEntity metadata = book.getMetadata();
         Integer pageCount = metadata != null && metadata.getPageCount() != null ? metadata.getPageCount() : 0;
         
@@ -311,7 +317,7 @@ public class KomgaService {
         if (bookIds.isEmpty()) {
             return List.of();
         }
-        Map<Long, BookEntity> booksById = bookRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+        Map<Long, BookEntity> booksById = jooqBookEntityRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
                 .collect(Collectors.toMap(BookEntity::getId, book -> book));
         return bookIds.stream()
                 .map(booksById::get)
@@ -384,8 +390,10 @@ public class KomgaService {
     public Resource getBookPageImage(Long bookId, Integer pageNumber, boolean convertToPng) throws IOException {
         log.debug("Getting page {} from book {} (convert to PNG: {})", pageNumber, bookId, convertToPng);
         
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found: " + bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found: " + bookId);
+        }
 
         boolean isPDF = book.getPrimaryBookFile().getBookType() == BookFileType.PDF;
      

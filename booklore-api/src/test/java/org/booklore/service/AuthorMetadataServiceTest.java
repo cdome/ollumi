@@ -6,10 +6,11 @@ import org.booklore.model.dto.AuthorDetails;
 import org.booklore.model.dto.AuthorSearchResult;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.AuthorMatchRequest;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.AuthorMetadataSource;
-import org.booklore.repository.AuthorRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.DuckDuckGoCoverService;
 import org.booklore.service.metadata.parser.AuthorParser;
@@ -35,7 +36,8 @@ import static org.mockito.Mockito.lenient;
 @ExtendWith(MockitoExtension.class)
 class AuthorMetadataServiceTest {
 
-    @Mock private AuthorRepository authorRepository;
+    @Mock private JooqAuthorRepository jooqAuthorRepository;
+    @Mock private JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private AuthorParser authorParser;
     @Mock private AuditService auditService;
     @Mock private FileService fileService;
@@ -49,7 +51,7 @@ class AuthorMetadataServiceTest {
         Map<AuthorMetadataSource, AuthorParser> authorParserMap = Map.of(
                 AuthorMetadataSource.AUDNEXUS, authorParser
         );
-        service = new AuthorMetadataService(authorRepository, authorParserMap, auditService, fileService, duckDuckGoCoverService, authenticationService);
+        service = new AuthorMetadataService(jooqAuthorRepository, relationsRepository, authorParserMap, auditService, fileService, duckDuckGoCoverService, authenticationService);
 
         BookLoreUser.UserPermissions adminPermissions = new BookLoreUser.UserPermissions();
         adminPermissions.setAdmin(true);
@@ -103,11 +105,11 @@ class AuthorMetadataServiceTest {
 
     @Test
     void matchAuthor_updatesEntityAndReturnsDetails() {
-        AuthorEntity author = new AuthorEntity();
+        AuthorRow author = new AuthorRow();
         author.setId(1L);
         author.setName("Stephen King");
 
-        when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
+        when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
 
         AuthorSearchResult result = AuthorSearchResult.builder()
                 .source(AuthorMetadataSource.AUDNEXUS).asin("B000APZGGS")
@@ -116,7 +118,7 @@ class AuthorMetadataServiceTest {
                 .build();
 
         when(authorParser.getAuthorByAsin("B000APZGGS", "us")).thenReturn(result);
-        when(authorRepository.save(any(AuthorEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(jooqAuthorRepository.save(any(AuthorRow.class))).thenAnswer(i -> i.getArgument(0));
 
         AuthorMatchRequest request = new AuthorMatchRequest();
         request.setAsin("B000APZGGS");
@@ -133,14 +135,14 @@ class AuthorMetadataServiceTest {
         assertThat(author.getDescription()).isEqualTo("Master of horror");
         assertThat(author.getAsin()).isEqualTo("B000APZGGS");
 
-        verify(authorRepository).save(author);
+        verify(jooqAuthorRepository).save(author);
         verify(fileService).createAuthorThumbnailFromUrl(eq(1L), eq("https://example.com/king.jpg"));
         verify(auditService).log(eq(AuditAction.AUTHOR_METADATA_UPDATED), eq("Author"), eq(1L), anyString());
     }
 
     @Test
     void matchAuthor_throwsWhenAuthorNotFound() {
-        when(authorRepository.findById(99L)).thenReturn(Optional.empty());
+        when(jooqAuthorRepository.findById(99L)).thenReturn(Optional.empty());
 
         AuthorMatchRequest request = new AuthorMatchRequest();
         request.setAsin("B000APZGGS");
@@ -153,11 +155,11 @@ class AuthorMetadataServiceTest {
 
     @Test
     void matchAuthor_throwsWhenProviderReturnsNull() {
-        AuthorEntity author = new AuthorEntity();
+        AuthorRow author = new AuthorRow();
         author.setId(1L);
         author.setName("Test Author");
 
-        when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
+        when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
         when(authorParser.getAuthorByAsin("INVALID", "us")).thenReturn(null);
 
         AuthorMatchRequest request = new AuthorMatchRequest();
@@ -172,11 +174,11 @@ class AuthorMetadataServiceTest {
 
     @Test
     void matchAuthor_throwsWhenSourceUnsupported() {
-        AuthorEntity author = new AuthorEntity();
+        AuthorRow author = new AuthorRow();
         author.setId(1L);
         author.setName("Test Author");
 
-        when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
+        when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
 
         AuthorMatchRequest request = new AuthorMatchRequest();
         request.setAsin("12345");
@@ -190,13 +192,13 @@ class AuthorMetadataServiceTest {
 
     @Test
     void getAuthorDetails_returnsDetails() {
-        AuthorEntity author = new AuthorEntity();
+        AuthorRow author = new AuthorRow();
         author.setId(5L);
         author.setName("Brandon Sanderson");
         author.setDescription("Fantasy author");
         author.setAsin("B001IGFHW6");
 
-        when(authorRepository.findById(5L)).thenReturn(Optional.of(author));
+        when(jooqAuthorRepository.findById(5L)).thenReturn(Optional.of(author));
 
         AuthorDetails details = service.getAuthorDetails(5L);
 
@@ -208,7 +210,7 @@ class AuthorMetadataServiceTest {
 
     @Test
     void getAuthorDetails_throwsWhenNotFound() {
-        when(authorRepository.findById(99L)).thenReturn(Optional.empty());
+        when(jooqAuthorRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getAuthorDetails(99L))
                 .isInstanceOf(APIException.class)
@@ -231,12 +233,12 @@ class AuthorMetadataServiceTest {
 
     @Test
     void matchAuthor_skipsPhotoWhenPhotoLocked() {
-        AuthorEntity author = new AuthorEntity();
+        AuthorRow author = new AuthorRow();
         author.setId(1L);
         author.setName("Test Author");
         author.setPhotoLocked(true);
 
-        when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
+        when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
 
         AuthorSearchResult result = AuthorSearchResult.builder()
                 .source(AuthorMetadataSource.AUDNEXUS).asin("B000APZGGS")
@@ -245,7 +247,7 @@ class AuthorMetadataServiceTest {
                 .build();
 
         when(authorParser.getAuthorByAsin("B000APZGGS", "us")).thenReturn(result);
-        when(authorRepository.save(any(AuthorEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(jooqAuthorRepository.save(any(AuthorRow.class))).thenAnswer(i -> i.getArgument(0));
 
         AuthorMatchRequest request = new AuthorMatchRequest();
         request.setAsin("B000APZGGS");

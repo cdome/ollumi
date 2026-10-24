@@ -28,7 +28,6 @@ import org.booklore.jooq.tables.Shelf.SHELF
 import org.booklore.jooq.tables.Tag.TAG
 import org.booklore.jooq.tables.Users.USERS
 import org.booklore.model.entity.BookEntity
-import org.booklore.repository.BookRepository
 import org.booklore.test.AbstractIntegrationTest
 import org.jooq.DSLContext
 import org.junit.jupiter.api.BeforeEach
@@ -46,7 +45,7 @@ import java.time.LocalDateTime
 class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
 
     @Autowired private lateinit var repository: JooqBookReadRepository
-    @Autowired private lateinit var bookRepository: BookRepository
+    @Autowired private lateinit var jooqBookEntityRepository: JooqBookEntityRepository
     @Autowired private lateinit var bookMapper: BookMapper
     @Autowired private lateinit var dsl: DSLContext
 
@@ -204,7 +203,7 @@ class JooqBookReadRepositoryGoldenMasterTest : AbstractIntegrationTest() {
     @Test
     @Transactional
     fun `jooq book read model matches MapStruct`() {
-        val entity: BookEntity = bookRepository.findAllWithMetadataByIds(setOf(bookId)).single()
+        val entity: BookEntity = jooqBookEntityRepository.findAllWithMetadataByIds(setOf(bookId)).single()
         val candidate = repository.findByIds(listOf(bookId)).single()
 
         // BookMapper.toBook is the live web Book mapper (write-flow notifications still use it);

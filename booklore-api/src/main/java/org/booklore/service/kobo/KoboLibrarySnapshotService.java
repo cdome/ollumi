@@ -4,10 +4,11 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
 import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
 import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.dto.KoboLibrarySnapshot;
 import org.booklore.repository.jooq.dto.KoboSnapshotBook;
 import lombok.AllArgsConstructor;
@@ -26,7 +27,9 @@ public class KoboLibrarySnapshotService {
 
     private final JooqKoboLibrarySnapshotRepository koboLibrarySnapshotRepository;
     private final JooqKoboSnapshotBookRepository koboSnapshotBookRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository jooqShelfRepository;
+    private final org.booklore.repository.jooq.JooqUserLibraryRepository jooqUserLibraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
     private final KoboCompatibilityService koboCompatibilityService;
     private final AuthenticationService authenticationService;
@@ -39,7 +42,7 @@ public class KoboLibrarySnapshotService {
     @Transactional
     public KoboLibrarySnapshot create(Long userId) {
         String snapshotId = UUID.randomUUID().toString();
-        List<KoboSnapshotBook> books = mapBooksToKoboSnapshotBook(getKoboShelf(userId), userId);
+        List<KoboSnapshotBook> books = mapBooksToKoboSnapshotBook(getKoboShelf(userId).getId(), userId);
         return koboLibrarySnapshotRepository.insert(snapshotId, userId, LocalDateTime.now(), books);
     }
 
@@ -108,15 +111,20 @@ public class KoboLibrarySnapshotService {
     }
 
     private ShelfEntity getKoboShelf(Long userId) {
-        return shelfRepository
-                .findByUserIdAndName(userId, ShelfType.KOBO.getName())
-                .orElseThrow(() -> new NoSuchElementException(
-                        String.format("Shelf '%s' not found for user %d", ShelfType.KOBO.getName(), userId)
-                ));
+        ShelfEntity shelf = jooqShelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
+        if (shelf == null) {
+            throw new NoSuchElementException(
+                    String.format("Shelf '%s' not found for user %d", ShelfType.KOBO.getName(), userId));
+        }
+        return shelf;
     }
 
-    private List<KoboSnapshotBook> mapBooksToKoboSnapshotBook(ShelfEntity shelf, Long userId) {
-        return shelf.getBookEntities().stream()
+    private List<KoboSnapshotBook> mapBooksToKoboSnapshotBook(Long shelfId, Long userId) {
+        Set<Long> bookIds = jooqShelfRepository.findBookIdsByShelfId(shelfId);
+        if (bookIds.isEmpty()) {
+            return List.of();
+        }
+        return jooqBookEntityRepository.findAllByIdsIncludingDeleted(bookIds).stream()
                 .filter(book -> isBookOwnedByUser(book, userId))
                 .filter(koboCompatibilityService::isBookSupportedForKobo)
                 .map(book -> new KoboSnapshotBook(
@@ -134,10 +142,8 @@ public class KoboLibrarySnapshotService {
         if (user.getPermissions().isAdmin()) {
             return true;
         }
-        return book.getLibrary()
-                .getUsers()
+        return jooqUserLibraryRepository.findUserIdsByLibraryId(book.getLibrary().getId())
                 .stream()
-                .map(BookLoreUserEntity::getId)
                 .anyMatch(id -> Objects.equals(id, userId));
     }
 

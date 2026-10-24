@@ -12,9 +12,9 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.OpdsSortOrder;
 import org.booklore.repository.jooq.JooqBookReadRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
 import org.booklore.service.library.LibraryService;
 import org.booklore.service.restriction.ContentRestrictionService;
@@ -38,10 +38,10 @@ public class OpdsBookService {
 
     private final JooqBookOpdsRepository jooqBookOpdsRepository;
     private final JooqBookReadRepository jooqBookReadRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final BookLoreUserTransformer bookLoreUserTransformer;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository shelfRepository;
     private final LibraryService libraryService;
     private final ContentRestrictionService contentRestrictionService;
 
@@ -50,8 +50,10 @@ public class OpdsBookService {
             return List.of();
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         List<Library> libraries;
@@ -71,8 +73,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (entity.getPermissions() == null ||
                 (!entity.getPermissions().isPermissionAccessOpds() && !entity.getPermissions().isPermissionAdmin())) {
@@ -118,8 +122,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
@@ -149,9 +155,8 @@ public class OpdsBookService {
     }
 
     public String getShelfName(Long shelfId) {
-        return shelfRepository.findById(shelfId)
-                .map(s -> s.getName() + " - Shelf")
-                .orElse("Shelf Books");
+        ShelfEntity shelf = shelfRepository.findById(shelfId);
+        return shelf != null ? shelf.getName() + " - Shelf" : "Shelf Books";
     }
 
     public List<ShelfEntity> getUserShelves(Long userId) {
@@ -183,8 +188,10 @@ public class OpdsBookService {
             return List.of();
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
@@ -202,8 +209,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
@@ -236,8 +245,10 @@ public class OpdsBookService {
             return List.of();
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         if (user.getPermissions().isAdmin()) {
@@ -256,8 +267,10 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), size);
@@ -394,8 +407,10 @@ public class OpdsBookService {
     }
 
     private void validateShelfAccess(Long shelfId, Long userId, boolean isAdmin) {
-        var shelf = shelfRepository.findByIdWithUser(shelfId)
-                .orElseThrow(() -> ApiError.SHELF_NOT_FOUND.createException(shelfId));
+        var shelf = shelfRepository.findByIdWithUser(shelfId);
+        if (shelf == null) {
+            throw ApiError.SHELF_NOT_FOUND.createException(shelfId);
+        }
         if (!shelf.getUser().getId().equals(userId) && !isAdmin) {
             throw ApiError.FORBIDDEN.createException("You are not allowed to access this shelf");
         }
@@ -418,15 +433,19 @@ public class OpdsBookService {
             throw ApiError.FORBIDDEN.createException("Authentication required");
         }
 
-        BookLoreUserEntity entity = userRepository.findById(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        BookLoreUserEntity entity = userRepository.findById(userId);
+        if (entity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (entity.getPermissions() != null && entity.getPermissions().isPermissionAdmin()) {
             return;
         }
 
-        BookEntity book = bookRepository.findById(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
         boolean hasLibraryAccess = user.getAssignedLibraries().stream()

@@ -7,9 +7,9 @@ import org.booklore.app.dto.AppAuthorSummary;
 import org.booklore.app.dto.AppPageResponse;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
-import org.booklore.model.entity.AuthorEntity;
-import org.booklore.repository.AuthorRepository;
 import org.booklore.repository.jooq.JooqAppAuthorRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.repository.jooq.dto.AuthorSummaryRow;
 import org.booklore.util.FileService;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +33,7 @@ class AppAuthorServiceTest {
 
     @Mock private JooqAppAuthorRepository jooqAppAuthorRepository;
     @Mock private AuthenticationService authenticationService;
-    @Mock private AuthorRepository authorRepository;
+    @Mock private JooqAuthorRepository jooqAuthorRepository;
     @Mock private FileService fileService;
 
     private AppAuthorService service;
@@ -42,7 +42,7 @@ class AppAuthorServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AppAuthorService(authorRepository, jooqAppAuthorRepository, authenticationService, fileService);
+        service = new AppAuthorService(jooqAuthorRepository, jooqAppAuthorRepository, authenticationService, fileService);
     }
 
     // ---- getAuthors tests ----
@@ -220,10 +220,10 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_admin_returnsDetail() {
             mockAdminUser();
-            AuthorEntity author = buildAuthor(1L, "J.R.R. Tolkien");
+            AuthorRow author = buildAuthor(1L, "J.R.R. Tolkien");
             author.setDescription("English writer and philologist.");
             author.setAsin("B000AP9MCS");
-            when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
+            when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
             mockAuthorThumbnailExists(1L, true);
             when(jooqAppAuthorRepository.countAccessibleBooks(eq(1L), any())).thenReturn(3);
 
@@ -241,9 +241,9 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonAdmin_withAccess_returnsDetail() {
             mockNonAdminUser(Set.of(5L));
-            AuthorEntity author = buildAuthor(2L, "Frank Herbert");
-            when(authorRepository.findById(2L)).thenReturn(Optional.of(author));
-            when(authorRepository.existsByIdAndLibraryIds(eq(2L), anySet())).thenReturn(true);
+            AuthorRow author = buildAuthor(2L, "Frank Herbert");
+            when(jooqAuthorRepository.findById(2L)).thenReturn(Optional.of(author));
+            when(jooqAuthorRepository.existsByIdAndLibraryIds(eq(2L), anySet())).thenReturn(true);
             mockAuthorThumbnailExists(2L, false);
             when(jooqAppAuthorRepository.countAccessibleBooks(eq(2L), any())).thenReturn(6);
 
@@ -258,9 +258,9 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonAdmin_noAccess_throwsNotFound() {
             mockNonAdminUser(Set.of(5L));
-            AuthorEntity author = buildAuthor(3L, "Secret Author");
-            when(authorRepository.findById(3L)).thenReturn(Optional.of(author));
-            when(authorRepository.existsByIdAndLibraryIds(eq(3L), anySet())).thenReturn(false);
+            AuthorRow author = buildAuthor(3L, "Secret Author");
+            when(jooqAuthorRepository.findById(3L)).thenReturn(Optional.of(author));
+            when(jooqAuthorRepository.existsByIdAndLibraryIds(eq(3L), anySet())).thenReturn(false);
 
             assertThrows(APIException.class, () -> service.getAuthorDetail(3L));
         }
@@ -268,7 +268,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonExistentAuthor_throwsNotFound() {
             mockAdminUser();
-            when(authorRepository.findById(999L)).thenReturn(Optional.empty());
+            when(jooqAuthorRepository.findById(999L)).thenReturn(Optional.empty());
 
             assertThrows(APIException.class, () -> service.getAuthorDetail(999L));
         }
@@ -276,8 +276,8 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonAdmin_emptyLibraries_throwsNotFound() {
             mockNonAdminUser(Collections.emptySet());
-            AuthorEntity author = buildAuthor(4L, "Author X");
-            when(authorRepository.findById(4L)).thenReturn(Optional.of(author));
+            AuthorRow author = buildAuthor(4L, "Author X");
+            when(jooqAuthorRepository.findById(4L)).thenReturn(Optional.of(author));
 
             assertThrows(APIException.class, () -> service.getAuthorDetail(4L));
         }
@@ -333,10 +333,7 @@ class AppAuthorServiceTest {
         }
     }
 
-    private AuthorEntity buildAuthor(Long id, String name) {
-        return AuthorEntity.builder()
-                .id(id)
-                .name(name)
-                .build();
+    private AuthorRow buildAuthor(Long id, String name) {
+        return new AuthorRow(id, name, null, null, false, false, false, false);
     }
 }

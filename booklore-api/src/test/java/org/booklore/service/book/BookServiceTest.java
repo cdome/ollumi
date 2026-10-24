@@ -4,12 +4,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
@@ -17,7 +21,6 @@ import org.booklore.model.dto.response.BookDeletionResponse;
 import org.booklore.model.dto.response.BookStatusUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.*;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -52,7 +55,9 @@ import static org.mockito.Mockito.*;
 class BookServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
     @Mock
     private JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     @Mock
@@ -67,6 +72,8 @@ class BookServiceTest {
     private JooqBookReadRepository jooqBookReadRepository;
     @Mock
     private JooqUserBookProgressRepository userBookProgressRepository;
+    @Mock
+    private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -152,7 +159,7 @@ class BookServiceTest {
         primaryFile.setBook(entity);
         primaryFile.setBookType(BookFileType.EPUB);
         entity.setBookFiles(List.of(primaryFile));
-        when(bookRepository.findByIdWithBookFiles(4L)).thenReturn(Optional.of(entity));
+        when(jooqBookEntityRepository.findByIdFull(4L)).thenReturn(entity);
         EbookViewerPreferences epubPref = EbookViewerPreferences.builder()
                 .fontFamily("Arial")
                 .fontSize(16)
@@ -194,7 +201,7 @@ class BookServiceTest {
         primaryFile.setBook(entity);
         primaryFile.setBookType(null);
         entity.setBookFiles(List.of(primaryFile));
-        when(bookRepository.findByIdWithBookFiles(5L)).thenReturn(Optional.of(entity));
+        when(jooqBookEntityRepository.findByIdFull(5L)).thenReturn(entity);
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
         assertThrows(APIException.class, () -> bookService.getBookViewerSetting(5L, 1L));
     }
@@ -302,7 +309,7 @@ class BookServiceTest {
     void getBookContent_returnsResource() throws Exception {
         BookEntity entity = new BookEntity();
         entity.setId(10L);
-        when(bookRepository.findByIdWithBookFiles(10L)).thenReturn(Optional.of(entity));
+        when(jooqBookEntityRepository.findByIdFull(10L)).thenReturn(entity);
         Path path = Paths.get("/tmp/bookcontent.txt");
         Files.write(path, "hello".getBytes());
         try (MockedStatic<FileUtils> fileUtilsMock = mockStatic(FileUtils.class)) {
@@ -317,7 +324,7 @@ class BookServiceTest {
 
     @Test
     void getBookContent_bookNotFound_throwsException() {
-        when(bookRepository.findByIdWithBookFiles(404L)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdFull(404L)).thenReturn(null);
         assertThrows(APIException.class, () -> bookService.getBookContent(404L));
     }
 
@@ -325,7 +332,7 @@ class BookServiceTest {
     void getBookContent_fileNotFound_throwsException() {
         BookEntity entity = new BookEntity();
         entity.setId(12L);
-        when(bookRepository.findByIdWithBookFiles(12L)).thenReturn(Optional.of(entity));
+        when(jooqBookEntityRepository.findByIdFull(12L)).thenReturn(entity);
         try (MockedStatic<FileUtils> fileUtilsMock = mockStatic(FileUtils.class)) {
             fileUtilsMock.when(() -> FileUtils.getBookFullPath(entity)).thenReturn("/tmp/nonexistentfile.txt");
             assertThrows(APIException.class, () -> bookService.getBookContent(12L));
@@ -340,7 +347,6 @@ class BookServiceTest {
         library.setId(42L);
         LibraryPathEntity libPath = new LibraryPathEntity();
         libPath.setPath("/tmp");
-        library.setLibraryPaths(List.of(libPath));
         entity.setLibrary(library);
         entity.setLibraryPath(libPath);
         BookFileEntity primaryFile = new BookFileEntity();
@@ -353,15 +359,16 @@ class BookServiceTest {
         Files.createDirectories(filePath.getParent());
         Files.write(filePath, "abc".getBytes());
 
-        doNothing().when(bookRepository).deleteAllInBatch(anyList());
         when(bookQueryService.findAllWithMetadataByIds(Set.of(11L))).thenReturn(List.of(entity));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(42L)).thenReturn(List.of(new LibraryPathRow(1L, "/tmp")));
 
         BookDeletionResponse response = bookService.deleteBooks(Set.of(11L)).getBody();
 
         assertNotNull(response);
         assertTrue(response.getFailedFileDeletions().isEmpty());
         assertEquals(Set.of(11L), response.getDeleted());
+        verify(jooqBookRepository).deleteByIds(List.of(11L));
         Files.deleteIfExists(filePath);
     }
 
@@ -373,7 +380,6 @@ class BookServiceTest {
         library.setId(42L);
         LibraryPathEntity libPath = new LibraryPathEntity();
         libPath.setPath("/tmp");
-        library.setLibraryPaths(List.of(libPath));
         entity.setLibrary(library);
         entity.setLibraryPath(libPath);
         BookFileEntity primaryFile = new BookFileEntity();
@@ -384,13 +390,13 @@ class BookServiceTest {
 
         when(bookQueryService.findAllWithMetadataByIds(Set.of(13L))).thenReturn(List.of(entity));
         when(authenticationService.getAuthenticatedUser()).thenReturn(testUser);
-        doNothing().when(bookRepository).deleteAllInBatch(anyList());
 
         BookDeletionResponse response = bookService.deleteBooks(Set.of(13L)).getBody();
 
         assertNotNull(response);
         assertTrue(response.getFailedFileDeletions().isEmpty());
         assertEquals(Set.of(13L), response.getDeleted());
+        verify(jooqBookRepository).deleteByIds(List.of(13L));
     }
 
     @Test
@@ -434,7 +440,7 @@ class BookServiceTest {
         // Ensure bookFiles list is populated to avoid IndexOutOfBounds or similar if logic accesses it
         entity.setBookFiles(List.of(primaryFile));
 
-        when(bookRepository.findByIdWithBookFiles(15L)).thenReturn(Optional.of(entity));
+        when(jooqBookEntityRepository.findByIdFull(15L)).thenReturn(entity);
 
         HttpServletRequest request = mock(HttpServletRequest.class);
         HttpServletResponse response = mock(HttpServletResponse.class);
@@ -457,7 +463,7 @@ class BookServiceTest {
 
             bookService.streamBookContent(15L, null, request, response);
 
-            verify(bookRepository).findByIdWithBookFiles(15L);
+            verify(jooqBookEntityRepository).findByIdFull(15L);
             verify(fileStreamingService).streamWithRangeSupport(eq(Paths.get("/tmp/library/book.epub")), eq("application/epub+zip"), eq(request), eq(response));
         }
     }

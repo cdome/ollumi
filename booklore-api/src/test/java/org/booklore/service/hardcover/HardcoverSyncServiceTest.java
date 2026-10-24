@@ -3,7 +3,7 @@ package org.booklore.service.hardcover;
 import org.booklore.model.dto.HardcoverSyncSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ class HardcoverSyncServiceTest {
     private HardcoverSyncSettingsService hardcoverSyncSettingsService;
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private RestClient restClient;
@@ -59,7 +59,7 @@ class HardcoverSyncServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         // Create service with mocked dependencies
-        service = new HardcoverSyncService(hardcoverSyncSettingsService, bookRepository);
+        service = new HardcoverSyncService(hardcoverSyncSettingsService, jooqBookEntityRepository);
         
         // Inject our mocked restClient using reflection
         Field restClientField = HardcoverSyncService.class.getDeclaredField("restClient");
@@ -80,7 +80,7 @@ class HardcoverSyncServiceTest {
         hardcoverSyncSettings.setHardcoverApiKey("test-api-key");
 
         when(hardcoverSyncSettingsService.getSettingsForUserId(TEST_USER_ID)).thenReturn(hardcoverSyncSettings);
-        when(bookRepository.findByIdWithMetadata(TEST_BOOK_ID)).thenReturn(Optional.of(testBook));
+        when(jooqBookEntityRepository.findByIdWithMetadata(TEST_BOOK_ID)).thenReturn(testBook);
         
         // Setup RestClient mock chain - handles multiple calls
         when(restClient.post()).thenReturn(requestBodyUriSpec);
@@ -133,7 +133,7 @@ class HardcoverSyncServiceTest {
     @Test
     @DisplayName("Should skip sync when book not found")
     void syncProgressToHardcover_whenBookNotFound_shouldSkip() {
-        when(bookRepository.findByIdWithMetadata(TEST_BOOK_ID)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdWithMetadata(TEST_BOOK_ID)).thenReturn(null);
 
         service.syncProgressToHardcover(TEST_BOOK_ID, 50.0f, TEST_USER_ID);
 

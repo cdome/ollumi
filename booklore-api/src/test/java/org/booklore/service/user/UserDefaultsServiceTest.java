@@ -4,7 +4,7 @@ import tools.jackson.databind.ObjectMapper;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.IconType;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,7 +20,7 @@ import static org.mockito.Mockito.*;
 class UserDefaultsServiceTest {
 
     @Mock
-    private ShelfRepository shelfRepository;
+    private JooqShelfRepository shelfRepository;
     @Mock
     private ObjectMapper objectMapper;
     @Mock

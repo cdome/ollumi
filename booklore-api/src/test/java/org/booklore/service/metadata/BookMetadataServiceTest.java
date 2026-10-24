@@ -17,11 +17,12 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
+import org.booklore.model.entity.ComicMetadataEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.Lock;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookMetadataRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
@@ -52,12 +53,13 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookMetadataServiceTest {
 
-    @Mock private BookRepository bookRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookMapper bookMapper;
     @Mock private BookMetadataMapper bookMetadataMapper;
     @Mock private BookMetadataUpdater bookMetadataUpdater;
     @Mock private NotificationService notificationService;
-    @Mock private BookMetadataRepository bookMetadataRepository;
+    @Mock private JooqBookMetadataRepository jooqBookMetadataRepository;
+    @Mock private JooqComicMetadataRepository jooqComicMetadataRepository;
     @Mock private BookQueryService bookQueryService;
     @Mock private org.booklore.service.audit.AuditService auditService;
     @Mock private CbxMetadataExtractor cbxMetadataExtractor;
@@ -73,8 +75,8 @@ class BookMetadataServiceTest {
     void setUp() {
         parserMap = new HashMap<>();
         service = new BookMetadataService(
-                bookRepository, bookMapper, bookMetadataMapper, bookMetadataUpdater,
-                notificationService, bookMetadataRepository, bookQueryService,
+                jooqBookEntityRepository, bookMapper, bookMetadataMapper, bookMetadataUpdater,
+                notificationService, jooqBookMetadataRepository, jooqComicMetadataRepository, bookQueryService,
                 auditService, parserMap, cbxMetadataExtractor, metadataExtractorFactory,
                 metadataClearFlagsMapper, transactionManager, appSettingService
         );
@@ -350,56 +352,39 @@ class BookMetadataServiceTest {
 
         @Test
         void locksSingleField() {
-            BookMetadataEntity entity = BookMetadataEntity.builder().bookId(1L).titleLocked(false).build();
-            when(bookMetadataRepository.getMetadataForBookIds(List.of(1L))).thenReturn(List.of(entity));
-
             service.toggleFieldLocks(List.of(1L), Map.of("titleLocked", "LOCK"));
 
-            assertThat(entity.getTitleLocked()).isTrue();
-            verify(bookMetadataRepository).saveAll(List.of(entity));
+            verify(jooqBookMetadataRepository).updateLockFields(List.of(1L), Map.of("titleLocked", true));
         }
 
         @Test
         void unlocksSingleField() {
-            BookMetadataEntity entity = BookMetadataEntity.builder().bookId(1L).titleLocked(true).build();
-            when(bookMetadataRepository.getMetadataForBookIds(List.of(1L))).thenReturn(List.of(entity));
-
             service.toggleFieldLocks(List.of(1L), Map.of("titleLocked", "UNLOCK"));
 
-            assertThat(entity.getTitleLocked()).isFalse();
-            verify(bookMetadataRepository).saveAll(List.of(entity));
+            verify(jooqBookMetadataRepository).updateLockFields(List.of(1L), Map.of("titleLocked", false));
         }
 
         @Test
         void mapsThumbnailLockedToCoverLocked() {
-            BookMetadataEntity entity = BookMetadataEntity.builder().bookId(1L).coverLocked(false).build();
-            when(bookMetadataRepository.getMetadataForBookIds(List.of(1L))).thenReturn(List.of(entity));
-
             service.toggleFieldLocks(List.of(1L), Map.of("thumbnailLocked", "LOCK"));
 
-            assertThat(entity.getCoverLocked()).isTrue();
+            verify(jooqBookMetadataRepository).updateLockFields(List.of(1L), Map.of("coverLocked", true));
         }
 
         @Test
         void handlesMultipleBooks() {
-            BookMetadataEntity entity1 = BookMetadataEntity.builder().bookId(1L).titleLocked(false).build();
-            BookMetadataEntity entity2 = BookMetadataEntity.builder().bookId(2L).titleLocked(false).build();
-            when(bookMetadataRepository.getMetadataForBookIds(List.of(1L, 2L))).thenReturn(List.of(entity1, entity2));
-
             service.toggleFieldLocks(List.of(1L, 2L), Map.of("titleLocked", "LOCK"));
 
-            assertThat(entity1.getTitleLocked()).isTrue();
-            assertThat(entity2.getTitleLocked()).isTrue();
+            verify(jooqBookMetadataRepository).updateLockFields(List.of(1L, 2L), Map.of("titleLocked", true));
         }
 
         @Test
         void throwsForInvalidField() {
-            BookMetadataEntity entity = BookMetadataEntity.builder().bookId(1L).build();
-            when(bookMetadataRepository.getMetadataForBookIds(List.of(1L))).thenReturn(List.of(entity));
-
             assertThatThrownBy(() -> service.toggleFieldLocks(List.of(1L), Map.of("nonExistentField", "LOCK")))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("Failed to invoke setter for field: nonExistentField");
+
+            verifyNoInteractions(jooqBookMetadataRepository);
         }
     }
 
@@ -421,7 +406,8 @@ class BookMetadataServiceTest {
             List<BookMetadata> result = service.toggleAllLock(request);
 
             assertThat(result).hasSize(1);
-            verify(bookRepository).saveAll(anyList());
+            verify(jooqBookMetadataRepository).lockAllFields(List.of(1L), true);
+            verifyNoInteractions(jooqComicMetadataRepository);
         }
 
         @Test
@@ -442,6 +428,25 @@ class BookMetadataServiceTest {
             assertThat(result).hasSize(1);
             assertThat(metadata.getTitleLocked()).isFalse();
             assertThat(metadata.getCoverLocked()).isFalse();
+            verify(jooqBookMetadataRepository).lockAllFields(List.of(1L), false);
+        }
+
+        @Test
+        void alsoLocksComicMetadataWhenPresent() {
+            ComicMetadataEntity comicMetadata = ComicMetadataEntity.builder().bookId(1L).build();
+            BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(1L).comicMetadata(comicMetadata).build();
+            BookEntity bookEntity = BookEntity.builder().id(1L).metadata(metadata).build();
+            when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(bookEntity));
+            when(bookMetadataMapper.toBookMetadata(metadata, false)).thenReturn(BookMetadata.builder().build());
+
+            ToggleAllLockRequest request = new ToggleAllLockRequest();
+            request.setBookIds(Set.of(1L));
+            request.setLock(Lock.LOCK);
+
+            service.toggleAllLock(request);
+
+            verify(jooqBookMetadataRepository).lockAllFields(List.of(1L), true);
+            verify(jooqComicMetadataRepository).lockAllFields(List.of(1L), true);
         }
     }
 
@@ -450,7 +455,7 @@ class BookMetadataServiceTest {
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.getComicInfoMetadata(1L))
                     .isInstanceOf(APIException.class);
@@ -459,7 +464,7 @@ class BookMetadataServiceTest {
         @Test
         void returnsNullWhenPrimaryFileIsNull() {
             BookEntity bookEntity = BookEntity.builder().id(1L).bookFiles(new ArrayList<>()).build();
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
             BookMetadata result = service.getComicInfoMetadata(1L);
 
@@ -470,7 +475,7 @@ class BookMetadataServiceTest {
         void returnsNullWhenFileTypeIsNotCbx() {
             BookFileEntity file = BookFileEntity.builder().bookType(BookFileType.PDF).isBookFormat(true).build();
             BookEntity bookEntity = BookEntity.builder().id(1L).bookFiles(List.of(file)).build();
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(bookEntity));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
             BookMetadata result = service.getComicInfoMetadata(1L);
 
@@ -483,7 +488,7 @@ class BookMetadataServiceTest {
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findById(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.getFileMetadata(1L))
                     .isInstanceOf(APIException.class);
@@ -492,7 +497,7 @@ class BookMetadataServiceTest {
         @Test
         void throwsWhenPrimaryFileIsNull() {
             BookEntity bookEntity = BookEntity.builder().id(1L).bookFiles(new ArrayList<>()).build();
-            when(bookRepository.findById(1L)).thenReturn(Optional.of(bookEntity));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
 
             assertThatThrownBy(() -> service.getFileMetadata(1L))
                     .isInstanceOf(APIException.class);
@@ -515,8 +520,8 @@ class BookMetadataServiceTest {
 
             BookEntity book1 = BookEntity.builder().id(1L).build();
             BookEntity book2 = BookEntity.builder().id(2L).build();
-            when(bookRepository.findByIdFull(1L)).thenReturn(Optional.of(book1));
-            when(bookRepository.findByIdFull(2L)).thenReturn(Optional.of(book2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book1);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(book2);
 
             var txStatus = mock(org.springframework.transaction.TransactionStatus.class);
             when(transactionManager.getTransaction(any())).thenReturn(txStatus);
@@ -543,8 +548,8 @@ class BookMetadataServiceTest {
             when(transactionManager.getTransaction(any())).thenReturn(txStatus);
 
             BookEntity book2 = BookEntity.builder().id(2L).build();
-            when(bookRepository.findByIdFull(1L)).thenReturn(Optional.empty());
-            when(bookRepository.findByIdFull(2L)).thenReturn(Optional.of(book2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(book2);
 
             service.bulkUpdateMetadata(request, false, false, false);
 
@@ -566,7 +571,7 @@ class BookMetadataServiceTest {
             when(transactionManager.getTransaction(any())).thenReturn(txStatus);
 
             BookEntity book = BookEntity.builder().id(1L).build();
-            when(bookRepository.findByIdFull(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             service.bulkUpdateMetadata(request, false, false, false);
 
@@ -582,7 +587,7 @@ class BookMetadataServiceTest {
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(99L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(99L)).thenReturn(null);
             FetchMetadataRequest request = FetchMetadataRequest.builder()
                     .providers(List.of(MetadataProvider.Google))
                     .build();

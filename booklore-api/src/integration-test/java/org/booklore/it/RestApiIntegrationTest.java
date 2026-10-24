@@ -5,7 +5,7 @@ import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.it.util.AuthTestHelper;
 import org.booklore.it.util.TestDataFactory;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -71,7 +71,7 @@ public abstract class RestApiIntegrationTest {
     protected JdbcTemplate jdbc;
 
     @Autowired
-    protected UserRepository userRepository;
+    protected JooqUserRepository userRepository;
 
     @Autowired
     protected TestDataFactory data;
@@ -113,7 +113,7 @@ public abstract class RestApiIntegrationTest {
     }
 
     private void ensureAdmin() {
-        if (userRepository.findByUsername(ADMIN_USERNAME).isPresent()) {
+        if (userRepository.findByUsername(ADMIN_USERNAME) != null) {
             return;
         }
         BookLoreUserEntity user = new BookLoreUserEntity();

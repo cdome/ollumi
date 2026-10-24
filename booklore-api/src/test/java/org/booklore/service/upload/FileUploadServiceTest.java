@@ -13,9 +13,9 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
@@ -57,13 +57,15 @@ class FileUploadServiceTest {
     Path tempDir;
 
     @Mock
-    LibraryRepository libraryRepository;
+    JooqLibraryRepository libraryRepository;
     @Mock
     JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
-    BookRepository bookRepository;
+    org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock
-    BookAdditionalFileRepository bookAdditionalFileRepository;
+    JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock
+    JooqBookRepository jooqBookRepository;
     @Mock
     AppSettingService appSettingService;
     @Mock
@@ -93,7 +95,7 @@ class FileUploadServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(settings);
 
         service = new FileUploadService(
-                libraryRepository, jooqLibraryPathRepository, bookRepository, bookAdditionalFileRepository,
+                libraryRepository, jooqLibraryPathRepository, relationsRepository, jooqBookEntityRepository, jooqBookRepository,
                 appSettingService, appProperties, metadataExtractorFactory, additionalFileMapper, fileMovingHelper, monitoringRegistrationService, auditService
         );
     }
@@ -155,7 +157,7 @@ class FileUploadServiceTest {
     @Test
     void uploadFile_throws_when_library_not_found() {
         MockMultipartFile file = new MockMultipartFile("file", "book.cbz", "application/octet-stream", new byte[]{1});
-        when(libraryRepository.findById(42L)).thenReturn(Optional.empty());
+        when(libraryRepository.findById(42L)).thenReturn(null);
 
         assertThatExceptionOfType(APIException.class)
                 .isThrownBy(() -> service.uploadFile(file, 42L, 1L))
@@ -167,7 +169,7 @@ class FileUploadServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "book.cbz", "application/octet-stream", new byte[]{1});
         LibraryEntity lib = new LibraryEntity();
         lib.setId(42L);
-        when(libraryRepository.findById(42L)).thenReturn(Optional.of(lib));
+        when(libraryRepository.findById(42L)).thenReturn(lib);
         // path 99 does not belong to library 42 -> jOOQ lookup returns null
         when(jooqLibraryPathRepository.findPathByIdAndLibraryId(99L, 42L)).thenReturn(null);
 
@@ -186,7 +188,7 @@ class FileUploadServiceTest {
 
         LibraryEntity lib = new LibraryEntity();
         lib.setId(1L);
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(lib));
+        when(libraryRepository.findById(1L)).thenReturn(lib);
         when(jooqLibraryPathRepository.findPathByIdAndLibraryId(1L, 1L)).thenReturn(tempDir.toString());
         when(fileMovingHelper.getFileNamingPattern(lib)).thenReturn("{currentFilename}");
 
@@ -205,7 +207,7 @@ class FileUploadServiceTest {
 
         LibraryEntity lib = new LibraryEntity();
         lib.setId(7L);
-        when(libraryRepository.findById(7L)).thenReturn(Optional.of(lib));
+        when(libraryRepository.findById(7L)).thenReturn(lib);
         when(jooqLibraryPathRepository.findPathByIdAndLibraryId(2L, 7L)).thenReturn(tempDir.toString());
         when(fileMovingHelper.getFileNamingPattern(lib)).thenReturn("{currentFilename}");
 
@@ -237,18 +239,15 @@ class FileUploadServiceTest {
         primaryFile.setBookType(BookFileType.EPUB);
         book.setBookFiles(new ArrayList<>(List.of(primaryFile)));
 
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
 
         try (MockedStatic<FileFingerprint> fp = mockStatic(FileFingerprint.class)) {
             fp.when(() -> FileFingerprint.generateHash(any())).thenReturn("hash-123");
 
-            when(bookAdditionalFileRepository.findByAltFormatCurrentHash("hash-123")).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findBookFileByAltFormatCurrentHash("hash-123")).thenReturn(null);
 
-            when(bookAdditionalFileRepository.save(any(BookFileEntity.class))).thenAnswer(inv -> {
-                BookFileEntity e = inv.getArgument(0);
-                e.setId(99L);
-                return e;
-            });
+            when(jooqBookRepository.insertBookFile(eq(bookId), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(99L);
 
             BookFile dto = mock(BookFile.class);
             when(additionalFileMapper.toAdditionalFile(any(BookFileEntity.class))).thenReturn(dto);
@@ -256,8 +255,8 @@ class FileUploadServiceTest {
             BookFile result = service.uploadAdditionalFile(bookId, file, true, BookFileType.PDF, "desc");
 
             assertThat(result).isEqualTo(dto);
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
-            verify(additionalFileMapper).toAdditionalFile(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(eq(bookId), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
+            verify(additionalFileMapper).toAdditionalFile(argThat(e -> e.getId() != null && e.getId() == 99L));
         }
     }
 
@@ -280,14 +279,14 @@ class FileUploadServiceTest {
         primaryFile.setBookType(BookFileType.EPUB);
         book.setBookFiles(new ArrayList<>(List.of(primaryFile)));
 
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
 
         try (MockedStatic<FileFingerprint> fp = mockStatic(FileFingerprint.class)) {
             fp.when(() -> FileFingerprint.generateHash(any())).thenReturn("dup-hash");
 
             BookFileEntity existing = new BookFileEntity();
             existing.setId(1L);
-            when(bookAdditionalFileRepository.findByAltFormatCurrentHash("dup-hash")).thenReturn(Optional.of(existing));
+            when(jooqBookEntityRepository.findBookFileByAltFormatCurrentHash("dup-hash")).thenReturn(existing);
 
             assertThatExceptionOfType(IllegalArgumentException.class)
                     .isThrownBy(() -> service.uploadAdditionalFile(bookId, file, true, BookFileType.PDF, null));
@@ -304,7 +303,7 @@ class FileUploadServiceTest {
         lib.setId(10L);
         String defaultPattern = "{authors}/<{series}/><{seriesIndex}. >{title}< - {authors}>< ({year})>";
         lib.setFileNamingPattern(defaultPattern);
-        when(libraryRepository.findById(10L)).thenReturn(Optional.of(lib));
+        when(libraryRepository.findById(10L)).thenReturn(lib);
         when(jooqLibraryPathRepository.findPathByIdAndLibraryId(3L, 10L)).thenReturn(tempDir.toString());
 
         BookMetadata metadata = BookMetadata.builder()
@@ -353,8 +352,7 @@ class FileUploadServiceTest {
         book.setBookFiles(new ArrayList<>(List.of(primaryFile)));
         book.getPrimaryBookFile().setFileSubPath(".");
 
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
-        when(bookAdditionalFileRepository.save(any(BookFileEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(additionalFileMapper.toAdditionalFile(any(BookFileEntity.class))).thenReturn(mock(BookFile.class));
 
         try (MockedStatic<FileFingerprint> fp = mockStatic(FileFingerprint.class)) {

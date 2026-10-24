@@ -7,7 +7,7 @@ import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.model.dto.request.OpdsUserV2CreateRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.OpdsSortOrder;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqOpdsUserV2Repository;
 import org.booklore.service.opds.OpdsUserV2Service;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ class OpdsUserV2ServiceTest {
     @Mock
     private AuthenticationService authenticationService;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
@@ -64,7 +64,7 @@ class OpdsUserV2ServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(authUser);
 
         BookLoreUserEntity userEntity = mock(BookLoreUserEntity.class);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         OpdsUserV2CreateRequest request = mock(OpdsUserV2CreateRequest.class);
         when(request.getUsername()).thenReturn("alice");
@@ -86,7 +86,7 @@ class OpdsUserV2ServiceTest {
         BookLoreUser authUser = mock(BookLoreUser.class);
         when(authUser.getId()).thenReturn(1L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(authUser);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(mock(BookLoreUserEntity.class)));
+        when(userRepository.findById(1L)).thenReturn(mock(BookLoreUserEntity.class));
 
         OpdsUserV2CreateRequest request = mock(OpdsUserV2CreateRequest.class);
         when(request.getUsername()).thenReturn("alice");
@@ -105,7 +105,7 @@ class OpdsUserV2ServiceTest {
         BookLoreUser authUser = mock(BookLoreUser.class);
         when(authUser.getId()).thenReturn(2L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(authUser);
-        when(userRepository.findById(2L)).thenReturn(Optional.empty());
+        when(userRepository.findById(2L)).thenReturn(null);
 
         OpdsUserV2CreateRequest request = mock(OpdsUserV2CreateRequest.class);
 
@@ -172,7 +172,7 @@ class OpdsUserV2ServiceTest {
         BookLoreUser authUser = mock(BookLoreUser.class);
         when(authUser.getId()).thenReturn(6L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(authUser);
-        when(userRepository.findById(6L)).thenReturn(Optional.of(mock(BookLoreUserEntity.class)));
+        when(userRepository.findById(6L)).thenReturn(mock(BookLoreUserEntity.class));
 
         OpdsUserV2CreateRequest request = mock(OpdsUserV2CreateRequest.class);
         when(request.getUsername()).thenReturn("bob");

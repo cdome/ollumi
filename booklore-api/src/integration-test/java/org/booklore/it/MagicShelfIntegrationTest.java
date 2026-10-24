@@ -51,7 +51,7 @@ public class MagicShelfIntegrationTest extends RestApiIntegrationTest {
     @Test
     void userCanGetMagicShelfById() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        BookLoreUserEntity admin = auth.userRepository().findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity admin = auth.userRepository().findByUsername(ADMIN_USERNAME);
 
         Map<String, Object> createRequest = Map.of(
                 "name", "Magic Shelf By Id " + UUID.randomUUID(),

@@ -4,7 +4,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.LibraryHealthPayload;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryPathRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.*;
 class LibraryHealthServiceTest {
 
     @Mock
-    private LibraryPathRepository libraryPathRepository;
+    private JooqLibraryPathRepository libraryPathRepository;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;

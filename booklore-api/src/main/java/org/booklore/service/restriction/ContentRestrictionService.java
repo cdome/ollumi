@@ -10,7 +10,7 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.ContentRestrictionMode;
 import org.booklore.model.enums.ContentRestrictionType;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqUserContentRestrictionRepository;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 public class ContentRestrictionService {
 
     private final JooqUserContentRestrictionRepository restrictionRepository;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqBookMetadataRelationsRepository relationsRepository;
 
     @Transactional(readOnly = true)
@@ -45,8 +45,9 @@ public class ContentRestrictionService {
 
     @Transactional
     public ContentRestriction addRestriction(Long userId, ContentRestriction restriction) {
-        userRepository.findById(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        if (userRepository.findById(userId) == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         if (restrictionRepository.existsByUserIdAndRestrictionTypeAndValue(
                 userId, restriction.getRestrictionType(), restriction.getValue())) {
@@ -58,8 +59,9 @@ public class ContentRestrictionService {
 
     @Transactional
     public List<ContentRestriction> updateRestrictions(Long userId, List<ContentRestriction> restrictions) {
-        userRepository.findById(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        if (userRepository.findById(userId) == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         restrictionRepository.deleteByUserId(userId);
 

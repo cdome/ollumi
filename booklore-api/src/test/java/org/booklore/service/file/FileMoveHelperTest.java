@@ -1,5 +1,6 @@
 package org.booklore.service.file;
 
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,9 @@ class FileMoveHelperTest {
     @Mock
     private AppSettingService appSettingService;
 
+    @Mock
+    private JooqBookMetadataRelationsRepository relationsRepository;
+
     private FileMoveHelper fileMoveHelper;
 
     @TempDir
@@ -39,7 +43,7 @@ class FileMoveHelperTest {
 
     @BeforeEach
     void setUp() {
-        fileMoveHelper = new FileMoveHelper(monitoringRegistrationService, appSettingService);
+        fileMoveHelper = new FileMoveHelper(monitoringRegistrationService, appSettingService, relationsRepository);
     }
 
     @Nested

@@ -1,6 +1,6 @@
 package org.booklore.service;
 
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookMetadata;
@@ -10,7 +10,7 @@ import org.booklore.model.dto.settings.MetadataPublicReviewsSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReviewRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookReviewService;
@@ -36,7 +36,7 @@ class BookReviewServiceTest {
     @Mock
     private BookReviewUpdateService bookReviewUpdateService;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private AppSettingService appSettingService;
     @Mock
@@ -51,7 +51,7 @@ class BookReviewServiceTest {
         service = new BookReviewService(
             bookReviewRepository,
             bookReviewUpdateService,
-            bookRepository,
+            jooqBookEntityRepository,
             appSettingService,
             metadataRefreshService,
             authenticationService
@@ -105,7 +105,7 @@ class BookReviewServiceTest {
         AppSettings appSettings = new AppSettings();
         appSettings.setMetadataPublicReviewsSettings(createReviewSettings(true));
 
-        when(bookRepository.findByIdWithMetadata(bookId)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdWithMetadata(bookId)).thenReturn(bookEntity);
         when(bookReviewRepository.findByBookId(bookId))
             .thenReturn(Collections.singletonList(dto));
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
@@ -124,7 +124,7 @@ class BookReviewServiceTest {
         AppSettings appSettings = new AppSettings();
         appSettings.setMetadataPublicReviewsSettings(createReviewSettings(false));
 
-        when(bookRepository.findByIdWithMetadata(bookId)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdWithMetadata(bookId)).thenReturn(bookEntity);
         when(bookReviewRepository.findByBookId(bookId))
             .thenReturn(Collections.emptyList());
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
@@ -143,7 +143,7 @@ class BookReviewServiceTest {
         appSettings.setMetadataPublicReviewsSettings(createReviewSettings(true, MetadataProvider.Amazon));
         BookLoreUser user = createUser(false, false);
 
-        when(bookRepository.findByIdWithMetadata(bookId)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdWithMetadata(bookId)).thenReturn(bookEntity);
         when(bookReviewRepository.findByBookId(bookId))
             .thenReturn(Collections.emptyList());
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
@@ -170,7 +170,7 @@ class BookReviewServiceTest {
             .thenReturn(Collections.singletonList(freshReview));
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithMetadata(bookId)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdWithMetadata(bookId)).thenReturn(bookEntity);
 
         Map<MetadataProvider, BookMetadata> metadataMap = new EnumMap<>(MetadataProvider.class);
         metadataMap.put(MetadataProvider.Amazon, BookMetadata.builder()
@@ -186,7 +186,6 @@ class BookReviewServiceTest {
         assertEquals(freshReview, result.getFirst());
         verify(bookReviewUpdateService).addReviewsToBook(
             Collections.singletonList(freshReview), bookEntity.getMetadata());
-        verify(bookRepository).saveAndFlush(bookEntity);
     }
 
     @Test
@@ -204,7 +203,7 @@ class BookReviewServiceTest {
             .thenReturn(Collections.singletonList(freshReview));
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithMetadata(bookId)).thenReturn(Optional.of(bookEntity));
+        when(jooqBookEntityRepository.findByIdWithMetadata(bookId)).thenReturn(bookEntity);
 
         Map<MetadataProvider, BookMetadata> metadataMap = new EnumMap<>(MetadataProvider.class);
         metadataMap.put(MetadataProvider.GoodReads, BookMetadata.builder()
@@ -218,14 +217,13 @@ class BookReviewServiceTest {
 
         assertEquals(1, result.size());
         verify(bookReviewUpdateService).addReviewsToBook(anyList(), any());
-        verify(bookRepository).saveAndFlush(bookEntity);
     }
 
     @Test
     void getByBookId_throwsException_whenBookNotFound() {
         Long bookId = 1L;
 
-        when(bookRepository.findByIdWithMetadata(bookId)).thenReturn(Optional.empty());
+        when(jooqBookEntityRepository.findByIdWithMetadata(bookId)).thenReturn(null);
 
         RuntimeException exception = assertThrows(RuntimeException.class,
             () -> service.getByBookId(bookId));

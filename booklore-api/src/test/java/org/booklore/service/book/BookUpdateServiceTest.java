@@ -9,13 +9,15 @@ import org.booklore.model.dto.response.PersonalRatingUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.service.progress.ReadingProgressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +33,7 @@ import static org.mockito.Mockito.*;
 class BookUpdateServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
@@ -41,11 +43,11 @@ class BookUpdateServiceTest {
     @Mock
     private JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     @Mock
-    private ShelfRepository shelfRepository;
+    private JooqShelfRepository jooqShelfRepository;
     @Mock
     private BookMapper bookMapper;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private JooqUserBookProgressRepository jooqUserBookProgressRepository;
     @Mock
@@ -64,12 +66,12 @@ class BookUpdateServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         bookUpdateService = new BookUpdateService(
-                bookRepository,
+                jooqBookEntityRepository,
                 jooqBookRepository,
                 pdfViewerPreferencesRepository,
                 cbxViewerPreferencesRepository,
                 newPdfViewerPreferencesRepository,
-                shelfRepository,
+                jooqShelfRepository,
                 bookMapper,
                 userRepository,
                 jooqUserBookProgressRepository,
@@ -90,7 +92,7 @@ class BookUpdateServiceTest {
         primaryFile.setBookType(BookFileType.PDF);
         book.setBookFiles(List.of(primaryFile));
         BookLoreUser user = mock(BookLoreUser.class);
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
@@ -116,7 +118,7 @@ class BookUpdateServiceTest {
         primaryFile.setBookType(BookFileType.EPUB);
         book.setBookFiles(List.of(primaryFile));
         BookLoreUser user = mock(BookLoreUser.class);
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(2L);
 
@@ -152,7 +154,7 @@ class BookUpdateServiceTest {
         primaryFile.setBook(book);
         primaryFile.setBookType(null);
         book.setBookFiles(List.of(primaryFile));
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
         when(authenticationService.getAuthenticatedUser()).thenReturn(mock(BookLoreUser.class));
         BookViewerSettings settings = BookViewerSettings.builder().build();
 
@@ -175,7 +177,7 @@ class BookUpdateServiceTest {
         when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         List<BookStatusUpdateResponse> result = bookUpdateService.updateReadStatus(bookIds, "READ");
         verify(jooqUserBookProgressRepository).bulkUpdateReadStatus(eq(1L), eq(existing), eq(ReadStatus.READ), any(), any());
@@ -216,7 +218,7 @@ class BookUpdateServiceTest {
         when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         assertDoesNotThrow(() -> bookUpdateService.updateReadStatus(bookIds, "READ"));
     }
@@ -233,7 +235,7 @@ class BookUpdateServiceTest {
         when(jooqUserBookProgressRepository.findExistingProgressBookIds(1L, bookIds)).thenReturn(existing);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         List<PersonalRatingUpdateResponse> result = bookUpdateService.updatePersonalRating(bookIds, 5);
         verify(jooqUserBookProgressRepository).bulkUpdatePersonalRating(eq(1L), eq(existing), eq(5));
@@ -266,12 +268,13 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
+        userEntity.setId(1L);
         ShelfEntity shelf1 = new ShelfEntity();
         shelf1.setId(10L);
         ShelfEntity shelf2 = new ShelfEntity();
         shelf2.setId(20L);
-        userEntity.setShelves(new HashSet<>(Arrays.asList(shelf1, shelf2)));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(jooqShelfRepository.findByUserId(1L)).thenReturn(List.of(shelf1, shelf2));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         Set<Long> bookIds = new HashSet<>(Arrays.asList(1L, 2L));
         Set<Long> assignIds = new HashSet<>(Collections.singletonList(10L));
@@ -279,7 +282,6 @@ class BookUpdateServiceTest {
 
         BookEntity bookEntity1 = spy(new BookEntity());
         bookEntity1.setId(1L);
-        bookEntity1.setShelves(new HashSet<>());
         LibraryPathEntity libraryPath1 = new LibraryPathEntity();
         libraryPath1.setPath("/mock/path/1");
         doReturn(libraryPath1).when(bookEntity1).getLibraryPath();
@@ -291,7 +293,6 @@ class BookUpdateServiceTest {
 
         BookEntity bookEntity2 = spy(new BookEntity());
         bookEntity2.setId(2L);
-        bookEntity2.setShelves(new HashSet<>());
         LibraryPathEntity libraryPath2 = new LibraryPathEntity();
         libraryPath2.setPath("/mock/path/2");
         doReturn(libraryPath2).when(bookEntity2).getLibraryPath();
@@ -302,9 +303,6 @@ class BookUpdateServiceTest {
         bookEntity2.setBookFiles(List.of(bookFileEntity2));
 
         when(bookQueryService.findAllWithMetadataByIds(bookIds)).thenReturn(Arrays.asList(bookEntity1, bookEntity2));
-        ShelfEntity assignShelf = new ShelfEntity();
-        assignShelf.setId(10L);
-        when(shelfRepository.findAllById(assignIds)).thenReturn(Collections.singletonList(assignShelf));
         Book mockBook = mock(Book.class);
         when(bookMapper.toBook(any())).thenReturn(mockBook);
 
@@ -312,7 +310,8 @@ class BookUpdateServiceTest {
         when(readingProgressService.fetchUserFileProgress(eq(1L), anySet())).thenReturn(Collections.emptyMap());
 
         List<Book> result = bookUpdateService.assignShelvesToBooks(bookIds, assignIds, unassignIds);
-        verify(bookRepository).saveAll(anyList());
+        verify(jooqShelfRepository).unassignShelvesFromBooks(bookIds, unassignIds);
+        verify(jooqShelfRepository).assignShelvesToBooks(bookIds, assignIds);
         assertEquals(2, result.size());
     }
 
@@ -323,10 +322,11 @@ class BookUpdateServiceTest {
         when(user.getId()).thenReturn(1L);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
+        userEntity.setId(1L);
         ShelfEntity shelf1 = new ShelfEntity();
         shelf1.setId(10L);
-        userEntity.setShelves(new HashSet<>(Collections.singletonList(shelf1)));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
+        when(jooqShelfRepository.findByUserId(1L)).thenReturn(List.of(shelf1));
+        when(userRepository.findById(1L)).thenReturn(userEntity);
 
         Set<Long> bookIds = new HashSet<>(Collections.singletonList(1L));
         Set<Long> assignIds = new HashSet<>(Collections.singletonList(99L));

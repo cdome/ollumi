@@ -8,9 +8,9 @@ import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.ShelfRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqBookOpdsRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.service.library.LibraryService;
@@ -40,10 +40,10 @@ class OpdsBookServiceTest {
 
     @Mock private JooqBookOpdsRepository jooqBookOpdsRepository;
     @Mock private JooqBookReadRepository jooqBookReadRepository;
-    @Mock private BookRepository bookRepository;
-    @Mock private UserRepository userRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock private JooqUserRepository userRepository;
     @Mock private BookLoreUserTransformer bookLoreUserTransformer;
-    @Mock private ShelfRepository shelfRepository;
+    @Mock private JooqShelfRepository shelfRepository;
     @Mock private LibraryService libraryService;
     @Mock private ContentRestrictionService contentRestrictionService;
 
@@ -81,7 +81,7 @@ class OpdsBookServiceTest {
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
 
-        when(userRepository.findByIdWithDetails(userId)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(userId)).thenReturn(entity);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
         when(user.getPermissions()).thenReturn(perms);
         when(perms.isAdmin()).thenReturn(isAdmin);
@@ -107,7 +107,7 @@ class OpdsBookServiceTest {
     void getAccessibleLibraries_returnsAssignedLibraries_forNonAdmin() {
         OpdsUserDetails details = v2UserDetails(1L, false, Set.of(2L, 3L));
         BookLoreUserEntity entity = mock(BookLoreUserEntity.class);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -140,7 +140,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(999L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(999L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -155,7 +155,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(999L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(2L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(2L)).thenReturn(shelf);
 
         when(jooqBookOpdsRepository.findBookIds(any())).thenReturn(Page.empty());
         when(jooqBookOpdsRepository.findBookIdsByLibraryIds(anySet(), any())).thenReturn(Page.empty());
@@ -183,7 +183,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(true);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
@@ -195,7 +195,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(anyLong())).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(anyLong())).thenReturn(shelf);
 
         opdsBookService.getBooksPage(details.getOpdsUserV2().getUserId(), "q", 1L, Set.of(2L), 0, 10);
     }
@@ -204,7 +204,7 @@ class OpdsBookServiceTest {
     void getRecentBooksPage_returnsRecentBooks_forLegacyUser() {
         OpdsUserDetails details = legacyUserDetails();
         BookLoreUserEntity entity = mock(BookLoreUserEntity.class);
-        when(userRepository.findByIdWithDetails(999L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(999L)).thenReturn(entity);
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -220,7 +220,7 @@ class OpdsBookServiceTest {
     void getRecentBooksPage_appliesBookFilters_forNonAdminV2User() {
         OpdsUserDetails details = v2UserDetails(2L, false, Set.of(1L, 2L));
         BookLoreUserEntity entity = mock(BookLoreUserEntity.class);
-        when(userRepository.findByIdWithDetails(2L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(2L)).thenReturn(entity);
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -263,7 +263,7 @@ class OpdsBookServiceTest {
     void getShelfName_returnsShelfName_whenFound() {
         ShelfEntity shelf = mock(ShelfEntity.class);
         when(shelf.getName()).thenReturn("Shelf1");
-        when(shelfRepository.findById(1L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findById(1L)).thenReturn(shelf);
 
         String name = opdsBookService.getShelfName(1L);
 
@@ -272,7 +272,7 @@ class OpdsBookServiceTest {
 
     @Test
     void getShelfName_returnsDefault_whenNotFound() {
-        when(shelfRepository.findById(1L)).thenReturn(Optional.empty());
+        when(shelfRepository.findById(1L)).thenReturn(null);
 
         String name = opdsBookService.getShelfName(1L);
 
@@ -324,7 +324,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(false);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         assertThatThrownBy(() ->
                 opdsBookService.getBooksPage(1L, null, null, null, 0, 10)
@@ -339,7 +339,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -354,7 +354,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         Book book = Book.builder().id(1L).build();
 
@@ -375,7 +375,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -392,8 +392,8 @@ class OpdsBookServiceTest {
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf1.getUser()).thenReturn(shelfUser);
         when(shelf2.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf1));
-        when(shelfRepository.findByIdWithUser(20L)).thenReturn(Optional.of(shelf2));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf1);
+        when(shelfRepository.findByIdWithUser(20L)).thenReturn(shelf2);
 
         Book book1 = Book.builder().id(1L).build();
         Book book2 = Book.builder().id(2L).build();
@@ -415,7 +415,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -430,7 +430,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(1L);
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         Book book = Book.builder().id(1L).build();
 
@@ -451,7 +451,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -466,7 +466,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(999L); // Different user
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         assertThatThrownBy(() ->
                 opdsBookService.getBooksPage(1L, null, null, Set.of(10L), 0, 10)
@@ -481,7 +481,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(true);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -496,7 +496,7 @@ class OpdsBookServiceTest {
         BookLoreUserEntity shelfUser = mock(BookLoreUserEntity.class);
         when(shelfUser.getId()).thenReturn(999L); // Different user, but admin
         when(shelf.getUser()).thenReturn(shelfUser);
-        when(shelfRepository.findByIdWithUser(10L)).thenReturn(Optional.of(shelf));
+        when(shelfRepository.findByIdWithUser(10L)).thenReturn(shelf);
 
         when(jooqBookOpdsRepository.findBookIdsByShelfIds(eq(Set.of(10L)), any())).thenReturn(Page.empty());
 
@@ -521,11 +521,11 @@ class OpdsBookServiceTest {
         var permissionsEntity = mock(UserPermissionsEntity.class);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(true);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(1L)).thenReturn(entity);
 
         opdsBookService.validateBookContentAccess(99L, 1L);
 
-        verify(bookRepository, never()).findById(anyLong());
+        verify(jooqBookEntityRepository, never()).findByIdFull(anyLong());
         verify(contentRestrictionService, never()).applyRestrictions(anyList(), eq(1L));
     }
 
@@ -535,7 +535,7 @@ class OpdsBookServiceTest {
         var permissionsEntity = mock(UserPermissionsEntity.class);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(userEntity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(2L)).thenReturn(userEntity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(userEntity)).thenReturn(user);
@@ -545,7 +545,7 @@ class OpdsBookServiceTest {
         LibraryEntity library = mock(LibraryEntity.class);
         when(library.getId()).thenReturn(99L);
         when(book.getLibrary()).thenReturn(library);
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         assertThatThrownBy(() ->
                 opdsBookService.validateBookContentAccess(1L, 2L)
@@ -558,7 +558,7 @@ class OpdsBookServiceTest {
         var permissionsEntity = mock(UserPermissionsEntity.class);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(userEntity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(2L)).thenReturn(userEntity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(userEntity)).thenReturn(user);
@@ -568,7 +568,7 @@ class OpdsBookServiceTest {
         LibraryEntity library = mock(LibraryEntity.class);
         when(library.getId()).thenReturn(5L);
         when(book.getLibrary()).thenReturn(library);
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         when(contentRestrictionService.applyRestrictions(eq(List.of(book)), eq(2L)))
                 .thenReturn(List.of());
@@ -584,7 +584,7 @@ class OpdsBookServiceTest {
         var permissionsEntity = mock(UserPermissionsEntity.class);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(userEntity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(2L)).thenReturn(userEntity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(userEntity)).thenReturn(user);
@@ -594,7 +594,7 @@ class OpdsBookServiceTest {
         LibraryEntity library = mock(LibraryEntity.class);
         when(library.getId()).thenReturn(5L);
         when(book.getLibrary()).thenReturn(library);
-        when(bookRepository.findById(1L)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
         when(contentRestrictionService.applyRestrictions(eq(List.of(book)), eq(2L)))
                 .thenReturn(List.of(book));
@@ -613,7 +613,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -648,7 +648,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(true);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -667,7 +667,7 @@ class OpdsBookServiceTest {
     @Test
     void getRecentBooksPage_appliesContentRestrictions_forNonAdmin() {
         BookLoreUserEntity entity = mock(BookLoreUserEntity.class);
-        when(userRepository.findByIdWithDetails(2L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(2L)).thenReturn(entity);
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -689,7 +689,7 @@ class OpdsBookServiceTest {
     @Test
     void getRecentBooksPage_skipsContentRestrictions_forAdmin() {
         BookLoreUserEntity entity = mock(BookLoreUserEntity.class);
-        when(userRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(1L)).thenReturn(entity);
         BookLoreUser user = mock(BookLoreUser.class);
         when(bookLoreUserTransformer.toDTO(entity)).thenReturn(user);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);
@@ -732,7 +732,7 @@ class OpdsBookServiceTest {
         when(permissionsEntity.isPermissionAccessOpds()).thenReturn(true);
         when(permissionsEntity.isPermissionAdmin()).thenReturn(false);
         when(entity.getPermissions()).thenReturn(permissionsEntity);
-        when(userRepository.findByIdWithDetails(3L)).thenReturn(Optional.of(entity));
+        when(userRepository.findByIdWithDetails(3L)).thenReturn(entity);
 
         BookLoreUser user = mock(BookLoreUser.class);
         BookLoreUser.UserPermissions perms = mock(BookLoreUser.UserPermissions.class);

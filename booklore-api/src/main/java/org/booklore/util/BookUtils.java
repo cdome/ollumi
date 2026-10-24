@@ -1,6 +1,5 @@
 package org.booklore.util;
 
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import lombok.experimental.UtilityClass;
 
@@ -22,16 +21,12 @@ public class BookUtils {
         if (e.getSubtitle() != null) sb.append(e.getSubtitle()).append(" ");
         if (e.getSeriesName() != null) sb.append(e.getSeriesName()).append(" ");
         
-        try {
-            if (e.getAuthors() != null) {
-                for (AuthorEntity author : e.getAuthors()) {
-                    if (author != null && author.getName() != null) {
-                        sb.append(author.getName()).append(" ");
-                    }
+        if (e.getAuthorNames() != null) {
+            for (String author : e.getAuthorNames()) {
+                if (author != null) {
+                    sb.append(author).append(" ");
                 }
             }
-        } catch (Exception ex) {
-            // LazyInitializationException or similar - authors won't be included in search text
         }
         
         return normalizeForSearch(sb.toString().trim());

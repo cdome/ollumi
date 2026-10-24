@@ -10,7 +10,7 @@ import org.booklore.model.dto.request.CreateLibraryRequest;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.IconType;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,9 +19,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.booklore.mapper.BookMapper;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryPathRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.service.NotificationService;
 import org.booklore.service.monitoring.LibraryWatchService;
@@ -40,11 +41,13 @@ import static org.mockito.Mockito.*;
 class LibraryServiceIconTest {
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
     @Mock
-    private LibraryPathRepository libraryPathRepository;
+    private JooqLibraryPathRepository jooqLibraryPathRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqUserLibraryRepository jooqUserLibraryRepository;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
     @Mock
     private LibraryProcessingService libraryProcessingService;
     @Mock
@@ -60,7 +63,7 @@ class LibraryServiceIconTest {
     @Mock
     private AuthenticationService authenticationService;
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private AuditService auditService;
 
@@ -83,7 +86,6 @@ class LibraryServiceIconTest {
                 .name("My Library")
                 .icon("book")
                 .iconType(IconType.PRIME_NG)
-                .libraryPaths(new ArrayList<>())
                 .watch(false)
                 .build();
 
@@ -95,7 +97,8 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(libraryRepository.findById(1L)).thenReturn(existing);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(Collections.emptyList());
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(Library.builder().name("Updated Library").build());
 
@@ -117,7 +120,6 @@ class LibraryServiceIconTest {
                 .name("My Library")
                 .icon("book")
                 .iconType(IconType.PRIME_NG)
-                .libraryPaths(new ArrayList<>())
                 .watch(false)
                 .build();
 
@@ -129,7 +131,8 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(libraryRepository.findById(1L)).thenReturn(existing);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(Collections.emptyList());
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(
                 Library.builder().name("Updated Library").icon("folder").iconType(IconType.CUSTOM_SVG).build());
@@ -151,7 +154,6 @@ class LibraryServiceIconTest {
                 .name("Library With Icon")
                 .icon("star")
                 .iconType(IconType.PRIME_NG)
-                .libraryPaths(new ArrayList<>())
                 .watch(false)
                 .build();
 
@@ -163,7 +165,8 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(libraryRepository.findById(1L)).thenReturn(existing);
+        when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(Collections.emptyList());
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(libraryMapper.toLibrary(any(LibraryEntity.class))).thenReturn(Library.builder().name("Library With Icon").build());
 
@@ -187,8 +190,6 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> {
             LibraryEntity entity = invocation.getArgument(0);
             entity.setId(1L);
@@ -217,8 +218,6 @@ class LibraryServiceIconTest {
                 .watch(false)
                 .build();
 
-        when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(userEntity));
         when(libraryRepository.save(any(LibraryEntity.class))).thenAnswer(invocation -> {
             LibraryEntity entity = invocation.getArgument(0);
             entity.setId(1L);

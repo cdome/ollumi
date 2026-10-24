@@ -11,7 +11,7 @@ import org.booklore.config.security.userdetails.UserAuthenticationDetails;
 import org.booklore.mapper.custom.BookLoreUserTransformer;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -28,7 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final BookLoreUserTransformer bookLoreUserTransformer;
     private final JwtUtils jwtUtils;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
 
     private static final List<String> WHITELISTED_PATHS = List.of(
             "/api/v1/opds/",
@@ -72,7 +72,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private void authenticateUser(String token, HttpServletRequest request) {
         Long userId = jwtUtils.extractUserId(token);
-        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId).orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        BookLoreUserEntity entity = userRepository.findByIdWithDetails(userId);
+        if (entity == null) {
+            throw new UsernameNotFoundException("User not found with ID: " + userId);
+        }
         BookLoreUser user = bookLoreUserTransformer.toDTO(entity);
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, null, null);
         authentication.setDetails(new UserAuthenticationDetails(request, user.getId()));

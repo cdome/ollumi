@@ -141,7 +141,7 @@ public class NotebookIntegrationTest extends RestApiIntegrationTest {
     }
 
     private void seedNotebookEntries(BookEntity book) {
-        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME).orElseThrow();
+        BookLoreUserEntity user = userRepository.findByUsername(ADMIN_USERNAME);
 
         annotationRepository.insert(
                 book.getId(), user.getId(),

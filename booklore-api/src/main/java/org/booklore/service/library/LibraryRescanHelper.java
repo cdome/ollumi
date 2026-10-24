@@ -8,8 +8,8 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.websocket.TaskProgressPayload;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.fileprocessor.AudiobookProcessor;
 import org.booklore.service.metadata.BookMetadataUpdater;
@@ -30,30 +30,33 @@ import java.util.List;
 @Service
 public class LibraryRescanHelper {
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final MetadataExtractorFactory metadataExtractorFactory;
     private final BookMetadataUpdater bookMetadataUpdater;
     private final NotificationService notificationService;
     private final TaskCancellationManager cancellationManager;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final AudiobookProcessor audiobookProcessor;
 
-    public LibraryRescanHelper(LibraryRepository libraryRepository, MetadataExtractorFactory metadataExtractorFactory, @Lazy BookMetadataUpdater bookMetadataUpdater, NotificationService notificationService, TaskCancellationManager cancellationManager, BookRepository bookRepository, AudiobookProcessor audiobookProcessor) {
+    public LibraryRescanHelper(JooqLibraryRepository libraryRepository, MetadataExtractorFactory metadataExtractorFactory, @Lazy BookMetadataUpdater bookMetadataUpdater, NotificationService notificationService, TaskCancellationManager cancellationManager, JooqBookEntityRepository jooqBookEntityRepository, AudiobookProcessor audiobookProcessor) {
         this.libraryRepository = libraryRepository;
         this.metadataExtractorFactory = metadataExtractorFactory;
         this.bookMetadataUpdater = bookMetadataUpdater;
         this.notificationService = notificationService;
         this.cancellationManager = cancellationManager;
-        this.bookRepository = bookRepository;
+        this.jooqBookEntityRepository = jooqBookEntityRepository;
         this.audiobookProcessor = audiobookProcessor;
     }
 
     @Transactional
     public void handleRescanOptions(RescanLibraryContext context, String taskId) {
 
-        LibraryEntity library = libraryRepository.findById(context.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        LibraryEntity library = libraryRepository.findById(context.getLibraryId());
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId());
+        }
 
-        List<BookEntity> bookEntities = bookRepository.findAllWithMetadataByLibraryId(library.getId());
+        List<BookEntity> bookEntities = jooqBookEntityRepository.findAllWithMetadataByLibraryId(library.getId());
 
         log.info("Found {} book(s) to process in library id={}", bookEntities.size(), library.getId());
 

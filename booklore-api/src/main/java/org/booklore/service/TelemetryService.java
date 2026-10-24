@@ -11,10 +11,13 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.MetadataProvider;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.repository.jooq.JooqMagicShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqBookNoteRepository;
 import org.booklore.repository.jooq.JooqBookMarkRepository;
@@ -36,20 +39,16 @@ import java.util.stream.Collectors;
 public class TelemetryService {
 
     private final VersionService versionService;
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final JooqLibraryPathRepository jooqLibraryPathRepository;
-    private final BookRepository bookRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqBookMarkRepository bookMarkRepository;
     private final JooqBookNoteRepository bookNoteRepository;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
-    private final AuthorRepository authorRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqShelfRepository shelfRepository;
     private final JooqMagicShelfRepository magicShelfRepository;
-    private final CategoryRepository categoryRepository;
-    private final TagRepository tagRepository;
-    private final MoodRepository moodRepository;
-    private final UserRepository userRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqUserRepository userRepository;
     private final org.booklore.repository.jooq.JooqEmailProviderV2Repository emailProviderV2Repository;
     private final org.booklore.repository.jooq.JooqEmailRecipientV2Repository emailRecipientV2Repository;
     private final AppSettingService appSettingService;
@@ -78,7 +77,7 @@ public class TelemetryService {
         AppSettings settings = appSettingService.getAppSettings();
 
         BookloreTelemetry.BookStatistics bookStatistics = BookloreTelemetry.BookStatistics.builder()
-                .totalBooks(bookRepository.count())
+                .totalBooks(jooqBookEntityRepository.countAllBooks())
                 .bookCountByType(getBookFileTypeCounts())
                 .build();
 
@@ -97,16 +96,16 @@ public class TelemetryService {
                 .installationDate(installation.getDate() != null ? installation.getDate().toString() : null)
                 .appVersion(versionService.appVersion)
                 .totalLibraries((int) libraryRepository.count())
-                .totalBooks(bookRepository.count())
-                .totalAdditionalBookFiles(bookAdditionalFileRepository.count())
-                .totalAuthors(authorRepository.count())
+                .totalBooks(jooqBookEntityRepository.countAllBooks())
+                .totalAdditionalBookFiles(jooqBookEntityRepository.countAllBookFiles())
+                .totalAuthors(relationsRepository.countAllAuthors())
                 .totalBookmarks(bookMarkRepository.count())
                 .totalBookNotes(bookNoteRepository.count())
                 .totalShelves((int) shelfRepository.count())
                 .totalMagicShelves((int) magicShelfRepository.count())
-                .totalCategories((int) categoryRepository.count())
-                .totalTags((int) tagRepository.count())
-                .totalMoods((int) moodRepository.count())
+                .totalCategories((int) relationsRepository.countAllCategories())
+                .totalTags((int) relationsRepository.countAllTags())
+                .totalMoods((int) relationsRepository.countAllMoods())
                 .totalKoreaderUsers((int) koreaderUserRepository.count())
                 .userStatistics(BookloreTelemetry.UserStatistics.builder()
                         .totalUsers((int) totalUsers)

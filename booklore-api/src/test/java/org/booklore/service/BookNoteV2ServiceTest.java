@@ -6,11 +6,11 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookNoteV2;
 import org.booklore.model.dto.CreateBookNoteV2Request;
 import org.booklore.model.dto.UpdateBookNoteV2Request;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookNoteV2Repository;
 import org.booklore.service.book.BookNoteV2Service;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,8 +25,8 @@ import static org.mockito.Mockito.*;
 class BookNoteV2ServiceTest {
 
     private JooqBookNoteV2Repository bookNoteV2Repository;
-    private BookRepository bookRepository;
-    private UserRepository userRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
+    private JooqUserRepository userRepository;
     private AuthenticationService authenticationService;
     private BookNoteV2Service service;
 
@@ -43,10 +43,10 @@ class BookNoteV2ServiceTest {
     @BeforeEach
     void setUp() {
         bookNoteV2Repository = mock(JooqBookNoteV2Repository.class);
-        bookRepository = mock(BookRepository.class);
-        userRepository = mock(UserRepository.class);
+        jooqBookEntityRepository = mock(JooqBookEntityRepository.class);
+        userRepository = mock(JooqUserRepository.class);
         authenticationService = mock(AuthenticationService.class);
-        service = new BookNoteV2Service(bookNoteV2Repository, bookRepository, userRepository, authenticationService);
+        service = new BookNoteV2Service(bookNoteV2Repository, jooqBookEntityRepository, userRepository, authenticationService);
 
         BookLoreUser user = new BookLoreUser();
         user.setId(userId);
@@ -109,7 +109,7 @@ class BookNoteV2ServiceTest {
 
         BookNoteV2 dto = BookNoteV2.builder().id(noteId).color(defaultColor).build();
         when(bookNoteV2Repository.existsByCfiAndBookIdAndUserId(cfi, bookId, userId)).thenReturn(false);
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(true);
         when(bookNoteV2Repository.insert(bookId, userId, cfi, selectedText, noteContent, defaultColor, chapterTitle)).thenReturn(dto);
 
@@ -133,7 +133,7 @@ class BookNoteV2ServiceTest {
 
         BookNoteV2 dto = BookNoteV2.builder().id(noteId).color(customColor).build();
         when(bookNoteV2Repository.existsByCfiAndBookIdAndUserId(cfi, bookId, userId)).thenReturn(false);
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(true);
         when(bookNoteV2Repository.insert(bookId, userId, cfi, selectedText, noteContent, customColor, chapterTitle)).thenReturn(dto);
 
@@ -168,7 +168,7 @@ class BookNoteV2ServiceTest {
                 .build();
 
         when(bookNoteV2Repository.existsByCfiAndBookIdAndUserId(cfi, bookId, userId)).thenReturn(false);
-        when(bookRepository.existsById(bookId)).thenReturn(false);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(false);
 
         EntityNotFoundException ex = assertThrows(EntityNotFoundException.class, () -> service.createNote(request));
 
@@ -185,7 +185,7 @@ class BookNoteV2ServiceTest {
                 .build();
 
         when(bookNoteV2Repository.existsByCfiAndBookIdAndUserId(cfi, bookId, userId)).thenReturn(false);
-        when(bookRepository.existsById(bookId)).thenReturn(true);
+        when(jooqBookEntityRepository.existsById(bookId)).thenReturn(true);
         when(userRepository.existsById(userId)).thenReturn(false);
 
         EntityNotFoundException ex = assertThrows(EntityNotFoundException.class, () -> service.createNote(request));

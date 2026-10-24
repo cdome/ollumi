@@ -7,7 +7,8 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.progress.KoreaderProgress;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoreaderUserRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -33,8 +34,8 @@ public class KoreaderService {
 
     private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final JooqKoreaderUserRepository koreaderUserRepository;
     private final HardcoverSyncService hardcoverSyncService;
     private final EpubCfiService epubCfiService;
@@ -220,13 +221,19 @@ public class KoreaderService {
     }
 
     private BookEntity findBookByHash(String bookHash) {
-        return bookRepository.findByCurrentHash(bookHash)
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("Book not found for hash " + bookHash));
+        BookEntity book = jooqBookEntityRepository.findByCurrentHash(bookHash);
+        if (book == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("Book not found for hash " + bookHash);
+        }
+        return book;
     }
 
     private BookLoreUserEntity findBookLoreUser(long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> ApiError.GENERIC_NOT_FOUND.createException("User not found with id " + userId));
+        BookLoreUserEntity user = userRepository.findById(userId);
+        if (user == null) {
+            throw ApiError.GENERIC_NOT_FOUND.createException("User not found with id " + userId);
+        }
+        return user;
     }
 
     private UserBookProgressRow findUserProgress(long userId, Long bookId) {

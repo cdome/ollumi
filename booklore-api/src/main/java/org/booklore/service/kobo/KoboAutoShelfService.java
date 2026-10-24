@@ -6,16 +6,16 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.model.entity.ShelfEntity;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -24,8 +24,8 @@ import java.util.stream.Collectors;
 public class KoboAutoShelfService {
 
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
-    private final ShelfRepository shelfRepository;
-    private final BookRepository bookRepository;
+    private final JooqShelfRepository jooqShelfRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final KoboCompatibilityService koboCompatibilityService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -35,7 +35,7 @@ public class KoboAutoShelfService {
             return;
         }
 
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId).orElse(null);
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
         if (!isBookEligible(book)) {
             return;
         }
@@ -51,38 +51,29 @@ public class KoboAutoShelfService {
                 .map(KoboUserSettings::getUserId)
                 .toList();
 
-        List<ShelfEntity> shelves = shelfRepository.findByUserIdInAndName(userIds, ShelfType.KOBO.getName());
+        List<ShelfEntity> shelves = jooqShelfRepository.findByUserIdInAndName(userIds, ShelfType.KOBO.getName());
 
-        Map<Long, ShelfEntity> shelfByUser = shelves
+        Map<Long, Long> shelfIdByUser = shelves
                 .stream()
-                .collect(Collectors.toMap(s -> s.getUser().getId(), s -> s));
+                .collect(Collectors.toMap(s -> s.getUser().getId(), ShelfEntity::getId));
 
-        boolean modified = false;
+        Set<Long> existingShelfIds = jooqShelfRepository.findShelfIdsByBookId(book.getId());
 
         for (KoboUserSettings setting : eligibleUsers) {
-            ShelfEntity shelf = shelfByUser.get(setting.getUserId());
+            Long shelfId = shelfIdByUser.get(setting.getUserId());
 
-            if (shelf == null) {
+            if (shelfId == null) {
                 log.debug("User {} has auto-add enabled but no Kobo shelf exists", setting.getUserId());
                 continue;
             }
 
-            if (book.getShelves() == null) {
-                book.setShelves(new HashSet<>());
-            }
-
-            if (book.getShelves().contains(shelf)) {
+            if (existingShelfIds.contains(shelfId)) {
                 log.debug("Book {} already on Kobo shelf for user {}", book.getId(), setting.getUserId());
                 continue;
             }
 
-            book.getShelves().add(shelf);
-            modified = true;
+            jooqShelfRepository.assignShelfToBook(book.getId(), shelfId);
             log.info("Auto-added book {} to Kobo shelf for user {}", book.getId(), setting.getUserId());
-        }
-
-        if (modified) {
-            bookRepository.save(book);
         }
     }
 

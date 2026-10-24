@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class DefaultSettingInitializer {
 
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final DefaultUserSettingsProvider settingsProvider;
     private final JooqUserSettingRepository userSettingRepository;
@@ -39,7 +39,10 @@ public class DefaultSettingInitializer {
         lock.lock();
         try {
             if (initializedUsers.contains(bookLoreUser.getId())) return;
-            BookLoreUserEntity user = userRepository.findByIdWithSettings(bookLoreUser.getId()).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+            BookLoreUserEntity user = userRepository.findByIdWithSettings(bookLoreUser.getId());
+            if (user == null) {
+                throw new UsernameNotFoundException("User not found");
+            }
             for (UserSettingKey key : settingsProvider.getAllKeys()) {
                 addSettingIfMissing(user, key, settingsProvider.getDefaultValue(key));
             }

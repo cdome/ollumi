@@ -3,7 +3,7 @@ package org.booklore.service.customfont;
 import org.booklore.config.AppProperties;
 import org.booklore.model.dto.CustomFontDto;
 import org.booklore.model.enums.FontFormat;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqCustomFontRepository;
 import org.booklore.repository.jooq.dto.CustomFont;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +34,7 @@ class CustomFontServiceTest {
     @Mock
     JooqCustomFontRepository customFontRepository;
     @Mock
-    UserRepository userRepository;
+    JooqUserRepository userRepository;
 
     AppProperties appProperties;
     CustomFontService service;

@@ -5,7 +5,7 @@ import org.booklore.model.dto.response.AudiobookInfo;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.FileStreamingService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,7 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AudiobookReaderService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final AudioMetadataService audioMetadataService;
     private final AudioFileUtilityService audioFileUtility;
     private final FileStreamingService fileStreamingService;
@@ -101,8 +101,10 @@ public class AudiobookReaderService {
     }
 
     private BookFileEntity getAudiobookFile(Long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());

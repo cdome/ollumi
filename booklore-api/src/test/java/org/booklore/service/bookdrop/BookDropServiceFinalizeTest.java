@@ -3,7 +3,7 @@ package org.booklore.service.bookdrop;
 import org.booklore.config.AppProperties;
 import org.booklore.model.dto.request.BookdropFinalizeRequest;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileMovingHelper;
 import org.booklore.service.kobo.KoboAutoShelfService;
@@ -28,7 +28,7 @@ class BookDropServiceFinalizeTest {
     @Mock
     private BookdropMonitoringService bookdropMonitoringService;
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
     @Mock
     private MonitoringRegistrationService monitoringRegistrationService;
     @Mock

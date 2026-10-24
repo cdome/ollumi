@@ -12,7 +12,8 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.ResetProgressType;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -39,13 +40,11 @@ class ReadingProgressServiceTest {
     @Mock
     private JooqUserBookFileProgressRepository userBookFileProgressRepository;
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
     @Mock
     private JooqBookRepository jooqBookRepository;
     @Mock
-    private BookFileRepository bookFileRepository;
-    @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
     @Mock
     private AuthenticationService authenticationService;
     @Mock
@@ -171,11 +170,11 @@ class ReadingProgressServiceTest {
         BookLoreUser user = mock(BookLoreUser.class);
         when(user.getId()).thenReturn(2L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
         userEntity.setId(2L);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(2L)).thenReturn(userEntity);
 
         UserBookProgressRow progress = new UserBookProgressRow();
         when(jooqUserBookProgressRepository.findByUserIdAndBookId(2L, bookId)).thenReturn(Optional.of(progress));
@@ -209,11 +208,11 @@ class ReadingProgressServiceTest {
         BookLoreUser user = mock(BookLoreUser.class);
         when(user.getId()).thenReturn(2L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(bookRepository.findByIdWithBookFiles(bookId)).thenReturn(Optional.of(book));
+        when(jooqBookEntityRepository.findByIdFull(bookId)).thenReturn(book);
 
         BookLoreUserEntity userEntity = new BookLoreUserEntity();
         userEntity.setId(2L);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findById(2L)).thenReturn(userEntity);
 
         UserBookProgressRow progress = new UserBookProgressRow();
         when(jooqUserBookProgressRepository.findByUserIdAndBookId(2L, bookId)).thenReturn(Optional.of(progress));

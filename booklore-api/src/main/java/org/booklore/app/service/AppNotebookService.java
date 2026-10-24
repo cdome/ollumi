@@ -9,7 +9,7 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.model.dto.UpdateAnnotationRequest;
 import org.booklore.model.dto.UpdateBookMarkRequest;
 import org.booklore.model.dto.UpdateBookNoteV2Request;
-import org.booklore.repository.AuthorRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.repository.jooq.JooqNotebookEntryRepository;
 import org.booklore.repository.jooq.dto.NotebookBookWithCount;
 import org.booklore.repository.jooq.dto.NotebookEntryRow;
@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public class AppNotebookService {
 
     private final JooqNotebookEntryRepository jooqNotebookEntryRepository;
-    private final AuthorRepository authorRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final AuthenticationService authenticationService;
     private final AnnotationService annotationService;
     private final BookNoteV2Service bookNoteV2Service;
@@ -57,11 +57,7 @@ public class AppNotebookService {
                 .map(NotebookBookWithCount::getBookId)
                 .collect(Collectors.toSet());
 
-        Map<Long, List<String>> authorsByBook = authorRepository.findAuthorNamesByBookIds(bookIds)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        AuthorRepository.AuthorBookProjection::getBookId,
-                        Collectors.mapping(AuthorRepository.AuthorBookProjection::getAuthorName, Collectors.toList())));
+        Map<Long, List<String>> authorsByBook = relationsRepository.findAuthorNamesByBookIds(bookIds);
 
         List<AppNotebookBookSummary> summaries = content.stream()
                 .map(p -> AppNotebookBookSummary.builder()

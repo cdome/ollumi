@@ -1,7 +1,8 @@
 package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.migration.Migration;
 import org.booklore.util.FileUtils;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PopulateMissingFileSizesMigration implements Migration {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
 
     @Override
     public String getKey() {
@@ -31,16 +33,15 @@ public class PopulateMissingFileSizesMigration implements Migration {
     public void execute() {
         log.info("Starting migration: {} for books.", getKey());
 
-        List<BookEntity> books = bookRepository.findAllWithMetadataByFileSizeKbIsNull();
+        List<BookEntity> books = jooqBookEntityRepository.findAllWithMetadataByFileSizeKbIsNull();
 
         for (BookEntity book : books) {
             Long sizeInKb = FileUtils.getFileSizeInKb(book);
             if (sizeInKb != null) {
                 book.getPrimaryBookFile().setFileSizeKb(sizeInKb);
+                jooqBookRepository.updateBookFileSizeKb(book.getPrimaryBookFile().getId(), sizeInKb);
             }
         }
-
-        bookRepository.saveAll(books);
 
         log.info("Migration '{}' executed successfully for {} books.", getKey(), books.size());
     }

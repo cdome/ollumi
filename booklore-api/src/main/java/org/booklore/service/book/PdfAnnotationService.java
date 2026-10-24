@@ -1,10 +1,10 @@
 package org.booklore.service.book;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqPdfAnnotationRepository;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,8 +18,8 @@ import java.util.Optional;
 public class PdfAnnotationService {
 
     private final JooqPdfAnnotationRepository pdfAnnotationRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)
@@ -31,7 +31,7 @@ public class PdfAnnotationService {
     @Transactional
     public void saveAnnotations(Long bookId, String data) {
         Long userId = getCurrentUserId();
-        if (!bookRepository.existsById(bookId)) {
+        if (!jooqBookEntityRepository.existsById(bookId)) {
             throw new EntityNotFoundException("Book not found: " + bookId);
         }
         if (!userRepository.existsById(userId)) {

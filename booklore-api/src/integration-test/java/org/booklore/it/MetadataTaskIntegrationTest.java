@@ -146,7 +146,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
 
         MetadataFetchProposalRow updated = metadataFetchJobRepository.findProposalById(proposalId).orElseThrow();
         assertThat(updated.getStatus()).isEqualTo(FetchedMetadataProposalStatus.ACCEPTED);
-        assertThat(updated.getReviewerUserId()).isEqualTo(auth.userRepository().findByUsername(ADMIN_USERNAME).orElseThrow().getId());
+        assertThat(updated.getReviewerUserId()).isEqualTo(auth.userRepository().findByUsername(ADMIN_USERNAME).getId());
         assertThat(updated.getReviewedAt()).isNotNull();
     }
 
@@ -183,7 +183,7 @@ public class MetadataTaskIntegrationTest extends RestApiIntegrationTest {
 
     private MetadataFetchJobRow createJobWithProposal() {
         String taskId = UUID.randomUUID().toString();
-        Long userId = auth.userRepository().findByUsername(ADMIN_USERNAME).orElseThrow().getId();
+        Long userId = auth.userRepository().findByUsername(ADMIN_USERNAME).getId();
 
         metadataFetchJobRepository.insertJob(
                 taskId, userId, MetadataFetchTaskStatus.COMPLETED, Instant.now(), 1, 1);

@@ -10,7 +10,7 @@ import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.repository.jooq.JooqOidcSessionRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.repository.jooq.dto.OidcSession;
 import org.booklore.repository.jooq.dto.RefreshToken;
@@ -41,7 +41,7 @@ class LogoutServiceTest {
     private JooqOidcSessionRepository oidcSessionRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
 
     @Mock
     private AppSettingService appSettingService;
@@ -90,7 +90,7 @@ class LogoutServiceTest {
         var tokenRecord = new RefreshToken(1L, 2L, "valid-token", java.time.Instant.now(), false, null);
 
         when(refreshTokenRepository.findByToken("valid-token")).thenReturn(tokenRecord);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(2L)).thenReturn(user);
 
         LogoutResponse response = logoutService.logout(null, "valid-token", null);
 
@@ -123,7 +123,7 @@ class LogoutServiceTest {
         var bookLoreUser = mock(BookLoreUser.class);
         when(bookLoreUser.getUsername()).thenReturn("missing");
         when(authenticationService.getAuthenticatedUser()).thenReturn(bookLoreUser);
-        when(userRepository.findByUsername("missing")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("missing")).thenReturn(null);
 
         assertThatThrownBy(() -> logoutService.logout(mockAuth(), null, null))
                 .isInstanceOf(APIException.class);
@@ -255,7 +255,7 @@ class LogoutServiceTest {
         var bookLoreUser = mock(BookLoreUser.class);
         when(bookLoreUser.getUsername()).thenReturn(username);
         when(authenticationService.getAuthenticatedUser()).thenReturn(bookLoreUser);
-        when(userRepository.findByUsername(username)).thenReturn(Optional.of(userEntity));
+        when(userRepository.findByUsername(username)).thenReturn(userEntity);
     }
 
     private void stubAppSettings(boolean oidcEnabled, OidcProviderDetails providerDetails) {

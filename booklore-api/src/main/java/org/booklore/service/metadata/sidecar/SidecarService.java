@@ -11,8 +11,8 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.enums.SidecarSyncStatus;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.metadata.BookMetadataUpdater;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,16 +27,18 @@ import java.util.Optional;
 @AllArgsConstructor
 public class SidecarService {
 
-    private final BookRepository bookRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final SidecarMetadataReader sidecarReader;
     private final SidecarMetadataWriter sidecarWriter;
     private final SidecarMetadataMapper sidecarMapper;
     private final BookMetadataUpdater bookMetadataUpdater;
 
     public Optional<SidecarMetadata> getSidecarContent(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         Path bookPath = book.getFullFilePath();
         if (bookPath == null) {
@@ -47,24 +49,30 @@ public class SidecarService {
     }
 
     public SidecarSyncStatus getSyncStatus(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         return sidecarReader.getSyncStatus(book);
     }
 
     @Transactional
     public void exportToSidecar(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         sidecarWriter.writeSidecarMetadata(book);
     }
 
     @Transactional
     public void importFromSidecar(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         Path bookPath = book.getFullFilePath();
         if (bookPath == null) {
@@ -102,10 +110,12 @@ public class SidecarService {
 
     @Transactional
     public int bulkExport(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
-        List<BookEntity> books = bookRepository.findAllByLibraryIdWithFiles(libraryId);
+        List<BookEntity> books = jooqBookEntityRepository.findAllByLibraryIdWithFiles(libraryId);
         int exported = 0;
 
         for (BookEntity book : books) {
@@ -123,10 +133,12 @@ public class SidecarService {
 
     @Transactional
     public int bulkImport(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
-        List<BookEntity> books = bookRepository.findAllByLibraryIdWithFiles(libraryId);
+        List<BookEntity> books = jooqBookEntityRepository.findAllByLibraryIdWithFiles(libraryId);
         int imported = 0;
 
         for (BookEntity book : books) {

@@ -6,7 +6,7 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.OidcProviderDetails;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.repository.jooq.JooqRefreshTokenRepository;
 import org.booklore.repository.jooq.dto.OidcSession;
 import org.booklore.model.enums.AuditAction;
@@ -46,7 +46,7 @@ class BackchannelLogoutServiceTest {
     private JooqOidcSessionRepository oidcSessionRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
 
     @Mock
     private JooqRefreshTokenRepository refreshTokenRepository;
@@ -96,7 +96,7 @@ class BackchannelLogoutServiceTest {
         var session = buildSession(10L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(1L)).thenReturn(user);
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -120,7 +120,7 @@ class BackchannelLogoutServiceTest {
         var session = buildSession(20L, 2L, null, "user-sub");
         when(oidcSessionRepository.findByOidcSubjectAndOidcIssuerAndRevokedFalse("user-sub", "https://issuer.example.com"))
                 .thenReturn(List.of(session));
-        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(2L)).thenReturn(user);
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -203,7 +203,7 @@ class BackchannelLogoutServiceTest {
         var session = buildSession(30L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(1L)).thenReturn(user);
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -241,7 +241,7 @@ class BackchannelLogoutServiceTest {
         var session = buildSession(40L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(1L)).thenReturn(user);
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -264,7 +264,7 @@ class BackchannelLogoutServiceTest {
         var session = buildSession(50L, 1L, "session-123", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("session-123"))
                 .thenReturn(List.of(session));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(1L)).thenReturn(user);
 
         backchannelLogoutService.handleLogoutToken("token");
 
@@ -293,8 +293,8 @@ class BackchannelLogoutServiceTest {
         var session2 = buildSession(61L, 2L, "shared-sid", "user-sub");
         when(oidcSessionRepository.findByOidcSessionIdAndRevokedFalse("shared-sid"))
                 .thenReturn(List.of(session1, session2));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user1));
-        when(userRepository.findById(2L)).thenReturn(Optional.of(user2));
+        when(userRepository.findById(1L)).thenReturn(user1);
+        when(userRepository.findById(2L)).thenReturn(user2);
 
         backchannelLogoutService.handleLogoutToken("token");
 

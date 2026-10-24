@@ -6,6 +6,8 @@ import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ComicCreatorRole;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqComicMetadataRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,9 +41,15 @@ class CbxMetadataWriterTest {
     private CbxMetadataWriter writer;
     private Path tempDir;
 
+    private JooqBookMetadataRelationsRepository relationsRepository;
+    private JooqComicMetadataRepository comicRelationsRepository;
+
     @BeforeEach
     void setup() throws Exception {
         AppSettingService appSettingService = Mockito.mock(AppSettingService.class);
+        relationsRepository = Mockito.mock(JooqBookMetadataRelationsRepository.class);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of());
+        comicRelationsRepository = Mockito.mock(JooqComicMetadataRepository.class);
         AppSettings settings = new AppSettings();
         MetadataPersistenceSettings persistence = new MetadataPersistenceSettings();
         MetadataPersistenceSettings.SaveToOriginalFile save = new MetadataPersistenceSettings.SaveToOriginalFile();
@@ -53,7 +61,7 @@ class CbxMetadataWriterTest {
         settings.setMetadataPersistenceSettings(persistence);
         Mockito.when(appSettingService.getAppSettings()).thenReturn(settings);
 
-        writer = new CbxMetadataWriter(appSettingService);
+        writer = new CbxMetadataWriter(appSettingService, relationsRepository, comicRelationsRepository);
         tempDir = Files.createTempDirectory("cbx_writer_test_");
     }
 
@@ -85,6 +93,7 @@ class CbxMetadataWriterTest {
 
         // Prepare metadata
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("My Comic");
         meta.setDescription("Short desc");
         meta.setPublisher("Indie");
@@ -95,26 +104,10 @@ class CbxMetadataWriterTest {
         meta.setPageCount(42);
         meta.setLanguage("en");
 
-        List<AuthorEntity> authors = new ArrayList<>();
-        AuthorEntity aliceAuthor = new AuthorEntity();
-        aliceAuthor.setId(1L);
-        aliceAuthor.setName("Alice");
-        AuthorEntity bobAuthor = new AuthorEntity();
-        bobAuthor.setId(2L);
-        bobAuthor.setName("Bob");
-        authors.add(aliceAuthor);
-        authors.add(bobAuthor);
-        meta.setAuthors(authors);
-        Set<CategoryEntity> cats = new HashSet<>();
-        CategoryEntity actionCat = new CategoryEntity();
-        actionCat.setId(1L);
-        actionCat.setName("action");
-        CategoryEntity adventureCat = new CategoryEntity();
-        adventureCat.setId(2L);
-        adventureCat.setName("adventure");
-        cats.add(actionCat);
-        cats.add(adventureCat);
-        meta.setCategories(cats);
+        Mockito.when(relationsRepository.findAuthorNamesByBookId(Mockito.anyLong()))
+                .thenReturn(List.of("Alice", "Bob"));
+        Mockito.when(relationsRepository.findCategoryNamesByBookId(Mockito.anyLong()))
+                .thenReturn(Set.of("action", "adventure"));
 
         // Execute
         writer.saveMetadataToFile(cbz, meta, null, new MetadataClearFlags());
@@ -170,28 +163,17 @@ class CbxMetadataWriterTest {
         File cbz = createCbz(tempDir.resolve("tags_rating.cbz"), new String[]{"page1.jpg"});
 
         BookMetadataEntity meta = new BookMetadataEntity();
+
+        meta.setBookId(1L);
         meta.setTitle("Rating Test");
         meta.setRating(8.4);
         meta.setGoodreadsId("12345");
         meta.setAsin("B00TEST123");
         
-        Set<TagEntity> tags = new HashSet<>();
-        TagEntity tag1 = new TagEntity();
-        tag1.setId(1L);
-        tag1.setName("Fantasy");
-        TagEntity tag2 = new TagEntity();
-        tag2.setId(2L);
-        tag2.setName("Epic");
-        tags.add(tag1);
-        tags.add(tag2);
-        meta.setTags(tags);
+        Mockito.when(relationsRepository.findTagNamesByBookId(Mockito.anyLong()))
+                .thenReturn(Set.of("Fantasy", "Epic"));
 
-        Set<MoodEntity> moods = new HashSet<>();
-        MoodEntity mood = new MoodEntity();
-        mood.setId(1L);
-        mood.setName("Dark");
-        moods.add(mood);
-        meta.setMoods(moods);
+        Mockito.when(relationsRepository.findMoodNamesByBookId(Mockito.anyLong())).thenReturn(Set.of("Dark"));
 
         writer.saveMetadataToFile(cbz, meta, null, new MetadataClearFlags());
 
@@ -242,6 +224,8 @@ class CbxMetadataWriterTest {
         }
 
         BookMetadataEntity meta = new BookMetadataEntity();
+
+        meta.setBookId(1L);
         meta.setTitle("New Title");
         meta.setDescription("New Summary");
 
@@ -262,6 +246,8 @@ class CbxMetadataWriterTest {
         File zipAsCbr = createCbz(tempDir.resolve("mismatched.cbr"), new String[]{"page1.jpg"});
 
         BookMetadataEntity meta = new BookMetadataEntity();
+
+        meta.setBookId(1L);
         meta.setTitle("Mismatched Title");
 
         writer.saveMetadataToFile(zipAsCbr, meta, null, new MetadataClearFlags());
@@ -281,6 +267,7 @@ class CbxMetadataWriterTest {
 
         // Create metadata with ComicMetadataEntity
         BookMetadataEntity meta = new BookMetadataEntity();
+        meta.setBookId(1L);
         meta.setTitle("Spider-Man #1");
         meta.setSeriesName("Spider-Man");
         meta.setSeriesNumber(1.0f);
@@ -288,6 +275,7 @@ class CbxMetadataWriterTest {
 
         // Create ComicMetadataEntity with all comic-specific fields
         ComicMetadataEntity comic = ComicMetadataEntity.builder()
+                .bookId(1L)
                 .volumeNumber(2023)
                 .alternateSeries("Amazing Spider-Man")
                 .alternateIssue("700.1")
@@ -299,55 +287,16 @@ class CbxMetadataWriterTest {
                 .readingDirection("RTL")
                 .build();
 
-        // Characters
-        ComicCharacterEntity char1 = new ComicCharacterEntity();
-        char1.setId(1L);
-        char1.setName("Peter Parker");
-        ComicCharacterEntity char2 = new ComicCharacterEntity();
-        char2.setId(2L);
-        char2.setName("Mary Jane");
-        Set<ComicCharacterEntity> characters = new HashSet<>();
-        characters.add(char1);
-        characters.add(char2);
-        comic.setCharacters(characters);
-
-        // Teams
-        ComicTeamEntity team1 = new ComicTeamEntity();
-        team1.setId(1L);
-        team1.setName("Avengers");
-        Set<ComicTeamEntity> teams = new HashSet<>();
-        teams.add(team1);
-        comic.setTeams(teams);
-
-        // Locations
-        ComicLocationEntity loc1 = new ComicLocationEntity();
-        loc1.setId(1L);
-        loc1.setName("New York City");
-        Set<ComicLocationEntity> locations = new HashSet<>();
-        locations.add(loc1);
-        comic.setLocations(locations);
-
-        // Creators
-        ComicCreatorEntity penciller = new ComicCreatorEntity();
-        penciller.setId(1L);
-        penciller.setName("John Romita Jr.");
-        ComicCreatorEntity inker = new ComicCreatorEntity();
-        inker.setId(2L);
-        inker.setName("Klaus Janson");
-        ComicCreatorMappingEntity pencillerMapping = ComicCreatorMappingEntity.builder()
-                .creator(penciller)
-                .role(ComicCreatorRole.PENCILLER)
-                .comicMetadata(comic)
-                .build();
-        ComicCreatorMappingEntity inkerMapping = ComicCreatorMappingEntity.builder()
-                .creator(inker)
-                .role(ComicCreatorRole.INKER)
-                .comicMetadata(comic)
-                .build();
-        Set<ComicCreatorMappingEntity> creatorMappings = new HashSet<>();
-        creatorMappings.add(pencillerMapping);
-        creatorMappings.add(inkerMapping);
-        comic.setCreatorMappings(creatorMappings);
+        Mockito.when(comicRelationsRepository.findCharacterNamesByBookId(1L))
+                .thenReturn(Set.of("Peter Parker", "Mary Jane"));
+        Mockito.when(comicRelationsRepository.findTeamNamesByBookId(1L))
+                .thenReturn(Set.of("Avengers"));
+        Mockito.when(comicRelationsRepository.findLocationNamesByBookId(1L))
+                .thenReturn(Set.of("New York City"));
+        Mockito.when(comicRelationsRepository.findCreatorNamesByBookIdAndRole(1L, ComicCreatorRole.PENCILLER))
+                .thenReturn(Set.of("John Romita Jr."));
+        Mockito.when(comicRelationsRepository.findCreatorNamesByBookIdAndRole(1L, ComicCreatorRole.INKER))
+                .thenReturn(Set.of("Klaus Janson"));
 
         meta.setComicMetadata(comic);
 

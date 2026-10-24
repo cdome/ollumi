@@ -36,7 +36,7 @@ class CbxConversionServiceTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        cbxConversionService = new CbxConversionService();
+        cbxConversionService = new CbxConversionService(org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class));
         testCbzFile = createTestCbzFile();
         testBookEntity = createTestBookEntity();
     }
@@ -193,6 +193,7 @@ class CbxConversionServiceTest {
     private BookEntity createTestBookEntity() {
         BookEntity bookEntity = new BookEntity();
         BookMetadataEntity metadata = new BookMetadataEntity();
+        metadata.setBookId(1L);
         metadata.setTitle("Test Comic Book");
         metadata.setLanguage("en");
         bookEntity.setMetadata(metadata);

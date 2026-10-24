@@ -7,9 +7,9 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryPathRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
@@ -27,13 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class FileMoveIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
 
     @Autowired
-    private LibraryPathRepository libraryPathRepository;
+    private JooqLibraryPathRepository libraryPathRepository;
 
     @Autowired
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Test
     void adminCanMoveBookFileBetweenLibraryPaths() throws Exception {
@@ -47,9 +47,7 @@ public class FileMoveIntegrationTest extends RestApiIntegrationTest {
         LibraryPathEntity path2 = new LibraryPathEntity();
         path2.setPath(path2Dir.toAbsolutePath().toString());
         path2.setLibrary(library);
-        library.getLibraryPaths().add(path2);
-        libraryPathRepository.save(path2);
-        libraryRepository.save(library);
+        path2.setId(libraryPathRepository.insertLibraryPath(library.getId(), path2.getPath()));
 
         Path pdf = Files.createTempFile("move-source-", ".pdf");
         FixtureFactory.writePdf(pdf);
@@ -78,7 +76,8 @@ public class FileMoveIntegrationTest extends RestApiIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        BookEntity moved = bookRepository.findByIdWithBookFiles(book.getId()).orElseThrow();
+        BookEntity moved = jooqBookEntityRepository.findByIdFull(book.getId());
+        assertThat(moved).isNotNull();
         assertThat(moved.getLibraryPath().getId()).isEqualTo(targetPathId);
         assertThat(moved.getLibraryPath().getId()).isNotEqualTo(sourcePathId);
         assertThat(Files.exists(moved.getBookFiles().get(0).getFullFilePath())).isTrue();

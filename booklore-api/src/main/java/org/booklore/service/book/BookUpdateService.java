@@ -9,13 +9,15 @@ import org.booklore.model.dto.response.PersonalRatingUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ReadStatus;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
 import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
 import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
 import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
 import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.service.progress.ReadingProgressService;
@@ -35,14 +37,14 @@ import java.util.stream.Collectors;
 @Service
 public class BookUpdateService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookRepository jooqBookRepository;
     private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
     private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
     private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
-    private final ShelfRepository shelfRepository;
+    private final JooqShelfRepository jooqShelfRepository;
     private final BookMapper bookMapper;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final JooqUserBookProgressRepository jooqUserBookProgressRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
@@ -50,7 +52,10 @@ public class BookUpdateService {
     private final JooqEbookViewerPreferenceRepository ebookViewerPreferenceRepository;
 
     public void updateBookViewerSetting(long bookId, BookViewerSettings bookViewerSettings) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         var primaryFile = book.getPrimaryBookFile();
         if (primaryFile == null || primaryFile.getBookType() == null) {
@@ -115,10 +120,13 @@ public class BookUpdateService {
         validateShelfOwnership(userEntity, shelfIdsToAssign, shelfIdsToUnassign);
 
         List<BookEntity> bookEntities = bookQueryService.findAllWithMetadataByIds(bookIds);
-        List<ShelfEntity> shelvesToAssign = shelfRepository.findAllById(shelfIdsToAssign);
 
-        updateBookShelves(bookEntities, shelvesToAssign, shelfIdsToUnassign);
-        bookRepository.saveAll(bookEntities);
+        if (!shelfIdsToUnassign.isEmpty()) {
+            jooqShelfRepository.unassignShelvesFromBooks(bookIds, shelfIdsToUnassign);
+        }
+        if (!shelfIdsToAssign.isEmpty()) {
+            jooqShelfRepository.assignShelvesToBooks(bookIds, shelfIdsToAssign);
+        }
 
         return buildBooksWithProgress(bookEntities, user.getId());
     }
@@ -199,7 +207,7 @@ public class BookUpdateService {
     }
 
     private void validateShelfOwnership(BookLoreUserEntity user, Set<Long> shelfIdsToAssign, Set<Long> shelfIdsToUnassign) {
-        Set<Long> userShelfIds = user.getShelves().stream()
+        Set<Long> userShelfIds = jooqShelfRepository.findByUserId(user.getId()).stream()
                 .map(ShelfEntity::getId)
                 .collect(Collectors.toSet());
 
@@ -208,13 +216,6 @@ public class BookUpdateService {
         }
         if (!userShelfIds.containsAll(shelfIdsToUnassign)) {
             throw ApiError.GENERIC_UNAUTHORIZED.createException("Cannot unassign shelves that do not belong to the user.");
-        }
-    }
-
-    private void updateBookShelves(List<BookEntity> books, List<ShelfEntity> shelvesToAssign, Set<Long> shelfIdsToUnassign) {
-        for (BookEntity book : books) {
-            book.getShelves().removeIf(shelf -> shelfIdsToUnassign.contains(shelf.getId()));
-            book.getShelves().addAll(shelvesToAssign);
         }
     }
 
@@ -242,8 +243,11 @@ public class BookUpdateService {
     }
 
     private BookLoreUserEntity findUserOrThrow(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+        BookLoreUserEntity user = userRepository.findById(userId);
+        if (user == null) {
+            throw new UsernameNotFoundException("User not found with ID: " + userId);
+        }
+        return user;
     }
 
     private void validateBulkOperationPermission(List<Long> bookIds, BookLoreUser user, UserPermission permission) {

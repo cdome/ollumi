@@ -4,9 +4,9 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.library.LibraryProcessingService;
@@ -37,9 +37,9 @@ class BookFileTransactionalHandlerTest {
     @Mock private BookFilePersistenceService bookFilePersistenceService;
     @Mock private LibraryProcessingService libraryProcessingService;
     @Mock private NotificationService notificationService;
-    @Mock private LibraryRepository libraryRepository;
-    @Mock private BookRepository bookRepository;
-    @Mock private BookAdditionalFileRepository bookAdditionalFileRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
     @Mock private PendingDeletionPool pendingDeletionPool;
 
     private BookFileTransactionalHandler handler;
@@ -57,7 +57,7 @@ class BookFileTransactionalHandlerTest {
         mocks = MockitoAnnotations.openMocks(this);
         handler = new BookFileTransactionalHandler(
                 bookFilePersistenceService, libraryProcessingService, notificationService,
-                libraryRepository, bookRepository, bookAdditionalFileRepository, pendingDeletionPool);
+                libraryRepository, jooqBookEntityRepository, jooqBookRepository, pendingDeletionPool);
 
         fingerprintMock = mockStatic(FileFingerprint.class);
         fileUtilsMock = mockStatic(FileUtils.class);
@@ -78,11 +78,10 @@ class BookFileTransactionalHandlerTest {
         library = LibraryEntity.builder()
                 .id(1L)
                 .name("Test Library")
-                .libraryPaths(List.of(libraryPath))
                 .organizationMode(LibraryOrganizationMode.AUTO_DETECT)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         when(bookFilePersistenceService.findMatchingLibraryPath(eq(library), any(Path.class))).thenReturn("/library");
         when(bookFilePersistenceService.getLibraryPathEntityForFile(eq(library), eq("/library"))).thenReturn(libraryPath);
     }
@@ -139,7 +138,7 @@ class BookFileTransactionalHandlerTest {
 
         @Test
         void libraryNotFound_throws() {
-            when(libraryRepository.findById(99L)).thenReturn(Optional.empty());
+            when(libraryRepository.findById(99L)).thenReturn(null);
 
             org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
                     () -> handler.handleNewBookFile(99L, Path.of("/library/sub/test.epub")));
@@ -157,7 +156,8 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookFilePersistenceService).save(book);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash123");
             org.assertj.core.api.Assertions.assertThat(book.getDeleted()).isFalse();
             org.assertj.core.api.Assertions.assertThat(book.getDeletedAt()).isNull();
         }
@@ -173,7 +173,8 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookFilePersistenceService, never()).save(any());
+            verify(jooqBookRepository, never()).markUndeleted(any());
+            verify(jooqBookRepository, never()).updateBookFileHash(anyLong(), any());
             verify(pendingDeletionPool).cancelByPath(any());
         }
 
@@ -189,7 +190,7 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
             verify(pendingDeletionPool).cancelByPath(any());
-            verify(bookFilePersistenceService).save(book);
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash123");
             org.assertj.core.api.Assertions.assertThat(bookFile.getCurrentHash()).isEqualTo("hash123");
         }
 
@@ -216,8 +217,8 @@ class BookFileTransactionalHandlerTest {
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
 
             BookEntity existingBook = buildBook(10L, false);
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(eq("hash123"), any()))
-                    .thenReturn(Optional.of(existingBook));
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(eq("hash123"), any()))
+                    .thenReturn(existingBook);
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
@@ -230,7 +231,7 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
 
             BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(10L).build();
             // Use reflection or setter to set title
@@ -239,12 +240,12 @@ class BookFileTransactionalHandlerTest {
             filelessBook.setMetadata(metadata);
             filelessBook.setLibraryPath(libraryPath);
 
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
             groupingMock.when(() -> BookFileGroupingUtils.calculateSimilarity(anyString(), anyString())).thenReturn(0.90);
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -252,13 +253,13 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             BookEntity existingBook = buildBook(20L, false);
             BookFileEntity primaryFile = buildBookFile(200L, existingBook, "test.epub", "otherhash");
             existingBook.setBookFiles(new ArrayList<>(List.of(primaryFile)));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(existingBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(existingBook));
 
             // Both files should produce the same grouping key (extension stripped)
             groupingMock.when(() -> BookFileGroupingUtils.extractGroupingKey("test.pdf")).thenReturn("test");
@@ -266,7 +267,7 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.pdf"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -274,9 +275,9 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
@@ -290,12 +291,12 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookRepository, never()).findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString());
+            verify(jooqBookEntityRepository, never()).findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString());
             verify(libraryProcessingService).processLibraryFiles(anyList(), eq(library));
         }
 
@@ -306,17 +307,17 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             BookEntity existingBook = buildBook(20L, false);
             BookFileEntity primaryFile = buildBookFile(200L, existingBook, "existing.epub", "otherhash");
             existingBook.setBookFiles(new ArrayList<>(List.of(primaryFile)));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(existingBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(existingBook));
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/new.pdf"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
             verify(libraryProcessingService, never()).processLibraryFiles(any(), any());
         }
 
@@ -327,9 +328,9 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of());
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
@@ -344,19 +345,19 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "author/book/audio")).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "author/book/audio")).thenReturn(List.of());
 
             BookEntity parentBook = buildBook(30L, false);
             BookFileEntity ebookFile = buildBookFile(300L, parentBook, "book.epub", "ebookhash");
             ebookFile.setBookType(BookFileType.EPUB);
             parentBook.setBookFiles(new ArrayList<>(List.of(ebookFile)));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "author/book")).thenReturn(List.of(parentBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "author/book")).thenReturn(List.of(parentBook));
 
             handler.handleNewBookFile(1L, Path.of("/library/author/book/audio/chapter1.m4b"));
 
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -372,8 +373,8 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
             // extractGroupingKey returns lowercase of input, so "different title" != "test.epub"
             // No exact match -> should create new
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
@@ -396,9 +397,9 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
@@ -410,8 +411,8 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             BookEntity book1 = buildBook(20L, false);
             BookFileEntity file1 = buildBookFile(200L, book1, "mybook.epub", "h1");
@@ -421,7 +422,7 @@ class BookFileTransactionalHandlerTest {
             BookFileEntity file2 = buildBookFile(201L, book2, "otherbook.epub", "h2");
             book2.setBookFiles(new ArrayList<>(List.of(file2)));
 
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(book1, book2));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(book1, book2));
             // Make groupingKey different to avoid exact match, but similarity high for book1
             groupingMock.when(() -> BookFileGroupingUtils.extractGroupingKey("mybook.pdf")).thenReturn("mybook");
             groupingMock.when(() -> BookFileGroupingUtils.extractGroupingKey("mybook.epub")).thenReturn("mybook");
@@ -432,7 +433,7 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/mybook.pdf"));
 
             // Should attach to book1 via exact grouping key match
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).insertBookFile(eq(20L), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -442,8 +443,8 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), any(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             handler.handleNewBookFile(1L, Path.of("/library/test.epub"));
 
@@ -458,8 +459,8 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             BookEntity smallBook = buildBook(20L, false);
             BookFileEntity f1 = buildBookFile(200L, smallBook, "a.epub", "h1");
@@ -470,12 +471,12 @@ class BookFileTransactionalHandlerTest {
             BookFileEntity f3 = buildBookFile(202L, bigBook, "b.pdf", "h3");
             bigBook.setBookFiles(new ArrayList<>(List.of(f2, f3)));
 
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(smallBook, bigBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(smallBook, bigBook));
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/new.mobi"));
 
             // Should attach to bigBook (more files)
-            verify(bookAdditionalFileRepository).save(argThat(bf -> bf.getBook().equals(bigBook)));
+            verify(jooqBookRepository).insertBookFile(eq(bigBook.getId()), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -491,7 +492,8 @@ class BookFileTransactionalHandlerTest {
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
             verify(pendingDeletionPool).matchByHash("oldhash");
-            verify(bookFilePersistenceService).save(book);
+            verify(jooqBookRepository).markUndeleted(List.of(10L));
+            verify(jooqBookRepository).updateBookFileHash(100L, "hash123");
         }
 
         @Test
@@ -501,14 +503,14 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
             // AUTO_DETECT path: findFilelessBooksByLibraryId is called (fuzzy matching)
-            verify(bookRepository).findFilelessBooksByLibraryId(1L);
+            verify(jooqBookEntityRepository).findFilelessBooksByLibraryId(1L);
         }
 
         @Test
@@ -516,13 +518,13 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of());
 
             BookEntity deletedBook = buildBook(20L, true);
             BookFileEntity file = buildBookFile(200L, deletedBook, "test.epub", "h1");
             deletedBook.setBookFiles(new ArrayList<>(List.of(file)));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(deletedBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(1L, "sub")).thenReturn(List.of(deletedBook));
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.pdf"));
 
@@ -534,7 +536,7 @@ class BookFileTransactionalHandlerTest {
             when(bookFilePersistenceService.findBookFileByLibraryPathSubPathAndFileName(anyLong(), anyString(), anyString()))
                     .thenReturn(Optional.empty());
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByCurrentHashIncludingRecentlyDeleted(anyString(), any())).thenReturn(null);
 
             BookMetadataEntity metadata = BookMetadataEntity.builder().bookId(10L).build();
             metadata.setTitle("test");
@@ -542,13 +544,13 @@ class BookFileTransactionalHandlerTest {
             filelessBook.setMetadata(metadata);
             filelessBook.setLibraryPath(null);
 
-            when(bookRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
+            when(jooqBookEntityRepository.findFilelessBooksByLibraryId(1L)).thenReturn(List.of(filelessBook));
             groupingMock.when(() -> BookFileGroupingUtils.calculateSimilarity(anyString(), anyString())).thenReturn(0.90);
 
             handler.handleNewBookFile(1L, Path.of("/library/sub/test.epub"));
 
-            verify(bookRepository).save(argThat(b -> b.getLibraryPath() != null));
-            verify(bookAdditionalFileRepository).save(any(BookFileEntity.class));
+            verify(jooqBookRepository).updateLibrary(10L, 1L, libraryPath.getId());
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), anyBoolean(), any(), any(), any(), any(), any(), any());
         }
     }
 
@@ -557,7 +559,7 @@ class BookFileTransactionalHandlerTest {
 
         @Test
         void libraryNotFound_throws() {
-            when(libraryRepository.findById(99L)).thenReturn(Optional.empty());
+            when(libraryRepository.findById(99L)).thenReturn(null);
 
             org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
                     () -> handler.handleNewFolderAudiobook(99L, Path.of("/library/audiobook")));
@@ -583,7 +585,7 @@ class BookFileTransactionalHandlerTest {
             BookEntity existingBook = buildBook(20L, false);
             BookFileEntity primaryFile = buildBookFile(200L, existingBook, "audiobook.epub", "h1");
             existingBook.setBookFiles(new ArrayList<>(List.of(primaryFile)));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of(existingBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of(existingBook));
 
             // Folder name "audiobook" and file "audiobook.epub" should produce same grouping key
             groupingMock.when(() -> BookFileGroupingUtils.extractGroupingKey("audiobook")).thenReturn("audiobook");
@@ -591,14 +593,13 @@ class BookFileTransactionalHandlerTest {
 
             handler.handleNewFolderAudiobook(1L, Path.of("/library/sub/audiobook"));
 
-            verify(bookAdditionalFileRepository).save(argThat(bf ->
-                    bf.isFolderBased() && bf.getBookType() == BookFileType.AUDIOBOOK));
+            verify(jooqBookRepository).insertBookFile(anyLong(), any(), any(), anyBoolean(), eq(true), eq(BookFileType.AUDIOBOOK), any(), any(), any(), any(), any());
         }
 
         @Test
         void noMatch_createsNewFolderAudiobook() {
             when(pendingDeletionPool.matchByHash(anyString())).thenReturn(Optional.empty());
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of());
 
             handler.handleNewFolderAudiobook(1L, Path.of("/library/sub/audiobook"));
 
@@ -613,7 +614,7 @@ class BookFileTransactionalHandlerTest {
             BookEntity deletedBook = buildBook(20L, true);
             BookFileEntity file = buildBookFile(200L, deletedBook, "audiobook.epub", "h1");
             deletedBook.setBookFiles(new ArrayList<>(List.of(file)));
-            when(bookRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of(deletedBook));
+            when(jooqBookEntityRepository.findAllByLibraryPathIdAndFileSubPath(anyLong(), anyString())).thenReturn(List.of(deletedBook));
 
             handler.handleNewFolderAudiobook(1L, Path.of("/library/sub/audiobook"));
 

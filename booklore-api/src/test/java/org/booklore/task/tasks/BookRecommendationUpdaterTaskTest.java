@@ -8,6 +8,8 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.TaskType;
 import org.booklore.model.websocket.Topic;
+import org.booklore.repository.jooq.JooqBookMetadataRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.recommender.BookVectorService;
@@ -32,6 +34,10 @@ class BookRecommendationUpdaterTaskTest {
 
     @Mock
     private BookQueryService bookQueryService;
+    @Mock
+    private JooqBookRepository jooqBookRepository;
+    @Mock
+    private JooqBookMetadataRepository jooqBookMetadataRepository;
     @Mock
     private BookVectorService vectorService;
     @Mock
@@ -66,7 +72,7 @@ class BookRecommendationUpdaterTaskTest {
 
         assertEquals(TaskType.UPDATE_BOOK_RECOMMENDATIONS, response.getTaskType());
         verify(bookQueryService).getAllFullBookEntities();
-        verify(bookQueryService).saveAll(anyList()); // Should be called with empty list
+        verifyNoInteractions(jooqBookRepository, jooqBookMetadataRepository);
         verify(notificationService, atLeastOnce()).sendMessage(eq(Topic.TASK_PROGRESS), any());
     }
 
@@ -88,13 +94,11 @@ class BookRecommendationUpdaterTaskTest {
         assertEquals("task-123", response.getTaskId());
         assertEquals(TaskStatus.COMPLETED, response.getStatus());
 
-        org.mockito.ArgumentCaptor<List<BookEntity>> captor = org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(bookQueryService).saveAll(captor.capture());
-        
-        List<BookEntity> savedBooks = captor.getValue();
-        assertEquals(2, savedBooks.size());
-        // Verify embeddings were set
-        assertNotNull(savedBooks.get(0).getMetadata().getEmbeddingVector());
+        verify(jooqBookMetadataRepository).updateEmbedding(eq(1L), eq("[0.1, 0.2]"), any());
+        verify(jooqBookMetadataRepository).updateEmbedding(eq(2L), eq("[0.1, 0.2]"), any());
+        verify(jooqBookRepository).updateSimilarBooksJson(eq(1L), any());
+        verify(jooqBookRepository).updateSimilarBooksJson(eq(2L), any());
+        assertNotNull(book1.getMetadata().getEmbeddingVector());
         verify(vectorService, times(2)).generateEmbedding(any());
     }
 
@@ -124,7 +128,10 @@ class BookRecommendationUpdaterTaskTest {
         TaskCreateResponse response = task.execute(request);
 
         assertEquals(TaskStatus.COMPLETED, response.getStatus());
-        // Should still try to save updates (even if empty list added)
-        verify(bookQueryService).saveAll(anyList());
+        // Embeddings persist independent of whether recommendation computation succeeds
+        verify(jooqBookMetadataRepository).updateEmbedding(eq(1L), eq("[0.1]"), any());
+        verify(jooqBookMetadataRepository).updateEmbedding(eq(2L), eq("[0.1]"), any());
+        // Neither book ever reached the recommendation-set step, so nothing is written here
+        verifyNoInteractions(jooqBookRepository);
     }
 }

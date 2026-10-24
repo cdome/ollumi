@@ -14,8 +14,8 @@ import org.booklore.model.dto.response.AudiobookInfo;
 import org.booklore.model.dto.response.AudiobookTrack;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookFileRepository;
 import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.metadata.extractor.AudiobookMetadataExtractor;
 import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
@@ -34,7 +34,7 @@ public class AudioMetadataService {
 
   private final AudioFileUtilityService audioFileUtility;
   private final AudiobookMetadataExtractor audiobookMetadataExtractor;
-  private final BookFileRepository bookFileRepository;
+  private final JooqBookRepository jooqBookRepository;
   private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
   public AudiobookInfo getMetadata(BookFileEntity bookFile, Path audioPath) throws Exception {
@@ -271,7 +271,7 @@ public class AudioMetadataService {
               .collect(Collectors.toList());
       bookFile.setChapters(entityChapters);
       bookFile.setChapterCount(entityChapters.size());
-      bookFileRepository.save(bookFile);
+      jooqBookRepository.updateBookFileFullRow(bookFile);
       log.info(
           "Backfilled {} chapters for audiobook file id={}",
           entityChapters.size(),

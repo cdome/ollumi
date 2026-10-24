@@ -10,7 +10,8 @@ import org.booklore.model.dto.response.kobo.KoboReadingStateResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.*;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqKoboReadingStateRepository;
 import org.booklore.repository.jooq.JooqUserBookFileProgressRepository;
 import org.booklore.repository.jooq.JooqUserBookProgressRepository;
@@ -52,8 +53,8 @@ public class KoboReadingStateService {
     private final JooqKoboReadingStateRepository repository;
     private final JooqUserBookProgressRepository progressRepository;
     private final JooqUserBookFileProgressRepository fileProgressRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final KoboSettingsService koboSettingsService;
     private final KoboReadingStateBuilder readingStateBuilder;
@@ -194,15 +195,13 @@ public class KoboReadingStateService {
         try {
             Long bookId = Long.parseLong(readingState.getEntitlementId());
 
-            Optional<BookEntity> bookOpt = bookRepository.findById(bookId);
-            if (bookOpt.isEmpty()) {
+            BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+            if (book == null) {
                 log.warn("Book not found for entitlement ID: {}", readingState.getEntitlementId());
                 return;
             }
 
-            BookEntity book = bookOpt.get();
-            Optional<BookLoreUserEntity> userOpt = userRepository.findById(userId);
-            if (userOpt.isEmpty()) {
+            if (userRepository.findById(userId) == null) {
                 log.warn("User not found: {}", userId);
                 return;
             }
@@ -210,7 +209,7 @@ public class KoboReadingStateService {
             UserBookProgressRow progress = progressRepository.findByUserIdAndBookId(userId, bookId)
                     .orElseGet(() -> {
                         UserBookProgressRow newProgress = new UserBookProgressRow();
-                        newProgress.setUserId(userOpt.get().getId());
+                        newProgress.setUserId(userId);
                         newProgress.setBookId(book.getId());
                         return newProgress;
                     });

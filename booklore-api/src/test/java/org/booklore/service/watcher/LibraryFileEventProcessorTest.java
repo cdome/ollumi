@@ -6,8 +6,7 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.LibraryOrganizationMode;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.library.LibraryProcessingService;
@@ -35,8 +34,8 @@ import static org.mockito.Mockito.*;
 
 class LibraryFileEventProcessorTest {
 
-    @Mock private LibraryRepository libraryRepository;
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqLibraryRepository libraryRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookEntityRepository jooqBookEntityRepository;
     @Mock private BookFileTransactionalHandler bookFileTransactionalHandler;
     @Mock private BookFilePersistenceService bookFilePersistenceService;
     @Mock private LibraryProcessingService libraryProcessingService;
@@ -57,7 +56,7 @@ class LibraryFileEventProcessorTest {
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
         processor = new LibraryFileEventProcessor(
-                libraryRepository, jooqLibraryPathRepository, bookRepository, bookFileTransactionalHandler,
+                libraryRepository, jooqLibraryPathRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
                 bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
 
         libraryPath = new LibraryPathEntity();
@@ -67,11 +66,10 @@ class LibraryFileEventProcessorTest {
         library = LibraryEntity.builder()
                 .id(1L)
                 .name("Test Library")
-                .libraryPaths(List.of(libraryPath))
                 .organizationMode(LibraryOrganizationMode.AUTO_DETECT)
                 .build();
 
-        when(libraryRepository.findById(1L)).thenReturn(Optional.of(library));
+        when(libraryRepository.findById(1L)).thenReturn(library);
         // handleEvent reads the library's paths via jOOQ, not off the LAZY entity collection
         when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
                 .thenReturn(List.of(new LibraryPathRow(1L, tempDir.toString())));
@@ -285,7 +283,7 @@ class LibraryFileEventProcessorTest {
                             .build())))
                     .build();
 
-            when(bookRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
+            when(jooqBookEntityRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
                     .thenReturn(List.of(book));
 
             Path folder = tempDir.resolve("books");
@@ -299,7 +297,7 @@ class LibraryFileEventProcessorTest {
 
         @Test
         void folderWithNoBooks_doesNotAddToPool() throws Exception {
-            when(bookRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
+            when(jooqBookEntityRepository.findBooksWithFilesUnderPath(eq(1L), anyString()))
                     .thenReturn(List.of());
 
             Path folder = tempDir.resolve("emptybooks");
@@ -404,7 +402,7 @@ class LibraryFileEventProcessorTest {
 
             // Reinitialize so tearDown's shutdown doesn't fail
             processor = new LibraryFileEventProcessor(
-                    libraryRepository, jooqLibraryPathRepository, bookRepository, bookFileTransactionalHandler,
+                    libraryRepository, jooqLibraryPathRepository, jooqBookEntityRepository, bookFileTransactionalHandler,
                     bookFilePersistenceService, libraryProcessingService, pendingDeletionPool);
         }
     }

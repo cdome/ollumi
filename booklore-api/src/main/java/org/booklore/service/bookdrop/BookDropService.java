@@ -23,8 +23,8 @@ import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.BookdropFileStatus;
 import org.booklore.model.enums.MetadataReplaceMode;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
 import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.NotificationService;
@@ -63,8 +63,9 @@ import java.util.stream.Stream;
 public class BookDropService {
 
     private final JooqBookdropFileRepository bookdropFileRepository;
-    private final LibraryRepository libraryRepository;
-    private final BookRepository bookRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final org.booklore.repository.jooq.JooqLibraryPathRepository jooqLibraryPathRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final BookdropMonitoringService bookdropMonitoringService;
     private final NotificationService notificationService;
     private final MetadataRefreshService metadataRefreshService;
@@ -288,9 +289,9 @@ public class BookDropService {
     private void reregisterAffectedLibraries(Set<Long> libraryIds) {
         for (Long libraryId : libraryIds) {
             try {
-                LibraryEntity library = libraryRepository.findById(libraryId).orElse(null);
+                LibraryEntity library = libraryRepository.findById(libraryId);
                 if (library != null) {
-                    for (LibraryPathEntity libPath : library.getLibraryPaths()) {
+                    for (org.booklore.repository.jooq.dto.LibraryPathRow libPath : jooqLibraryPathRepository.findPathsByLibraryId(libraryId)) {
                         Path libraryRoot = Path.of(libPath.getPath());
                         monitoringRegistrationService.registerLibraryPaths(libraryId, libraryRoot);
                         log.debug("Re-registered library {} path {} for monitoring", libraryId, libraryRoot);
@@ -372,10 +373,12 @@ public class BookDropService {
     }
 
     private BookdropFileResult moveFile(long libraryId, long pathId, BookMetadata metadata, BookdropFileRow bookdropFile) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
-        LibraryPathEntity path = library.getLibraryPaths().stream()
+        LibraryPathEntity path = jooqLibraryPathRepository.findByLibraryId(libraryId).stream()
                 .filter(p -> p.getId().equals(pathId))
                 .findFirst()
                 .orElseThrow(() -> ApiError.INVALID_LIBRARY_PATH.createException(libraryId));
@@ -468,8 +471,10 @@ public class BookDropService {
                         .orElseThrow(() -> ApiError.INVALID_FILE_FORMAT.createException("Unsupported file extension"))
                         .getType());
 
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(fileProcessResult.getBook().getId())
-                .orElseThrow(() -> ApiError.FILE_NOT_FOUND.createException("Book ID missing after import"));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(fileProcessResult.getBook().getId());
+        if (bookEntity == null) {
+            throw ApiError.FILE_NOT_FOUND.createException("Book ID missing after import");
+        }
 
         notificationService.sendMessage(Topic.BOOK_ADD, fileProcessResult.getBook());
         MetadataUpdateContext context = MetadataUpdateContext.builder()

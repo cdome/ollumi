@@ -15,7 +15,6 @@ import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.enums.ComicCreatorRole;
 import org.booklore.model.enums.MetadataReplaceMode;
-import org.booklore.repository.*;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.file.FileMoveService;
@@ -44,16 +43,10 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class BookMetadataUpdater {
 
-    private final AuthorRepository authorRepository;
-    private final CategoryRepository categoryRepository;
-    private final MoodRepository moodRepository;
-    private final TagRepository tagRepository;
-    private final BookRepository bookRepository;
-    private final ComicMetadataRepository comicMetadataRepository;
-    private final ComicCharacterRepository comicCharacterRepository;
-    private final ComicTeamRepository comicTeamRepository;
-    private final ComicLocationRepository comicLocationRepository;
-    private final ComicCreatorRepository comicCreatorRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final org.booklore.repository.jooq.JooqBookRepository jooqBookRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRepository jooqBookMetadataRepository;
+    private final org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
     private final AppProperties appProperties;
     private final FileService fileService;
     private final MetadataMatchService metadataMatchService;
@@ -83,6 +76,17 @@ public class BookMetadataUpdater {
 
         MetadataClearFlags clearFlags = wrapper.getClearFlags();
         BookMetadataEntity metadata = bookEntity.getMetadata();
+        // MetadataChangeDetector's moods/categories/tags fields read the transient scratch caches
+        // (not Hibernate collections) - populate them once here via jOOQ.
+        metadata.setMoodNames(relationsRepository.findMoodNamesByBookId(bookId));
+        metadata.setCategoryNames(relationsRepository.findCategoryNamesByBookId(bookId));
+        metadata.setTagNames(relationsRepository.findTagNamesByBookId(bookId));
+        metadata.setAuthorNames(relationsRepository.findAuthorNamesByBookId(bookId));
+        // MetadataChangeDetector is also a @UtilityClass (no DI), so comic relation names must be
+        // snapshotted here too, before it runs, not lazily inside updateComicMetadataIfNeeded.
+        if (metadata.getComicMetadata() != null) {
+            populateComicRelationNames(metadata.getComicMetadata());
+        }
 
         boolean thumbnailRequiresUpdate = StringUtils.hasText(newMetadata.getThumbnailUrl());
         boolean hasMetadataChanges = MetadataChangeDetector.isDifferent(newMetadata, metadata, clearFlags);
@@ -116,11 +120,15 @@ public class BookMetadataUpdater {
         updateComicMetadataIfNeeded(newMetadata, metadata, replaceMode);
         updateLocks(newMetadata, metadata);
 
-        bookEntity.setMetadataUpdatedAt(Instant.now());
-        bookRepository.save(bookEntity);
+        Instant metadataUpdatedAt = Instant.now();
+        bookEntity.setMetadataUpdatedAt(metadataUpdatedAt);
+        metadata.updateSearchText();
+        jooqBookMetadataRepository.updateFullRow(metadata);
+        jooqBookRepository.updateMetadataUpdatedAt(bookId, metadataUpdatedAt);
         try {
             Float score = metadataMatchService.calculateMatchScore(bookEntity);
             bookEntity.setMetadataMatchScore(score);
+            jooqBookRepository.updateMetadataMatchScore(bookId, score);
         } catch (Exception e) {
             log.warn("Failed to calculate metadata match score for book ID {}: {}", bookId, e.getMessage());
         }
@@ -139,9 +147,11 @@ public class BookMetadataUpdater {
                     String newHash = file.isDirectory()
                             ? FileFingerprint.generateFolderHash(bookEntity.getFullFilePath())
                             : FileFingerprint.generateHash(bookEntity.getFullFilePath());
-                    bookEntity.setMetadataForWriteUpdatedAt(Instant.now());
+                    Instant metadataForWriteUpdatedAt = Instant.now();
+                    bookEntity.setMetadataForWriteUpdatedAt(metadataForWriteUpdatedAt);
                     primaryFile.setCurrentHash(newHash);
-                    bookRepository.save(bookEntity);
+                    jooqBookRepository.updateBookFileHash(primaryFile.getId(), newHash);
+                    jooqBookRepository.updateMetadataForWriteUpdatedAt(bookId, metadataForWriteUpdatedAt);
                 } catch (Exception e) {
                     log.warn("Failed to write metadata for book ID {}: {}", bookId, e.getMessage());
                 }
@@ -166,6 +176,8 @@ public class BookMetadataUpdater {
                     if (bookPrimaryFile != null) {
                         bookPrimaryFile.setFileName(result.getNewFileName());
                         bookPrimaryFile.setFileSubPath(result.getNewFileSubPath());
+                        jooqBookRepository.updateFileNameAndSubPath(
+                                bookPrimaryFile.getId(), result.getNewFileName(), result.getNewFileSubPath());
                     }
                 }
             } catch (Exception e) {
@@ -240,160 +252,199 @@ public class BookMetadataUpdater {
         return false;
     }
 
+    /**
+     * Writes authors via jOOQ instead of mutating a Hibernate collection: e.getAuthorNames() is the
+     * pre-update snapshot (ordered) populated once at the top of setBookMetadata. Every substantive
+     * branch computes the FINAL ordered name list and calls relationsRepository.setAuthorsForBook
+     * (which handles per-name dedup and sort_order) exactly once, keeps e.getAuthorNames() in sync,
+     * and calls e.updateSearchText() only when authors actually change, mirroring prior behavior.
+     */
     private void updateAuthorsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getAuthorsLocked())) return;
 
-        // Get or initialize authors collection
-        List<AuthorEntity> authors = e.getAuthors();
-        if (authors == null) {
-            authors = new ArrayList<>();
-            e.setAuthors(authors);
-        }
+        List<String> existingAuthors = Optional.ofNullable(e.getAuthorNames()).orElse(Collections.emptyList());
 
         if (clear.isAuthors()) {
-            authors.clear();
+            relationsRepository.clearAuthorsForBook(e.getBookId());
+            e.setAuthorNames(Collections.emptyList());
             return;
         }
 
         List<String> authorNames = Optional.ofNullable(m.getAuthors()).orElse(Collections.emptyList());
         if (authorNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) authors.clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearAuthorsForBook(e.getBookId());
+                e.setAuthorNames(Collections.emptyList());
+            }
             return;
         }
 
-        List<AuthorEntity> newAuthors = authorNames.stream()
+        List<String> newAuthors = authorNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> authorRepository.findByName(name)
-                        .orElseGet(() -> authorRepository.save(AuthorEntity.builder().name(name).build())))
                 .toList();
 
         if (newAuthors.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getAuthors().clear();
-            for (AuthorEntity author : newAuthors) {
-                if (!e.getAuthors().contains(author)) {
-                    e.getAuthors().add(author);
+        List<String> finalAuthors;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                List<String> combined = new ArrayList<>(existingAuthors);
+                for (String name : newAuthors) {
+                    if (!combined.contains(name)) combined.add(name);
                 }
+                finalAuthors = combined;
+            } else {
+                finalAuthors = newAuthors;
             }
-            e.updateSearchText();
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && authors.isEmpty()) {
-            authors.addAll(newAuthors);
-            e.updateSearchText();
-        } else if (replaceMode == null) {
-            if (!merge) e.getAuthors().clear();
-            for (AuthorEntity author : newAuthors) {
-                if (!e.getAuthors().contains(author)) {
-                    e.getAuthors().add(author);
-                }
-            }
-            e.updateSearchText();
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingAuthors.isEmpty()) {
+            finalAuthors = newAuthors;
+        } else {
+            return;
         }
+
+        relationsRepository.setAuthorsForBook(e.getBookId(), finalAuthors);
+        e.setAuthorNames(finalAuthors);
+        e.updateSearchText();
     }
 
+    /** Same jOOQ-write pattern as updateMoodsIfNeeded; see its doc comment. */
     private void updateCategoriesIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getCategoriesLocked())) return;
 
-        e.setCategories(Optional.ofNullable(e.getCategories()).orElseGet(HashSet::new));
+        Set<String> existingCategories = Optional.ofNullable(e.getCategoryNames()).orElse(Collections.emptySet());
 
         if (clear.isCategories()) {
-            e.getCategories().clear();
+            relationsRepository.clearCategoriesForBook(e.getBookId());
+            e.setCategoryNames(Collections.emptySet());
             return;
         }
 
         Set<String> categoryNames = Optional.ofNullable(m.getCategories()).orElse(Collections.emptySet());
         if (categoryNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) e.getCategories().clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearCategoriesForBook(e.getBookId());
+                e.setCategoryNames(Collections.emptySet());
+            }
             return;
         }
 
-        Set<CategoryEntity> newCategories = categoryNames.stream()
+        Set<String> newCategories = categoryNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> categoryRepository.findByName(name)
-                        .orElseGet(() -> categoryRepository.save(CategoryEntity.builder().name(name).build())))
                 .collect(Collectors.toSet());
 
         if (newCategories.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getCategories().clear();
-            e.getCategories().addAll(newCategories);
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && e.getCategories().isEmpty()) {
-            e.getCategories().addAll(newCategories);
-        } else if (replaceMode == null) {
-            if (!merge) e.getCategories().clear();
-            e.getCategories().addAll(newCategories);
+        Set<String> finalCategories;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                finalCategories = new HashSet<>(existingCategories);
+                finalCategories.addAll(newCategories);
+            } else {
+                finalCategories = newCategories;
+            }
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingCategories.isEmpty()) {
+            finalCategories = newCategories;
+        } else {
+            return;
         }
+
+        relationsRepository.setCategoriesForBook(e.getBookId(), finalCategories);
+        e.setCategoryNames(finalCategories);
     }
 
+    /**
+     * Writes moods via jOOQ instead of mutating a Hibernate collection: e.getMoodNames() is the
+     * pre-update snapshot populated once at the top of updateMetadata, and every branch below computes
+     * the FINAL desired name set and calls relationsRepository.setMoodsForBook/clearMoodsForBook exactly
+     * once, keeping e.getMoodNames() in sync so later steps in the same request see the new value.
+     */
     private void updateMoodsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getMoodsLocked())) return;
 
-        e.setMoods(Optional.ofNullable(e.getMoods()).orElseGet(HashSet::new));
+        Set<String> existingMoods = Optional.ofNullable(e.getMoodNames()).orElse(Collections.emptySet());
 
         if (clear.isMoods()) {
-            e.getMoods().clear();
+            relationsRepository.clearMoodsForBook(e.getBookId());
+            e.setMoodNames(Collections.emptySet());
             return;
         }
 
         Set<String> moodNames = Optional.ofNullable(m.getMoods()).orElse(Collections.emptySet());
         if (moodNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) e.getMoods().clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearMoodsForBook(e.getBookId());
+                e.setMoodNames(Collections.emptySet());
+            }
             return;
         }
 
-        Set<MoodEntity> newMoods = moodNames.stream()
+        Set<String> newMoods = moodNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> moodRepository.findByName(name)
-                        .orElseGet(() -> moodRepository.save(MoodEntity.builder().name(name).build())))
                 .collect(Collectors.toSet());
 
         if (newMoods.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getMoods().clear();
-            e.getMoods().addAll(newMoods);
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && e.getMoods().isEmpty()) {
-            e.getMoods().addAll(newMoods);
-        } else if (replaceMode == null) {
-            if (!merge) e.getMoods().clear();
-            e.getMoods().addAll(newMoods);
+        Set<String> finalMoods;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                finalMoods = new HashSet<>(existingMoods);
+                finalMoods.addAll(newMoods);
+            } else {
+                finalMoods = newMoods;
+            }
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingMoods.isEmpty()) {
+            finalMoods = newMoods;
+        } else {
+            return;
         }
+
+        relationsRepository.setMoodsForBook(e.getBookId(), finalMoods);
+        e.setMoodNames(finalMoods);
     }
 
+    /** Same jOOQ-write pattern as updateMoodsIfNeeded; see its doc comment. */
     private void updateTagsIfNeeded(BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, boolean merge, MetadataReplaceMode replaceMode) {
         if (Boolean.TRUE.equals(e.getTagsLocked())) return;
 
-        e.setTags(Optional.ofNullable(e.getTags()).orElseGet(HashSet::new));
+        Set<String> existingTags = Optional.ofNullable(e.getTagNames()).orElse(Collections.emptySet());
 
         if (clear.isTags()) {
-            e.getTags().clear();
+            relationsRepository.clearTagsForBook(e.getBookId());
+            e.setTagNames(Collections.emptySet());
             return;
         }
 
         Set<String> tagNames = Optional.ofNullable(m.getTags()).orElse(Collections.emptySet());
         if (tagNames.isEmpty()) {
-            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) e.getTags().clear();
+            if (replaceMode == MetadataReplaceMode.REPLACE_ALL) {
+                relationsRepository.clearTagsForBook(e.getBookId());
+                e.setTagNames(Collections.emptySet());
+            }
             return;
         }
 
-        Set<TagEntity> newTags = tagNames.stream()
+        Set<String> newTags = tagNames.stream()
                 .filter(name -> name != null && !name.isBlank())
-                .map(name -> tagRepository.findByName(name)
-                        .orElseGet(() -> tagRepository.save(TagEntity.builder().name(name).build())))
                 .collect(Collectors.toSet());
 
         if (newTags.isEmpty()) return;
 
-        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            if (!merge) e.getTags().clear();
-            e.getTags().addAll(newTags);
-        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && e.getTags().isEmpty()) {
-            e.getTags().addAll(newTags);
-        } else if (replaceMode == null) {
-            if (!merge) e.getTags().clear();
-            e.getTags().addAll(newTags);
+        Set<String> finalTags;
+        if (replaceMode == MetadataReplaceMode.REPLACE_ALL || replaceMode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || replaceMode == null) {
+            if (merge) {
+                finalTags = new HashSet<>(existingTags);
+                finalTags.addAll(newTags);
+            } else {
+                finalTags = newTags;
+            }
+        } else if (replaceMode == MetadataReplaceMode.REPLACE_MISSING && existingTags.isEmpty()) {
+            finalTags = newTags;
+        } else {
+            return;
         }
+
+        relationsRepository.setTagsForBook(e.getBookId(), finalTags);
+        e.setTagNames(finalTags);
     }
 
     private void updateAudiobookMetadataIfNeeded(BookEntity bookEntity, BookMetadata m, BookMetadataEntity e, MetadataClearFlags clear, MetadataReplaceMode replaceMode) {
@@ -419,6 +470,20 @@ public class BookMetadataUpdater {
                     .bookId(e.getBookId())
                     .build();
             e.setComicMetadata(comic);
+            // Unlike JPA's saveAndFlush (needed because comic_metadata.book_id is manually assigned,
+            // not identity-generated, so a plain save() could defer the INSERT past the relation-table
+            // FK writes below), a jOOQ INSERT executes immediately - no flush-timing gotcha.
+            comicRelationsRepository.insertBlankRow(e.getBookId());
+            // Brand new row: nothing to snapshot from jOOQ, every relation starts empty.
+            comic.setCharacterNames(Collections.emptySet());
+            comic.setTeamNames(Collections.emptySet());
+            comic.setLocationNames(Collections.emptySet());
+            comic.setPencillerNames(Collections.emptySet());
+            comic.setInkerNames(Collections.emptySet());
+            comic.setColoristNames(Collections.emptySet());
+            comic.setLettererNames(Collections.emptySet());
+            comic.setCoverArtistNames(Collections.emptySet());
+            comic.setEditorNames(Collections.emptySet());
         }
 
         ComicMetadataEntity c = comic;
@@ -477,12 +542,31 @@ public class BookMetadataUpdater {
         if (comicDto.getTeamsLocked() != null) c.setTeamsLocked(comicDto.getTeamsLocked());
         if (comicDto.getLocationsLocked() != null) c.setLocationsLocked(comicDto.getLocationsLocked());
 
-        e.setComicMetadata(comicMetadataRepository.save(c));
+        comicRelationsRepository.updateFullRow(c);
 
-        comicCharacterRepository.deleteOrphaned();
-        comicTeamRepository.deleteOrphaned();
-        comicLocationRepository.deleteOrphaned();
-        comicCreatorRepository.deleteOrphaned();
+        comicRelationsRepository.deleteOrphanedCharacters();
+        comicRelationsRepository.deleteOrphanedTeams();
+        comicRelationsRepository.deleteOrphanedLocations();
+        comicRelationsRepository.deleteOrphanedCreators();
+    }
+
+    /**
+     * Snapshots a comic metadata row's relation names via jOOQ into its @Transient scratch fields.
+     * Called once at the top of setBookMetadata (before MetadataChangeDetector runs, since that's
+     * also a @UtilityClass and can't query jOOQ itself) for a comic row that already existed;
+     * updateComicMetadataIfNeeded seeds a newly-created row's fields to empty sets directly instead.
+     */
+    private void populateComicRelationNames(ComicMetadataEntity c) {
+        Long bookId = c.getBookId();
+        c.setCharacterNames(comicRelationsRepository.findCharacterNamesByBookId(bookId));
+        c.setTeamNames(comicRelationsRepository.findTeamNamesByBookId(bookId));
+        c.setLocationNames(comicRelationsRepository.findLocationNamesByBookId(bookId));
+        c.setPencillerNames(comicRelationsRepository.findCreatorNamesByBookIdAndRole(bookId, ComicCreatorRole.PENCILLER));
+        c.setInkerNames(comicRelationsRepository.findCreatorNamesByBookIdAndRole(bookId, ComicCreatorRole.INKER));
+        c.setColoristNames(comicRelationsRepository.findCreatorNamesByBookIdAndRole(bookId, ComicCreatorRole.COLORIST));
+        c.setLettererNames(comicRelationsRepository.findCreatorNamesByBookIdAndRole(bookId, ComicCreatorRole.LETTERER));
+        c.setCoverArtistNames(comicRelationsRepository.findCreatorNamesByBookIdAndRole(bookId, ComicCreatorRole.COVER_ARTIST));
+        c.setEditorNames(comicRelationsRepository.findCreatorNamesByBookIdAndRole(bookId, ComicCreatorRole.EDITOR));
     }
 
     private boolean hasComicData(ComicMetadata dto) {
@@ -539,76 +623,76 @@ public class BookMetadataUpdater {
     }
 
     private void updateComicCharacters(ComicMetadataEntity c, Set<String> characters, MetadataReplaceMode mode) {
+        Set<String> existing = Optional.ofNullable(c.getCharacterNames()).orElse(Collections.emptySet());
         if (characters == null || characters.isEmpty()) {
             if (mode == MetadataReplaceMode.REPLACE_ALL) {
-                c.getCharacters().clear();
+                comicRelationsRepository.clearCharactersForBook(c.getBookId());
+                c.setCharacterNames(Collections.emptySet());
             }
             return;
         }
-        if (c.getCharacters() == null) {
-            c.setCharacters(new HashSet<>());
-        }
-        if (mode == MetadataReplaceMode.REPLACE_ALL || mode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            c.getCharacters().clear();
-        }
-        if (mode == MetadataReplaceMode.REPLACE_MISSING && !c.getCharacters().isEmpty()) {
+        if (mode == MetadataReplaceMode.REPLACE_MISSING && !existing.isEmpty()) {
             return;
         }
-        characters.stream()
-                .map(name -> comicCharacterRepository.findByName(name)
-                        .orElseGet(() -> comicCharacterRepository.save(ComicCharacterEntity.builder().name(name).build())))
-                .forEach(entity -> c.getCharacters().add(entity));
+        // A null replace mode merges with existing (unlike creator roles below, which fully replace).
+        Set<String> finalNames;
+        if (mode == null) {
+            finalNames = new HashSet<>(existing);
+            finalNames.addAll(characters);
+        } else {
+            finalNames = characters;
+        }
+        comicRelationsRepository.setCharactersForBook(c.getBookId(), finalNames);
+        c.setCharacterNames(finalNames);
     }
 
     private void updateComicTeams(ComicMetadataEntity c, Set<String> teams, MetadataReplaceMode mode) {
+        Set<String> existing = Optional.ofNullable(c.getTeamNames()).orElse(Collections.emptySet());
         if (teams == null || teams.isEmpty()) {
             if (mode == MetadataReplaceMode.REPLACE_ALL) {
-                c.getTeams().clear();
+                comicRelationsRepository.clearTeamsForBook(c.getBookId());
+                c.setTeamNames(Collections.emptySet());
             }
             return;
         }
-        if (c.getTeams() == null) {
-            c.setTeams(new HashSet<>());
-        }
-        if (mode == MetadataReplaceMode.REPLACE_ALL || mode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            c.getTeams().clear();
-        }
-        if (mode == MetadataReplaceMode.REPLACE_MISSING && !c.getTeams().isEmpty()) {
+        if (mode == MetadataReplaceMode.REPLACE_MISSING && !existing.isEmpty()) {
             return;
         }
-        teams.stream()
-                .map(name -> comicTeamRepository.findByName(name)
-                        .orElseGet(() -> comicTeamRepository.save(ComicTeamEntity.builder().name(name).build())))
-                .forEach(entity -> c.getTeams().add(entity));
+        Set<String> finalNames;
+        if (mode == null) {
+            finalNames = new HashSet<>(existing);
+            finalNames.addAll(teams);
+        } else {
+            finalNames = teams;
+        }
+        comicRelationsRepository.setTeamsForBook(c.getBookId(), finalNames);
+        c.setTeamNames(finalNames);
     }
 
     private void updateComicLocations(ComicMetadataEntity c, Set<String> locations, MetadataReplaceMode mode) {
+        Set<String> existing = Optional.ofNullable(c.getLocationNames()).orElse(Collections.emptySet());
         if (locations == null || locations.isEmpty()) {
             if (mode == MetadataReplaceMode.REPLACE_ALL) {
-                c.getLocations().clear();
+                comicRelationsRepository.clearLocationsForBook(c.getBookId());
+                c.setLocationNames(Collections.emptySet());
             }
             return;
         }
-        if (c.getLocations() == null) {
-            c.setLocations(new HashSet<>());
-        }
-        if (mode == MetadataReplaceMode.REPLACE_ALL || mode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED) {
-            c.getLocations().clear();
-        }
-        if (mode == MetadataReplaceMode.REPLACE_MISSING && !c.getLocations().isEmpty()) {
+        if (mode == MetadataReplaceMode.REPLACE_MISSING && !existing.isEmpty()) {
             return;
         }
-        locations.stream()
-                .map(name -> comicLocationRepository.findByName(name)
-                        .orElseGet(() -> comicLocationRepository.save(ComicLocationEntity.builder().name(name).build())))
-                .forEach(entity -> c.getLocations().add(entity));
+        Set<String> finalNames;
+        if (mode == null) {
+            finalNames = new HashSet<>(existing);
+            finalNames.addAll(locations);
+        } else {
+            finalNames = locations;
+        }
+        comicRelationsRepository.setLocationsForBook(c.getBookId(), finalNames);
+        c.setLocationNames(finalNames);
     }
 
     private void updateComicCreatorsPerRole(ComicMetadataEntity c, ComicMetadata dto, MetadataReplaceMode mode) {
-        if (c.getCreatorMappings() == null) {
-            c.setCreatorMappings(new HashSet<>());
-        }
-
         updateCreatorRole(c, dto.getPencillers(), ComicCreatorRole.PENCILLER, c.getPencillersLocked(), mode);
         updateCreatorRole(c, dto.getInkers(), ComicCreatorRole.INKER, c.getInkersLocked(), mode);
         updateCreatorRole(c, dto.getColorists(), ComicCreatorRole.COLORIST, c.getColoristsLocked(), mode);
@@ -621,42 +705,47 @@ public class BookMetadataUpdater {
         if (Boolean.TRUE.equals(locked)) return;
 
         boolean hasNewNames = names != null && !names.isEmpty();
-        Set<ComicCreatorMappingEntity> existingForRole = c.getCreatorMappings().stream()
-                .filter(m -> m.getRole() == role)
-                .collect(Collectors.toSet());
+        Set<String> existing = existingCreatorNames(c, role);
 
         if (!hasNewNames) {
             if (mode == MetadataReplaceMode.REPLACE_ALL) {
-                c.getCreatorMappings().removeAll(existingForRole);
+                comicRelationsRepository.clearCreatorsForBookRole(c.getBookId(), role);
+                setCreatorNames(c, role, Collections.emptySet());
             }
             return;
         }
 
-        if (mode == MetadataReplaceMode.REPLACE_MISSING && !existingForRole.isEmpty()) {
+        if (mode == MetadataReplaceMode.REPLACE_MISSING && !existing.isEmpty()) {
             return;
         }
 
-        if (mode == MetadataReplaceMode.REPLACE_ALL || mode == MetadataReplaceMode.REPLACE_WHEN_PROVIDED || mode == null) {
-            c.getCreatorMappings().removeAll(existingForRole);
-        }
-
-        addCreatorsWithRole(c, names, role);
+        // REPLACE_ALL / REPLACE_WHEN_PROVIDED / null all fully replace this role's creators -
+        // unlike characters/teams/locations, a null replace mode does NOT merge here (matches
+        // the pre-jOOQ entity-collection behavior exactly).
+        comicRelationsRepository.setCreatorsForBookRole(c.getBookId(), role, names);
+        setCreatorNames(c, role, names);
     }
 
-    private void addCreatorsWithRole(ComicMetadataEntity comic, Set<String> names, ComicCreatorRole role) {
-        if (names == null || names.isEmpty()) {
-            return;
-        }
-        for (String name : names) {
-            ComicCreatorEntity creator = comicCreatorRepository.findByName(name)
-                    .orElseGet(() -> comicCreatorRepository.save(ComicCreatorEntity.builder().name(name).build()));
+    private Set<String> existingCreatorNames(ComicMetadataEntity c, ComicCreatorRole role) {
+        Set<String> names = switch (role) {
+            case PENCILLER -> c.getPencillerNames();
+            case INKER -> c.getInkerNames();
+            case COLORIST -> c.getColoristNames();
+            case LETTERER -> c.getLettererNames();
+            case COVER_ARTIST -> c.getCoverArtistNames();
+            case EDITOR -> c.getEditorNames();
+        };
+        return names != null ? names : Collections.emptySet();
+    }
 
-            ComicCreatorMappingEntity mapping = ComicCreatorMappingEntity.builder()
-                    .comicMetadata(comic)
-                    .creator(creator)
-                    .role(role)
-                    .build();
-            comic.getCreatorMappings().add(mapping);
+    private void setCreatorNames(ComicMetadataEntity c, ComicCreatorRole role, Set<String> names) {
+        switch (role) {
+            case PENCILLER -> c.setPencillerNames(names);
+            case INKER -> c.setInkerNames(names);
+            case COLORIST -> c.setColoristNames(names);
+            case LETTERER -> c.setLettererNames(names);
+            case COVER_ARTIST -> c.setCoverArtistNames(names);
+            case EDITOR -> c.setEditorNames(names);
         }
     }
 
@@ -675,7 +764,9 @@ public class BookMetadataUpdater {
                 fileService.createThumbnailFromUrl(bookId, m.getThumbnailUrl());
                 bookEntity.getMetadata().setCoverUpdatedOn(Instant.now());
             }
-            bookEntity.setBookCoverHash(BookCoverUtils.generateCoverHash());
+            String coverHash = BookCoverUtils.generateCoverHash();
+            bookEntity.setBookCoverHash(coverHash);
+            jooqBookRepository.updateBookCoverHash(bookId, coverHash);
         } catch (Exception ex) {
             log.warn("Failed to download cover for book {}: {}", bookId, ex.getMessage());
         }
@@ -746,6 +837,7 @@ public class BookMetadataUpdater {
         if (Files.exists(cbzPath)) {
             log.info("File converted from {} to {}, updating book file record", fileName, cbzFileName);
             bookFile.setFileName(cbzFileName);
+            jooqBookRepository.updateFileNameAndSubPath(bookFile.getId(), cbzFileName, bookFile.getFileSubPath());
         }
     }
 

@@ -6,7 +6,7 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataPersistenceSettings;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.repository.jooq.dto.BookCoverUpdate;
 import org.booklore.service.NotificationService;
@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Instant;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +42,8 @@ import static org.mockito.Mockito.*;
 class BookCoverServiceTest {
 
     @Mock private AppProperties appProperties;
-    @Mock private BookRepository bookRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private JooqBookRepository jooqBookRepository;
     @Mock private NotificationService notificationService;
     @Mock private AppSettingService appSettingService;
@@ -58,6 +60,7 @@ class BookCoverServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(appProperties.isLocalStorage()).thenReturn(true);
+        lenient().when(relationsRepository.findAuthorNamesByBookId(anyLong())).thenReturn(List.of());
     }
 
     private BookEntity buildBook(long id, boolean coverLocked) {
@@ -90,7 +93,7 @@ class BookCoverServiceTest {
 
         @Test
         void generateCustomCoverThrowsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.generateCustomCover(1L))
                     .isInstanceOf(APIException.class)
@@ -99,7 +102,7 @@ class BookCoverServiceTest {
 
         @Test
         void updateCoverFromFileThrowsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
             MultipartFile file = mock(MultipartFile.class);
 
             assertThatThrownBy(() -> service.updateCoverFromFile(1L, file))
@@ -108,7 +111,7 @@ class BookCoverServiceTest {
 
         @Test
         void updateCoverFromUrlThrowsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.updateCoverFromUrl(1L, "http://example.com/cover.jpg"))
                     .isInstanceOf(APIException.class);
@@ -116,7 +119,7 @@ class BookCoverServiceTest {
 
         @Test
         void regenerateCoverThrowsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.regenerateCover(1L))
                     .isInstanceOf(APIException.class);
@@ -129,7 +132,7 @@ class BookCoverServiceTest {
         @Test
         void generateCustomCoverThrowsWhenCoverLocked() {
             BookEntity book = buildBook(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.generateCustomCover(1L))
                     .isInstanceOf(APIException.class)
@@ -139,7 +142,7 @@ class BookCoverServiceTest {
         @Test
         void updateCoverFromFileThrowsWhenCoverLocked() {
             BookEntity book = buildBook(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             MultipartFile file = mock(MultipartFile.class);
 
             assertThatThrownBy(() -> service.updateCoverFromFile(1L, file))
@@ -150,7 +153,7 @@ class BookCoverServiceTest {
         @Test
         void updateCoverFromUrlThrowsWhenCoverLocked() {
             BookEntity book = buildBook(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.updateCoverFromUrl(1L, "http://example.com"))
                     .isInstanceOf(APIException.class)
@@ -160,7 +163,7 @@ class BookCoverServiceTest {
         @Test
         void regenerateCoverThrowsWhenCoverLocked() {
             BookEntity book = buildBook(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateCover(1L))
                     .isInstanceOf(APIException.class)
@@ -174,7 +177,7 @@ class BookCoverServiceTest {
         @Test
         void updateAudiobookCoverFromFileThrowsWhenLocked() {
             BookEntity book = buildBookWithAudiobookLock(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             MultipartFile file = mock(MultipartFile.class);
 
             assertThatThrownBy(() -> service.updateAudiobookCoverFromFile(1L, file))
@@ -185,7 +188,7 @@ class BookCoverServiceTest {
         @Test
         void updateAudiobookCoverFromUrlThrowsWhenLocked() {
             BookEntity book = buildBookWithAudiobookLock(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.updateAudiobookCoverFromUrl(1L, "http://example.com"))
                     .isInstanceOf(APIException.class)
@@ -195,7 +198,7 @@ class BookCoverServiceTest {
         @Test
         void regenerateAudiobookCoverThrowsWhenLocked() {
             BookEntity book = buildBookWithAudiobookLock(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateAudiobookCover(1L))
                     .isInstanceOf(APIException.class)
@@ -205,7 +208,7 @@ class BookCoverServiceTest {
         @Test
         void generateCustomAudiobookCoverThrowsWhenLocked() {
             BookEntity book = buildBookWithAudiobookLock(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.generateCustomAudiobookCover(1L))
                     .isInstanceOf(APIException.class)
@@ -219,7 +222,7 @@ class BookCoverServiceTest {
         @Test
         void throwsWhenNoEbookFileFound() {
             BookEntity book = buildBook(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateCover(1L))
                     .isInstanceOf(APIException.class)
@@ -234,7 +237,7 @@ class BookCoverServiceTest {
                     .isBookFormat(true)
                     .build();
             book.setBookFiles(List.of(ebookFile));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
@@ -253,7 +256,7 @@ class BookCoverServiceTest {
                     .isBookFormat(true)
                     .build();
             book.setBookFiles(List.of(ebookFile));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
@@ -261,10 +264,7 @@ class BookCoverServiceTest {
 
             service.regenerateCover(1L);
 
-            assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
-            assertThat(book.getMetadataUpdatedAt()).isNotNull();
-            assertThat(book.getBookCoverHash()).isNotNull();
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -274,7 +274,7 @@ class BookCoverServiceTest {
         @Test
         void throwsWhenNoAudiobookFileFound() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateAudiobookCover(1L))
                     .isInstanceOf(APIException.class)
@@ -288,7 +288,7 @@ class BookCoverServiceTest {
                     .bookType(BookFileType.AUDIOBOOK)
                     .build();
             book.setBookFiles(List.of(audiobookFile));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.AUDIOBOOK)).thenReturn(processor);
@@ -326,7 +326,7 @@ class BookCoverServiceTest {
                     .build();
             book.setLibrary(library);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
@@ -351,7 +351,7 @@ class BookCoverServiceTest {
             book.setBookFiles(List.of(audiobookFile, pdfFile));
             book.setLibrary(LibraryEntity.builder().formatPriority(null).build());
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.PDF)).thenReturn(processor);
@@ -369,10 +369,9 @@ class BookCoverServiceTest {
         @Test
         void generatesCoverWithTitleAndAuthor() {
             BookEntity book = buildBook(1L, false);
-            AuthorEntity author = AuthorEntity.builder().name("Jane Doe").build();
-            book.getMetadata().setAuthors(List.of(author));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Jane Doe"));
             book.setBookFiles(new ArrayList<>());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(coverImageGenerator.generateCover("Test Book", "Jane Doe")).thenReturn(new byte[]{1, 2, 3});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
@@ -380,7 +379,7 @@ class BookCoverServiceTest {
 
             verify(coverImageGenerator).generateCover("Test Book", "Jane Doe");
             verify(fileService).createThumbnailFromBytes(eq(1L), any());
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -492,15 +491,13 @@ class BookCoverServiceTest {
         @Test
         void successfullyUpdatesCoverFromUrl() {
             BookEntity book = buildBook(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
             verify(fileService).createThumbnailFromUrl(1L, "https://example.com/cover.jpg");
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
-            assertThat(book.getBookCoverHash()).isNotNull();
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -510,15 +507,14 @@ class BookCoverServiceTest {
         @Test
         void successfullyUpdatesCoverFromFile() {
             BookEntity book = buildBook(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
             MultipartFile file = mock(MultipartFile.class);
 
             service.updateCoverFromFile(1L, file);
 
             verify(fileService).createThumbnailFromFile(1L, file);
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -528,21 +524,19 @@ class BookCoverServiceTest {
         @Test
         void successfullyUpdatesCoverFromFile() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
             MultipartFile file = mock(MultipartFile.class);
 
             service.updateAudiobookCoverFromFile(1L, file);
 
             verify(fileService).createAudiobookThumbnailFromFile(1L, file);
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
-            assertThat(book.getAudiobookCoverHash()).isNotNull();
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
             MultipartFile file = mock(MultipartFile.class);
 
             assertThatThrownBy(() -> service.updateAudiobookCoverFromFile(1L, file))
@@ -556,20 +550,18 @@ class BookCoverServiceTest {
         @Test
         void successfullyUpdatesCoverFromUrl() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateAudiobookCoverFromUrl(1L, "https://example.com/audiobook-cover.jpg");
 
             verify(fileService).createAudiobookThumbnailFromUrl(1L, "https://example.com/audiobook-cover.jpg");
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
-            assertThat(book.getAudiobookCoverHash()).isNotNull();
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.updateAudiobookCoverFromUrl(1L, "https://example.com"))
                     .isInstanceOf(APIException.class);
@@ -586,7 +578,7 @@ class BookCoverServiceTest {
                     .bookType(BookFileType.AUDIOBOOK)
                     .build();
             book.setBookFiles(List.of(audiobookFile));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.AUDIOBOOK)).thenReturn(processor);
@@ -595,9 +587,7 @@ class BookCoverServiceTest {
 
             service.regenerateAudiobookCover(1L);
 
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
-            assertThat(book.getAudiobookCoverHash()).isNotNull();
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 
@@ -607,9 +597,8 @@ class BookCoverServiceTest {
         @Test
         void successfullyGeneratesCustomAudiobookCover() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            AuthorEntity author = AuthorEntity.builder().name("Author Name").build();
-            book.getMetadata().setAuthors(List.of(author));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Author Name"));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(coverImageGenerator.generateSquareCover("Test Audiobook", "Author Name")).thenReturn(new byte[]{1, 2});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
@@ -617,13 +606,12 @@ class BookCoverServiceTest {
 
             verify(coverImageGenerator).generateSquareCover("Test Audiobook", "Author Name");
             verify(fileService).createAudiobookThumbnailFromBytes(eq(1L), any());
-            verify(bookRepository).save(book);
-            assertThat(book.getMetadata().getAudiobookCoverUpdatedOn()).isNotNull();
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
         void throwsWhenBookNotFound() {
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(null);
 
             assertThatThrownBy(() -> service.generateCustomAudiobookCover(1L))
                     .isInstanceOf(APIException.class);
@@ -632,7 +620,7 @@ class BookCoverServiceTest {
         @Test
         void throwsWhenAudiobookCoverLocked() {
             BookEntity book = buildBookWithAudiobookLock(1L, true);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.generateCustomAudiobookCover(1L))
                     .isInstanceOf(APIException.class);
@@ -641,8 +629,8 @@ class BookCoverServiceTest {
         @Test
         void handlesNullAuthors() {
             BookEntity book = buildBookWithAudiobookLock(1L, false);
-            book.getMetadata().setAuthors(null);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(coverImageGenerator.generateSquareCover("Test Audiobook", null)).thenReturn(new byte[]{1});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
@@ -753,7 +741,7 @@ class BookCoverServiceTest {
                 var callback = inv.getArgument(0, org.springframework.transaction.support.TransactionCallback.class);
                 return callback.doInTransaction(null);
             });
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
             when(processor.generateCover(book)).thenReturn(true);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
@@ -767,8 +755,7 @@ class BookCoverServiceTest {
 
                 service.regenerateCovers(false);
 
-                verify(bookRepository).save(book);
-                assertThat(book.getMetadata().getCoverUpdatedOn()).isNotNull();
+                verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
             }
         }
 
@@ -791,7 +778,7 @@ class BookCoverServiceTest {
 
                 service.regenerateCovers(false);
 
-                verify(bookRepository, never()).save(any());
+                verify(jooqBookRepository, never()).updateCoverMetadata(anyLong(), anyString(), any());
             }
         }
 
@@ -818,7 +805,7 @@ class BookCoverServiceTest {
                 var callback = inv.getArgument(0, org.springframework.transaction.support.TransactionCallback.class);
                 return callback.doInTransaction(null);
             });
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(withoutCover));
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(withoutCover);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
             when(processor.generateCover(withoutCover)).thenReturn(true);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
@@ -833,8 +820,8 @@ class BookCoverServiceTest {
                 service.regenerateCovers(true);
 
                 verify(transactionTemplate, times(1)).execute(any());
-                verify(bookRepository).save(withoutCover);
-                verify(bookRepository, never()).findById(1L);
+                verify(jooqBookRepository).updateCoverMetadata(eq(2L), anyString(), any(Instant.class));
+                verify(jooqBookEntityRepository, never()).findByIdFull(1L);
             }
         }
 
@@ -866,7 +853,7 @@ class BookCoverServiceTest {
         void returnsNullWhenBookFilesIsNull() {
             BookEntity book = buildBook(1L, false);
             book.setBookFiles(null);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateCover(1L))
                     .isInstanceOf(APIException.class)
@@ -877,7 +864,7 @@ class BookCoverServiceTest {
         void returnsNullWhenBookFilesIsEmpty() {
             BookEntity book = buildBook(1L, false);
             book.setBookFiles(new ArrayList<>());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateCover(1L))
                     .isInstanceOf(APIException.class)
@@ -891,7 +878,7 @@ class BookCoverServiceTest {
                     .bookType(BookFileType.AUDIOBOOK).isBookFormat(false).build();
             book.setBookFiles(List.of(audiobookFile));
             book.setLibrary(LibraryEntity.builder().formatPriority(null).build());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             assertThatThrownBy(() -> service.regenerateCover(1L))
                     .isInstanceOf(APIException.class)
@@ -908,7 +895,7 @@ class BookCoverServiceTest {
             book.setBookFiles(List.of(pdfFile, epubFile));
             book.setLibrary(LibraryEntity.builder()
                     .formatPriority(List.of(BookFileType.EPUB, BookFileType.PDF)).build());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
@@ -927,7 +914,7 @@ class BookCoverServiceTest {
             book.setBookFiles(List.of(pdfFile));
             book.setLibrary(LibraryEntity.builder()
                     .formatPriority(List.of(BookFileType.EPUB)).build());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.PDF)).thenReturn(processor);
@@ -945,7 +932,7 @@ class BookCoverServiceTest {
                     .bookType(BookFileType.EPUB).isBookFormat(true).build();
             book.setBookFiles(List.of(epubFile));
             book.setLibrary(LibraryEntity.builder().formatPriority(List.of()).build());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookFileProcessor processor = mock(BookFileProcessor.class);
             when(processorRegistry.getProcessorOrThrow(BookFileType.EPUB)).thenReturn(processor);
@@ -964,6 +951,7 @@ class BookCoverServiceTest {
         void writesAndUpdatesHashWhenWriterExists() {
             BookEntity book = buildBook(1L, false);
             BookFileEntity primaryFile = BookFileEntity.builder()
+                    .id(20L)
                     .bookType(BookFileType.EPUB).isBookFormat(true)
                     .fileName("test.epub").fileSubPath("sub")
                     .build();
@@ -979,7 +967,7 @@ class BookCoverServiceTest {
 
             MetadataWriter writer = mock(MetadataWriter.class);
             when(metadataWriterFactory.getWriter(BookFileType.EPUB)).thenReturn(Optional.of(writer));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             try (MockedStatic<FileFingerprint> fpMock = mockStatic(FileFingerprint.class)) {
@@ -988,7 +976,7 @@ class BookCoverServiceTest {
                 service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
                 verify(metadataWriterFactory).getWriter(BookFileType.EPUB);
-                assertThat(primaryFile.getCurrentHash()).isEqualTo("abc123");
+                verify(jooqBookRepository).updateBookFileHash(20L, "abc123");
             }
         }
 
@@ -996,7 +984,7 @@ class BookCoverServiceTest {
         void skipsWriteWhenNoPrimaryFile() {
             BookEntity book = buildBook(1L, false);
             book.setBookFiles(new ArrayList<>());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
@@ -1011,7 +999,7 @@ class BookCoverServiceTest {
         @Test
         void sendsNotificationWhenUpdatesExist() {
             BookEntity book = buildBook(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
 
             BookCoverUpdate update = new BookCoverUpdate(1L, null);
             when(jooqBookRepository.findCoverUpdateInfoByIds(List.of(1L))).thenReturn(List.of(update));
@@ -1024,7 +1012,7 @@ class BookCoverServiceTest {
         @Test
         void doesNotSendNotificationWhenNoUpdates() {
             BookEntity book = buildBook(1L, false);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
@@ -1039,8 +1027,8 @@ class BookCoverServiceTest {
         @Test
         void returnsNullForEmptyAuthors() {
             BookEntity book = buildBook(1L, false);
-            book.getMetadata().setAuthors(new ArrayList<>());
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(coverImageGenerator.generateCover("Test Book", null)).thenReturn(new byte[]{1});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
@@ -1052,11 +1040,8 @@ class BookCoverServiceTest {
         @Test
         void joinsMultipleAuthorNames() {
             BookEntity book = buildBook(1L, false);
-            List<AuthorEntity> authors = new ArrayList<>();
-            authors.add(AuthorEntity.builder().name("Alice").build());
-            authors.add(AuthorEntity.builder().name("Bob").build());
-            book.getMetadata().setAuthors(authors);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(relationsRepository.findAuthorNamesByBookId(1L)).thenReturn(List.of("Alice", "Bob"));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(coverImageGenerator.generateCover(eq("Test Book"), argThat(s -> s.contains("Alice") && s.contains("Bob"))))
                     .thenReturn(new byte[]{1});
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
@@ -1080,13 +1065,13 @@ class BookCoverServiceTest {
                     .isBookFormat(true)
                     .build();
             book.setBookFiles(List.of(bookFile));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateCoverFromUrl(1L, "https://example.com/cover.jpg");
 
             verify(metadataWriterFactory, never()).getWriter(any());
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
 
         @Test
@@ -1098,13 +1083,13 @@ class BookCoverServiceTest {
                     .bookType(BookFileType.AUDIOBOOK)
                     .build();
             book.setBookFiles(List.of(audiobookFile));
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(book));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(book);
             when(jooqBookRepository.findCoverUpdateInfoByIds(any())).thenReturn(List.of());
 
             service.updateAudiobookCoverFromUrl(1L, "https://example.com/audiobook-cover.jpg");
 
             verify(metadataWriterFactory, never()).getWriter(any());
-            verify(bookRepository).save(book);
+            verify(jooqBookRepository).updateAudiobookCoverMetadata(anyLong(), anyString(), any(Instant.class));
         }
     }
 }

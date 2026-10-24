@@ -5,7 +5,7 @@ import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ComicMetadata;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.repository.jooq.JooqBookReadRepository;
 import org.booklore.service.restriction.ContentRestrictionService;
 import org.springframework.stereotype.Service;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class BookQueryService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final JooqBookReadRepository jooqBookReadRepository;
     private final ContentRestrictionService contentRestrictionService;
 
@@ -36,16 +36,11 @@ public class BookQueryService {
     }
 
     public List<BookEntity> findAllWithMetadataByIds(Set<Long> bookIds) {
-        return bookRepository.findAllWithMetadataByIds(bookIds);
+        return jooqBookEntityRepository.findAllWithMetadataByIds(bookIds);
     }
 
     public List<BookEntity> getAllFullBookEntities() {
-        return bookRepository.findAllFullBooks();
-    }
-
-    @Transactional
-    public void saveAll(List<BookEntity> books) {
-        bookRepository.saveAll(books);
+        return jooqBookEntityRepository.findAllFullBooks();
     }
 
     private List<Book> mapBooksToDto(List<Book> books, boolean includeDescription, Long userId, boolean stripForListView) {

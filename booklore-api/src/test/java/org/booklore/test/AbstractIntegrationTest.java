@@ -31,7 +31,6 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.username", MARIADB::getUsername);
         registry.add("spring.datasource.password", MARIADB::getPassword);
         registry.add("spring.flyway.enabled", () -> true);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("app.path-config", () -> "build/app-data");
         registry.add("app.bookdrop-folder", () -> "build/bookdrop");
     }

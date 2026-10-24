@@ -10,7 +10,7 @@ import org.booklore.repository.jooq.dto.KoboUserSettings;
 import org.booklore.repository.jooq.dto.UserSettingRow;
 import org.booklore.repository.jooq.JooqKoboUserSettingsRepository;
 import org.booklore.repository.jooq.JooqUserSettingRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +20,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class HardcoverSyncSettingsService {
 
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
     private final JooqKoboUserSettingsRepository koboUserSettingsRepository;
     private final JooqUserSettingRepository userSettingRepository;
@@ -33,8 +33,9 @@ public class HardcoverSyncSettingsService {
 
     @Transactional
     public HardcoverSyncSettings getSettingsForUserId(Long userId) {
-        userRepository.findByIdWithSettings(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        if (userRepository.findByIdWithSettings(userId) == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
         return readSettings(userId);
     }
 
@@ -50,8 +51,9 @@ public class HardcoverSyncSettingsService {
             throw ApiError.INVALID_INPUT.createException("Hardcover settings cannot be null.");
         }
 
-        userRepository.findByIdWithSettings(userId)
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        if (userRepository.findByIdWithSettings(userId) == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         String apiKey = settings.getHardcoverApiKey();
         if (apiKey == null) {
