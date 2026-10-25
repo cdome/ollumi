@@ -1,10 +1,6 @@
-package org.booklore.model.enums;
+package org.booklore.model.enums
 
-import lombok.Getter;
-
-@Getter
-public enum PermissionType {
-
+enum class PermissionType(val entityField: String) {
     ADMIN("permissionAdmin"),
     UPLOAD("permissionUpload"),
     DOWNLOAD("permissionDownload"),
@@ -23,11 +19,5 @@ public enum PermissionType {
     MANAGE_GLOBAL_PREFERENCES("permissionManageGlobalPreferences"),
     MANAGE_ICONS("permissionManageIcons"),
     MANAGE_FONTS("permissionManageFonts"),
-    DEMO_USER("permissionDemoUser");
-
-    private final String entityField;
-
-    PermissionType(String entityField) {
-        this.entityField = entityField;
-    }
+    DEMO_USER("permissionDemoUser")
 }
