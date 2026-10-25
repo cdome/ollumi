@@ -48,11 +48,8 @@ public class BookRecommendationUpdaterTask implements Task {
 
     @Override
     public TaskCreateResponse execute(TaskCreateRequest request) {
-        TaskCreateResponse.TaskCreateResponseBuilder builder = TaskCreateResponse.builder()
-                .taskId(request.getTaskId())
-                .taskType(TaskType.UPDATE_BOOK_RECOMMENDATIONS);
-
-        String taskId = builder.build().getTaskId();
+        String taskId = request.getTaskId();
+        TaskType taskType = TaskType.UPDATE_BOOK_RECOMMENDATIONS;
 
         long startTime = System.currentTimeMillis();
         log.info("{}: Task started", getTaskType());
@@ -160,9 +157,7 @@ public class BookRecommendationUpdaterTask implements Task {
 
         sendTaskProgressNotification(taskId, 100, String.format("Updated recommendations for %d books in %d ms", totalBooks, endTime - startTime), TaskStatus.COMPLETED, lastNotificationTime, true);
 
-        return builder
-                .status(TaskStatus.COMPLETED)
-                .build();
+        return new TaskCreateResponse(taskId, taskType, TaskStatus.COMPLETED);
     }
 
     private long sendTaskProgressNotification(String taskId, int progress, String message, TaskStatus taskStatus, long lastNotificationTime, boolean force) {

@@ -87,7 +87,7 @@ class MetadataTaskServiceTest {
             MetadataFetchJobRow task = buildTask("t1", MetadataFetchTaskStatus.COMPLETED, List.of(fetched, accepted, rejected));
 
             when(metadataFetchTaskRepository.findById("t1")).thenReturn(Optional.of(task));
-            when(fetchedProposalMapper.toDto(fetched)).thenReturn(FetchedProposal.builder().proposalId(1L).build());
+            when(fetchedProposalMapper.toDto(fetched)).thenReturn(new FetchedProposal(1L, null, null, null, null, null, null, null));
 
             Optional<MetadataTaskDetailsResponse> result = service.getTaskWithProposals("t1");
 

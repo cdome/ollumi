@@ -32,9 +32,9 @@ public class DeletedBooksCleanupTask implements Task {
 
     @Override
     public TaskCreateResponse execute(TaskCreateRequest request) {
-        TaskCreateResponse.TaskCreateResponseBuilder builder = TaskCreateResponse.builder()
-                .taskId(UUID.randomUUID().toString())
-                .taskType(getTaskType());
+        String taskId = UUID.randomUUID().toString();
+        TaskType taskType = getTaskType();
+        TaskStatus status;
 
         long startTime = System.currentTimeMillis();
         log.info("{}: Task started", getTaskType());
@@ -49,16 +49,16 @@ public class DeletedBooksCleanupTask implements Task {
                 deletedCount = jooqBookRepository.deleteAllSoftDeleted();
                 log.info("{}: Removed all {} deleted books (on-demand execution)", getTaskType(), deletedCount);
             }
-            builder.status(TaskStatus.COMPLETED);
+            status = TaskStatus.COMPLETED;
         } catch (Exception e) {
             log.error("{}: Error cleaning up deleted books", getTaskType(), e);
-            builder.status(TaskStatus.FAILED);
+            status = TaskStatus.FAILED;
         }
 
         long endTime = System.currentTimeMillis();
         log.info("{}: Task completed. Duration: {} ms", getTaskType(), endTime - startTime);
 
-        return builder.build();
+        return new TaskCreateResponse(taskId, taskType, status);
     }
 
     @Override

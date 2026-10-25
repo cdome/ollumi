@@ -31,9 +31,9 @@ public class LibraryScanTask implements Task {
 
     @Override
     public TaskCreateResponse execute(TaskCreateRequest request) {
-        TaskCreateResponse.TaskCreateResponseBuilder builder = TaskCreateResponse.builder()
-                .taskId(UUID.randomUUID().toString())
-                .taskType(getTaskType());
+        String taskId = UUID.randomUUID().toString();
+        TaskType taskType = getTaskType();
+        TaskStatus status;
 
         long startTime = System.currentTimeMillis();
         log.info("{}: Task started", getTaskType());
@@ -48,16 +48,16 @@ public class LibraryScanTask implements Task {
                 }
             }
 
-            builder.status(TaskStatus.COMPLETED);
+            status = TaskStatus.COMPLETED;
         } catch (Exception e) {
             log.error("{}: Error scanning libraries", getTaskType(), e);
-            builder.status(TaskStatus.FAILED);
+            status = TaskStatus.FAILED;
         }
 
         long endTime = System.currentTimeMillis();
         log.info("{}: Task completed. Duration: {} ms", getTaskType(), endTime - startTime);
 
-        return builder.build();
+        return new TaskCreateResponse(taskId, taskType, status);
     }
 
     @Override

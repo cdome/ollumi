@@ -89,9 +89,7 @@ class AuthenticationServiceTest {
         var user = BookLoreUserEntity.builder().username("regularuser").permissions(permissions).build();
         when(userRepository.findByUsername("regularuser")).thenReturn(user);
 
-        var request = new UserLoginRequest();
-        request.setUsername("regularuser");
-        request.setPassword("password");
+        var request = new UserLoginRequest("regularuser", "password");
 
         assertThatThrownBy(() -> authenticationService.loginUser(request))
                 .isInstanceOf(APIException.class)
@@ -105,9 +103,7 @@ class AuthenticationServiceTest {
         when(appSettingService.getAppSettings()).thenReturn(appSettings);
         when(userRepository.findByUsername("unknown")).thenReturn(null);
 
-        var request = new UserLoginRequest();
-        request.setUsername("unknown");
-        request.setPassword("password");
+        var request = new UserLoginRequest("unknown", "password");
 
         assertThatThrownBy(() -> authenticationService.loginUser(request))
                 .isInstanceOf(APIException.class)
@@ -133,9 +129,7 @@ class AuthenticationServiceTest {
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
 
-        var request = new UserLoginRequest();
-        request.setUsername("admin");
-        request.setPassword("password");
+        var request = new UserLoginRequest("admin", "password");
 
         ResponseEntity<Map<String, String>> response = authenticationService.loginUser(request);
 
@@ -163,9 +157,7 @@ class AuthenticationServiceTest {
         when(jwtUtils.generateAccessToken(user)).thenReturn("access-token");
         when(jwtUtils.generateRefreshToken(user)).thenReturn("refresh-token");
 
-        var request = new UserLoginRequest();
-        request.setUsername("normaluser");
-        request.setPassword("password");
+        var request = new UserLoginRequest("normaluser", "password");
 
         ResponseEntity<Map<String, String>> response = authenticationService.loginUser(request);
 
