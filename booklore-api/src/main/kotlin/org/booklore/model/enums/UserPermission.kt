@@ -4,232 +4,231 @@ import org.booklore.model.dto.BookLoreUser
 import org.booklore.model.dto.request.UserUpdateRequest
 import org.booklore.model.entity.UserPermissionsEntity
 import java.util.function.BiConsumer
-import java.util.function.Function
 import java.util.function.Predicate
 
 enum class UserPermission(
     val description: String,
     private val dtoGetter: Predicate<BookLoreUser.UserPermissions>,
     private val dtoSetter: BiConsumer<BookLoreUser.UserPermissions, Boolean>,
-    private val requestGetter: Function<UserUpdateRequest.Permissions, Boolean>,
+    private val requestGetter: Predicate<UserUpdateRequest.Permissions>,
     private val entityGetter: Predicate<UserPermissionsEntity>,
     private val entitySetter: BiConsumer<UserPermissionsEntity, Boolean>
 ) {
     IS_ADMIN(
         "Admin access",
-        BookLoreUser.UserPermissions::isAdmin,
-        BookLoreUser.UserPermissions::setAdmin,
-        UserUpdateRequest.Permissions::isAdmin,
-        UserPermissionsEntity::isPermissionAdmin,
-        UserPermissionsEntity::setPermissionAdmin
+        { it.isAdmin },
+        { dto, value -> dto.isAdmin = value },
+        { it.isAdmin() },
+        { it.isPermissionAdmin },
+        { entity, value -> entity.isPermissionAdmin = value }
     ),
     CAN_UPLOAD(
         "Upload books",
-        BookLoreUser.UserPermissions::isCanUpload,
-        BookLoreUser.UserPermissions::setCanUpload,
-        UserUpdateRequest.Permissions::isCanUpload,
-        UserPermissionsEntity::isPermissionUpload,
-        UserPermissionsEntity::setPermissionUpload
+        { it.isCanUpload },
+        { dto, value -> dto.isCanUpload = value },
+        { it.isCanUpload() },
+        { it.isPermissionUpload },
+        { entity, value -> entity.isPermissionUpload = value }
     ),
     CAN_DOWNLOAD(
         "Download books",
-        BookLoreUser.UserPermissions::isCanDownload,
-        BookLoreUser.UserPermissions::setCanDownload,
-        UserUpdateRequest.Permissions::isCanDownload,
-        UserPermissionsEntity::isPermissionDownload,
-        UserPermissionsEntity::setPermissionDownload
+        { it.isCanDownload },
+        { dto, value -> dto.isCanDownload = value },
+        { it.isCanDownload() },
+        { it.isPermissionDownload },
+        { entity, value -> entity.isPermissionDownload = value }
     ),
     CAN_EDIT_METADATA(
         "Edit metadata",
-        BookLoreUser.UserPermissions::isCanEditMetadata,
-        BookLoreUser.UserPermissions::setCanEditMetadata,
-        UserUpdateRequest.Permissions::isCanEditMetadata,
-        UserPermissionsEntity::isPermissionEditMetadata,
-        UserPermissionsEntity::setPermissionEditMetadata
+        { it.isCanEditMetadata },
+        { dto, value -> dto.isCanEditMetadata = value },
+        { it.isCanEditMetadata() },
+        { it.isPermissionEditMetadata },
+        { entity, value -> entity.isPermissionEditMetadata = value }
     ),
     CAN_MANAGE_LIBRARY(
         "Manage library",
-        BookLoreUser.UserPermissions::isCanManageLibrary,
-        BookLoreUser.UserPermissions::setCanManageLibrary,
-        UserUpdateRequest.Permissions::isCanManageLibrary,
-        UserPermissionsEntity::isPermissionManageLibrary,
-        UserPermissionsEntity::setPermissionManageLibrary
+        { it.isCanManageLibrary },
+        { dto, value -> dto.isCanManageLibrary = value },
+        { it.isCanManageLibrary() },
+        { it.isPermissionManageLibrary },
+        { entity, value -> entity.isPermissionManageLibrary = value }
     ),
     CAN_SYNC_KOREADER(
         "Sync KoReader",
-        BookLoreUser.UserPermissions::isCanSyncKoReader,
-        BookLoreUser.UserPermissions::setCanSyncKoReader,
-        UserUpdateRequest.Permissions::isCanSyncKoReader,
-        UserPermissionsEntity::isPermissionSyncKoreader,
-        UserPermissionsEntity::setPermissionSyncKoreader
+        { it.isCanSyncKoReader },
+        { dto, value -> dto.isCanSyncKoReader = value },
+        { it.isCanSyncKoReader() },
+        { it.isPermissionSyncKoreader },
+        { entity, value -> entity.isPermissionSyncKoreader = value }
     ),
     CAN_SYNC_KOBO(
         "Sync Kobo",
-        BookLoreUser.UserPermissions::isCanSyncKobo,
-        BookLoreUser.UserPermissions::setCanSyncKobo,
-        UserUpdateRequest.Permissions::isCanSyncKobo,
-        UserPermissionsEntity::isPermissionSyncKobo,
-        UserPermissionsEntity::setPermissionSyncKobo
+        { it.isCanSyncKobo },
+        { dto, value -> dto.isCanSyncKobo = value },
+        { it.isCanSyncKobo() },
+        { it.isPermissionSyncKobo },
+        { entity, value -> entity.isPermissionSyncKobo = value }
     ),
     CAN_EMAIL_BOOK(
         "Email books",
-        BookLoreUser.UserPermissions::isCanEmailBook,
-        BookLoreUser.UserPermissions::setCanEmailBook,
-        UserUpdateRequest.Permissions::isCanEmailBook,
-        UserPermissionsEntity::isPermissionEmailBook,
-        UserPermissionsEntity::setPermissionEmailBook
+        { it.isCanEmailBook },
+        { dto, value -> dto.isCanEmailBook = value },
+        { it.isCanEmailBook() },
+        { it.isPermissionEmailBook },
+        { entity, value -> entity.isPermissionEmailBook = value }
     ),
     CAN_DELETE_BOOK(
         "Delete books",
-        BookLoreUser.UserPermissions::isCanDeleteBook,
-        BookLoreUser.UserPermissions::setCanDeleteBook,
-        UserUpdateRequest.Permissions::isCanDeleteBook,
-        UserPermissionsEntity::isPermissionDeleteBook,
-        UserPermissionsEntity::setPermissionDeleteBook
+        { it.isCanDeleteBook },
+        { dto, value -> dto.isCanDeleteBook = value },
+        { it.isCanDeleteBook() },
+        { it.isPermissionDeleteBook },
+        { entity, value -> entity.isPermissionDeleteBook = value }
     ),
     CAN_ACCESS_OPDS(
         "Access OPDS",
-        BookLoreUser.UserPermissions::isCanAccessOpds,
-        BookLoreUser.UserPermissions::setCanAccessOpds,
-        UserUpdateRequest.Permissions::isCanAccessOpds,
-        UserPermissionsEntity::isPermissionAccessOpds,
-        UserPermissionsEntity::setPermissionAccessOpds
+        { it.isCanAccessOpds },
+        { dto, value -> dto.isCanAccessOpds = value },
+        { it.isCanAccessOpds() },
+        { it.isPermissionAccessOpds },
+        { entity, value -> entity.isPermissionAccessOpds = value }
     ),
     CAN_MANAGE_METADATA_CONFIG(
         "Manage metadata config",
-        BookLoreUser.UserPermissions::isCanManageMetadataConfig,
-        BookLoreUser.UserPermissions::setCanManageMetadataConfig,
-        UserUpdateRequest.Permissions::isCanManageMetadataConfig,
-        UserPermissionsEntity::isPermissionManageMetadataConfig,
-        UserPermissionsEntity::setPermissionManageMetadataConfig
+        { it.isCanManageMetadataConfig },
+        { dto, value -> dto.isCanManageMetadataConfig = value },
+        { it.isCanManageMetadataConfig() },
+        { it.isPermissionManageMetadataConfig },
+        { entity, value -> entity.isPermissionManageMetadataConfig = value }
     ),
     CAN_ACCESS_BOOKDROP(
         "Access bookdrop",
-        BookLoreUser.UserPermissions::isCanAccessBookdrop,
-        BookLoreUser.UserPermissions::setCanAccessBookdrop,
-        UserUpdateRequest.Permissions::isCanAccessBookdrop,
-        UserPermissionsEntity::isPermissionAccessBookdrop,
-        UserPermissionsEntity::setPermissionAccessBookdrop
+        { it.isCanAccessBookdrop },
+        { dto, value -> dto.isCanAccessBookdrop = value },
+        { it.isCanAccessBookdrop() },
+        { it.isPermissionAccessBookdrop },
+        { entity, value -> entity.isPermissionAccessBookdrop = value }
     ),
     CAN_ACCESS_LIBRARY_STATS(
         "Access library stats",
-        BookLoreUser.UserPermissions::isCanAccessLibraryStats,
-        BookLoreUser.UserPermissions::setCanAccessLibraryStats,
-        UserUpdateRequest.Permissions::isCanAccessLibraryStats,
-        UserPermissionsEntity::isPermissionAccessLibraryStats,
-        UserPermissionsEntity::setPermissionAccessLibraryStats
+        { it.isCanAccessLibraryStats },
+        { dto, value -> dto.isCanAccessLibraryStats = value },
+        { it.isCanAccessLibraryStats() },
+        { it.isPermissionAccessLibraryStats },
+        { entity, value -> entity.isPermissionAccessLibraryStats = value }
     ),
     CAN_ACCESS_USER_STATS(
         "Access user stats",
-        BookLoreUser.UserPermissions::isCanAccessUserStats,
-        BookLoreUser.UserPermissions::setCanAccessUserStats,
-        UserUpdateRequest.Permissions::isCanAccessUserStats,
-        UserPermissionsEntity::isPermissionAccessUserStats,
-        UserPermissionsEntity::setPermissionAccessUserStats
+        { it.isCanAccessUserStats },
+        { dto, value -> dto.isCanAccessUserStats = value },
+        { it.isCanAccessUserStats() },
+        { it.isPermissionAccessUserStats },
+        { entity, value -> entity.isPermissionAccessUserStats = value }
     ),
     CAN_ACCESS_TASK_MANAGER(
         "Access task manager",
-        BookLoreUser.UserPermissions::isCanAccessTaskManager,
-        BookLoreUser.UserPermissions::setCanAccessTaskManager,
-        UserUpdateRequest.Permissions::isCanAccessTaskManager,
-        UserPermissionsEntity::isPermissionAccessTaskManager,
-        UserPermissionsEntity::setPermissionAccessTaskManager
+        { it.isCanAccessTaskManager },
+        { dto, value -> dto.isCanAccessTaskManager = value },
+        { it.isCanAccessTaskManager() },
+        { it.isPermissionAccessTaskManager },
+        { entity, value -> entity.isPermissionAccessTaskManager = value }
     ),
     CAN_MANAGE_GLOBAL_PREFERENCES(
         "Manage global preferences",
-        BookLoreUser.UserPermissions::isCanManageGlobalPreferences,
-        BookLoreUser.UserPermissions::setCanManageGlobalPreferences,
-        UserUpdateRequest.Permissions::isCanManageGlobalPreferences,
-        UserPermissionsEntity::isPermissionManageGlobalPreferences,
-        UserPermissionsEntity::setPermissionManageGlobalPreferences
+        { it.isCanManageGlobalPreferences },
+        { dto, value -> dto.isCanManageGlobalPreferences = value },
+        { it.isCanManageGlobalPreferences() },
+        { it.isPermissionManageGlobalPreferences },
+        { entity, value -> entity.isPermissionManageGlobalPreferences = value }
     ),
     CAN_MANAGE_ICONS(
         "Manage icons",
-        BookLoreUser.UserPermissions::isCanManageIcons,
-        BookLoreUser.UserPermissions::setCanManageIcons,
-        UserUpdateRequest.Permissions::isCanManageIcons,
-        UserPermissionsEntity::isPermissionManageIcons,
-        UserPermissionsEntity::setPermissionManageIcons
+        { it.isCanManageIcons },
+        { dto, value -> dto.isCanManageIcons = value },
+        { it.isCanManageIcons() },
+        { it.isPermissionManageIcons },
+        { entity, value -> entity.isPermissionManageIcons = value }
     ),
     CAN_MANAGE_FONTS(
         "Manage fonts",
-        BookLoreUser.UserPermissions::isCanManageFonts,
-        BookLoreUser.UserPermissions::setCanManageFonts,
-        UserUpdateRequest.Permissions::isCanManageFonts,
-        UserPermissionsEntity::isPermissionManageFonts,
-        UserPermissionsEntity::setPermissionManageFonts
+        { it.isCanManageFonts },
+        { dto, value -> dto.isCanManageFonts = value },
+        { it.isCanManageFonts() },
+        { it.isPermissionManageFonts },
+        { entity, value -> entity.isPermissionManageFonts = value }
     ),
     CAN_BULK_AUTO_FETCH_METADATA(
         "Bulk auto fetch metadata",
-        BookLoreUser.UserPermissions::isCanBulkAutoFetchMetadata,
-        BookLoreUser.UserPermissions::setCanBulkAutoFetchMetadata,
-        UserUpdateRequest.Permissions::isCanBulkAutoFetchMetadata,
-        UserPermissionsEntity::isPermissionBulkAutoFetchMetadata,
-        UserPermissionsEntity::setPermissionBulkAutoFetchMetadata
+        { it.isCanBulkAutoFetchMetadata },
+        { dto, value -> dto.isCanBulkAutoFetchMetadata = value },
+        { it.isCanBulkAutoFetchMetadata() },
+        { it.isPermissionBulkAutoFetchMetadata },
+        { entity, value -> entity.isPermissionBulkAutoFetchMetadata = value }
     ),
     CAN_BULK_CUSTOM_FETCH_METADATA(
         "Bulk custom fetch metadata",
-        BookLoreUser.UserPermissions::isCanBulkCustomFetchMetadata,
-        BookLoreUser.UserPermissions::setCanBulkCustomFetchMetadata,
-        UserUpdateRequest.Permissions::isCanBulkCustomFetchMetadata,
-        UserPermissionsEntity::isPermissionBulkCustomFetchMetadata,
-        UserPermissionsEntity::setPermissionBulkCustomFetchMetadata
+        { it.isCanBulkCustomFetchMetadata },
+        { dto, value -> dto.isCanBulkCustomFetchMetadata = value },
+        { it.isCanBulkCustomFetchMetadata() },
+        { it.isPermissionBulkCustomFetchMetadata },
+        { entity, value -> entity.isPermissionBulkCustomFetchMetadata = value }
     ),
     CAN_BULK_EDIT_METADATA(
         "Bulk edit metadata",
-        BookLoreUser.UserPermissions::isCanBulkEditMetadata,
-        BookLoreUser.UserPermissions::setCanBulkEditMetadata,
-        UserUpdateRequest.Permissions::isCanBulkEditMetadata,
-        UserPermissionsEntity::isPermissionBulkEditMetadata,
-        UserPermissionsEntity::setPermissionBulkEditMetadata
+        { it.isCanBulkEditMetadata },
+        { dto, value -> dto.isCanBulkEditMetadata = value },
+        { it.isCanBulkEditMetadata() },
+        { it.isPermissionBulkEditMetadata },
+        { entity, value -> entity.isPermissionBulkEditMetadata = value }
     ),
     CAN_BULK_REGENERATE_COVER(
         "Bulk regenerate cover",
-        BookLoreUser.UserPermissions::isCanBulkRegenerateCover,
-        BookLoreUser.UserPermissions::setCanBulkRegenerateCover,
-        UserUpdateRequest.Permissions::isCanBulkRegenerateCover,
-        UserPermissionsEntity::isPermissionBulkRegenerateCover,
-        UserPermissionsEntity::setPermissionBulkRegenerateCover
+        { it.isCanBulkRegenerateCover },
+        { dto, value -> dto.isCanBulkRegenerateCover = value },
+        { it.isCanBulkRegenerateCover() },
+        { it.isPermissionBulkRegenerateCover },
+        { entity, value -> entity.isPermissionBulkRegenerateCover = value }
     ),
     CAN_MOVE_ORGANIZE_FILES(
         "Move/organize files",
-        BookLoreUser.UserPermissions::isCanMoveOrganizeFiles,
-        BookLoreUser.UserPermissions::setCanMoveOrganizeFiles,
-        UserUpdateRequest.Permissions::isCanMoveOrganizeFiles,
-        UserPermissionsEntity::isPermissionMoveOrganizeFiles,
-        UserPermissionsEntity::setPermissionMoveOrganizeFiles
+        { it.isCanMoveOrganizeFiles },
+        { dto, value -> dto.isCanMoveOrganizeFiles = value },
+        { it.isCanMoveOrganizeFiles() },
+        { it.isPermissionMoveOrganizeFiles },
+        { entity, value -> entity.isPermissionMoveOrganizeFiles = value }
     ),
     CAN_BULK_LOCK_UNLOCK_METADATA(
         "Bulk lock/unlock metadata",
-        BookLoreUser.UserPermissions::isCanBulkLockUnlockMetadata,
-        BookLoreUser.UserPermissions::setCanBulkLockUnlockMetadata,
-        UserUpdateRequest.Permissions::isCanBulkLockUnlockMetadata,
-        UserPermissionsEntity::isPermissionBulkLockUnlockMetadata,
-        UserPermissionsEntity::setPermissionBulkLockUnlockMetadata
+        { it.isCanBulkLockUnlockMetadata },
+        { dto, value -> dto.isCanBulkLockUnlockMetadata = value },
+        { it.isCanBulkLockUnlockMetadata() },
+        { it.isPermissionBulkLockUnlockMetadata },
+        { entity, value -> entity.isPermissionBulkLockUnlockMetadata = value }
     ),
     CAN_BULK_RESET_BOOKLORE_READ_PROGRESS(
         "Bulk reset Booklore read progress",
-        BookLoreUser.UserPermissions::isCanBulkResetBookloreReadProgress,
-        BookLoreUser.UserPermissions::setCanBulkResetBookloreReadProgress,
-        UserUpdateRequest.Permissions::isCanBulkResetBookloreReadProgress,
-        UserPermissionsEntity::isPermissionBulkResetBookloreReadProgress,
-        UserPermissionsEntity::setPermissionBulkResetBookloreReadProgress
+        { it.isCanBulkResetBookloreReadProgress },
+        { dto, value -> dto.isCanBulkResetBookloreReadProgress = value },
+        { it.isCanBulkResetBookloreReadProgress() },
+        { it.isPermissionBulkResetBookloreReadProgress },
+        { entity, value -> entity.isPermissionBulkResetBookloreReadProgress = value }
     ),
     CAN_BULK_RESET_KOREADER_READ_PROGRESS(
         "Bulk reset KoReader read progress",
-        BookLoreUser.UserPermissions::isCanBulkResetKoReaderReadProgress,
-        BookLoreUser.UserPermissions::setCanBulkResetKoReaderReadProgress,
-        UserUpdateRequest.Permissions::isCanBulkResetKoReaderReadProgress,
-        UserPermissionsEntity::isPermissionBulkResetKoReaderReadProgress,
-        UserPermissionsEntity::setPermissionBulkResetKoReaderReadProgress
+        { it.isCanBulkResetKoReaderReadProgress },
+        { dto, value -> dto.isCanBulkResetKoReaderReadProgress = value },
+        { it.isCanBulkResetKoReaderReadProgress() },
+        { it.isPermissionBulkResetKoReaderReadProgress },
+        { entity, value -> entity.isPermissionBulkResetKoReaderReadProgress = value }
     ),
     CAN_BULK_RESET_BOOK_READ_STATUS(
         "Bulk reset book read status",
-        BookLoreUser.UserPermissions::isCanBulkResetBookReadStatus,
-        BookLoreUser.UserPermissions::setCanBulkResetBookReadStatus,
-        UserUpdateRequest.Permissions::isCanBulkResetBookReadStatus,
-        UserPermissionsEntity::isPermissionBulkResetBookReadStatus,
-        UserPermissionsEntity::setPermissionBulkResetBookReadStatus
+        { it.isCanBulkResetBookReadStatus },
+        { dto, value -> dto.isCanBulkResetBookReadStatus = value },
+        { it.isCanBulkResetBookReadStatus() },
+        { it.isPermissionBulkResetBookReadStatus },
+        { entity, value -> entity.isPermissionBulkResetBookReadStatus = value }
     );
 
     fun isGranted(permissions: BookLoreUser.UserPermissions?): Boolean {
@@ -253,7 +252,7 @@ enum class UserPermission(
     }
 
     fun getFromRequest(request: UserUpdateRequest.Permissions?): Boolean {
-        return request != null && requestGetter.apply(request)
+        return request != null && requestGetter.test(request)
     }
 
     companion object {
