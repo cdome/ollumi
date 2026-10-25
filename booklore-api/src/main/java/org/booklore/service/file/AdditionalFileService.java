@@ -2,10 +2,9 @@ package org.booklore.service.file;
 
 import org.booklore.mapper.AdditionalFileMapper;
 import org.booklore.model.dto.BookFile;
-import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -38,30 +36,27 @@ public class AdditionalFileService {
 
     private static final Pattern NON_ASCII = Pattern.compile("[^\\x00-\\x7F]");
 
-    private final BookAdditionalFileRepository additionalFileRepository;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final AdditionalFileMapper additionalFileMapper;
     private final MonitoringRegistrationService monitoringRegistrationService;
 
     public List<BookFile> getAdditionalFilesByBookId(Long bookId) {
-        List<BookFileEntity> entities = additionalFileRepository.findByBookId(bookId);
+        List<BookFileEntity> entities = jooqBookEntityRepository.findBookFilesByBookId(bookId);
         return additionalFileMapper.toAdditionalFiles(entities);
     }
 
     public List<BookFile> getAdditionalFilesByBookIdAndIsBook(Long bookId, boolean isBook) {
-        List<BookFileEntity> entities = additionalFileRepository.findByBookIdAndIsBookFormat(bookId, isBook);
+        List<BookFileEntity> entities = jooqBookEntityRepository.findBookFilesByBookIdAndIsBookFormat(bookId, isBook);
         return additionalFileMapper.toAdditionalFiles(entities);
     }
 
     @Transactional
     public void deleteAdditionalFile(Long fileId) {
-        Optional<BookFileEntity> fileOpt = additionalFileRepository.findById(fileId);
-        if (fileOpt.isEmpty()) {
+        BookFileEntity file = jooqBookEntityRepository.findBookFileById(fileId);
+        if (file == null) {
             throw new IllegalArgumentException("Additional file not found with id: " + fileId);
         }
-
-        BookFileEntity file = fileOpt.get();
-        BookEntity book = file.getBook();
 
         try {
             monitoringRegistrationService.unregisterSpecificPath(file.getFullFilePath().getParent());
@@ -75,14 +70,10 @@ public class AdditionalFileService {
                 log.info("Deleted additional file: {}", filePath);
             }
 
-            additionalFileRepository.delete(file);
+            jooqBookRepository.deleteBookFileById(fileId);
         } catch (IOException e) {
             log.warn("Failed to delete physical file: {}", file.getFullFilePath(), e);
-            additionalFileRepository.delete(file);
-        }
-
-        if (file.isBook() && book != null) {
-            book.getBookFiles().remove(file);
+            jooqBookRepository.deleteBookFileById(fileId);
         }
     }
 
@@ -96,13 +87,15 @@ public class AdditionalFileService {
         }
     }
 
+    // readOnly tx: getFullFilePath() walks book -> libraryPath, both LAZY, and open-in-view is off.
+    // The returned Resource is filesystem-backed, so streaming after commit needs no session.
+    @Transactional(readOnly = true)
     public ResponseEntity<Resource> downloadAdditionalFile(Long fileId) throws IOException {
-        Optional<BookFileEntity> fileOpt = additionalFileRepository.findById(fileId);
-        if (fileOpt.isEmpty()) {
+        BookFileEntity file = jooqBookEntityRepository.findBookFileById(fileId);
+        if (file == null) {
             return ResponseEntity.notFound().build();
         }
 
-        BookFileEntity file = fileOpt.get();
         Path filePath = file.getFullFilePath();
 
         if (!Files.exists(filePath)) {

@@ -1,6 +1,5 @@
 package org.booklore.service.book;
 
-import jakarta.persistence.EntityManager;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.mapper.BookMapper;
@@ -9,9 +8,11 @@ import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.AttachBookFileResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
@@ -34,16 +35,17 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookFileAttachmentServiceTest {
 
-    @Mock private BookRepository bookRepository;
-    @Mock private BookFileRepository bookFileRepository;
-    @Mock private UserBookProgressRepository userBookProgressRepository;
+    @Mock private JooqBookEntityRepository jooqBookEntityRepository;
+    @Mock private JooqBookRepository jooqBookRepository;
+    @Mock private JooqUserBookProgressRepository userBookProgressRepository;
+    @Mock private JooqLibraryPathRepository jooqLibraryPathRepository;
+    @Mock private org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
     @Mock private AuthenticationService authenticationService;
     @Mock private ReadingProgressService readingProgressService;
     @Mock private MonitoringRegistrationService monitoringRegistrationService;
     @Mock private FileMoveHelper fileMoveHelper;
     @Mock private BookMapper bookMapper;
     @Mock private BookService bookService;
-    @Mock private EntityManager entityManager;
 
     @InjectMocks
     private BookFileAttachmentService service;
@@ -70,7 +72,8 @@ class BookFileAttachmentServiceTest {
                 .path(tempDir.toString())
                 .build();
 
-        library.setLibraryPaths(new ArrayList<>(List.of(libraryPath)));
+        lenient().when(jooqLibraryPathRepository.findPathsByLibraryId(1L))
+                .thenReturn(List.of(new LibraryPathRow(libraryPath.getId(), libraryPath.getPath())));
     }
 
     private BookEntity createBook(Long id) {
@@ -94,6 +97,7 @@ class BookFileAttachmentServiceTest {
                 .folderBased(folderBased)
                 .bookType(BookFileType.EPUB)
                 .build();
+        book.getBookFiles().add(file);
 
         Path dir = tempDir.resolve(subPath);
         Files.createDirectories(dir);
@@ -113,14 +117,15 @@ class BookFileAttachmentServiceTest {
                 .folderBased(false)
                 .bookType(BookFileType.EPUB)
                 .build();
+        book.getBookFiles().add(file);
         return file;
     }
 
     private void setupGetUpdatedBookMocks(Long bookId, BookEntity bookEntity) {
         BookLoreUser user = BookLoreUser.builder().id(1L).username("testuser").build();
         lenient().when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        lenient().when(bookRepository.findByIdWithBookFiles(bookId))
-                .thenReturn(Optional.of(bookEntity));
+        lenient().when(jooqBookEntityRepository.findByIdFull(bookId))
+                .thenReturn(bookEntity);
         lenient().when(userBookProgressRepository.findByUserIdAndBookId(1L, bookId))
                 .thenReturn(Optional.empty());
         lenient().when(readingProgressService.fetchUserFileProgress(eq(1L), anySet()))
@@ -137,7 +142,7 @@ class BookFileAttachmentServiceTest {
         @Test
         @DisplayName("Throws when target book does not exist")
         void attachBookFiles_targetNotFound_throws() {
-            when(bookRepository.findByIdWithBookFiles(999L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(999L)).thenReturn(null);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(999L, List.of(2L), false));
@@ -153,8 +158,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "book.epub", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(2L), false));
@@ -170,7 +175,7 @@ class BookFileAttachmentServiceTest {
         @DisplayName("Throws when attaching a book to itself")
         void attachBookFiles_selfAttach_throws() {
             BookEntity target = createBook(1L);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(1L), false));
@@ -183,8 +188,8 @@ class BookFileAttachmentServiceTest {
             BookEntity target = createBook(1L);
             createBookFile(10L, target, "target.epub", "sub", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(999L)).thenReturn(Optional.empty());
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(999L)).thenReturn(null);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(999L), false));
@@ -206,8 +211,8 @@ class BookFileAttachmentServiceTest {
                     .build();
             createBookFile(20L, source, "source.epub", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(2L), false));
@@ -223,8 +228,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "notes.txt", "sub2", false, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(2L), false));
@@ -240,8 +245,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "audiobook", "sub2", true, true);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(2L), false));
@@ -264,8 +269,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFileNoPhysicalFile(20L, source, "missing.epub", "sub2", true);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(2L), false));
@@ -281,15 +286,15 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "source.epub", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L, 2L, 2L), false);
 
             // findByIdWithBookFiles for source should be called only once (deduplicated)
-            verify(bookRepository, times(1)).findByIdWithBookFiles(2L);
+            verify(jooqBookEntityRepository, times(1)).findByIdFull(2L);
         }
     }
 
@@ -306,10 +311,9 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "source.epub", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
             setupGetUpdatedBookMocks(1L, target);
 
             AttachBookFileResponse result = service.attachBookFiles(1L, List.of(2L), false);
@@ -317,10 +321,8 @@ class BookFileAttachmentServiceTest {
             assertNotNull(result);
             assertNotNull(result.updatedBook());
             assertEquals(List.of(2L), result.deletedSourceBookIds());
-            verify(bookFileRepository).reassignFilesToBook(eq(1L), anyList());
-            verify(entityManager).flush();
-            verify(entityManager).clear();
-            verify(bookRepository).deleteAll(List.of(source));
+            verify(jooqBookRepository).reassignFilesToBook(eq(1L), anyList());
+            verify(jooqBookRepository).deleteByIds(List.of(2L));
         }
 
         @Test
@@ -335,17 +337,16 @@ class BookFileAttachmentServiceTest {
             BookEntity source2 = createBook(3L);
             createBookFile(30L, source2, "source2.epub", "sub3", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source1));
-            when(bookRepository.findByIdWithBookFiles(3L)).thenReturn(Optional.of(source2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source1);
+            when(jooqBookEntityRepository.findByIdFull(3L)).thenReturn(source2);
 
-            when(bookRepository.findAllById(anyList())).thenReturn(List.of(source1, source2));
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L, 3L), false);
 
-            verify(bookFileRepository, times(2)).reassignFilesToBook(eq(1L), anyList());
-            verify(bookRepository).deleteAll(anyList());
+            verify(jooqBookRepository, times(2)).reassignFilesToBook(eq(1L), anyList());
+            verify(jooqBookRepository).deleteByIds(anyList());
         }
 
         @Test
@@ -358,14 +359,14 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.epub", "sub2", true, false);
             createBookFile(21L, source, "cover.jpg", "sub2", false, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L), false);
 
-            verify(bookRepository, never()).deleteAll(anyList());
+            verify(jooqBookRepository, never()).deleteByIds(anyList());
         }
 
         @Test
@@ -378,10 +379,9 @@ class BookFileAttachmentServiceTest {
             Path sourceFile = createBookFile(20L, source, "source.epub", "sub2", true, false)
                     .getFullFilePath();
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L), false);
@@ -408,8 +408,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -429,8 +429,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "source.epub", "source_dir", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -451,8 +451,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "new_dir/{title}");
 
@@ -474,8 +474,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -497,14 +497,14 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
             service.attachBookFiles(1L, List.of(2L), true);
 
-            verify(bookRepository).deleteAll(anyList());
+            verify(jooqBookRepository).deleteByIds(anyList());
         }
 
         @Test
@@ -517,8 +517,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "source.epub", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupFileMoveStubs(target, "other_dir/{title}");
 
             APIException ex = assertThrows(APIException.class,
@@ -536,8 +536,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -556,8 +556,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -577,8 +577,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -601,9 +601,9 @@ class BookFileAttachmentServiceTest {
             createBookFile(30L, source2, "source2.mobi", "source_dir2", true, false);
             source2.getBookFiles().getFirst().setBookType(BookFileType.MOBI);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source1));
-            when(bookRepository.findByIdWithBookFiles(3L)).thenReturn(Optional.of(source2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source1);
+            when(jooqBookEntityRepository.findByIdFull(3L)).thenReturn(source2);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -625,9 +625,9 @@ class BookFileAttachmentServiceTest {
             BookEntity source2 = createBook(3L);
             createBookFile(30L, source2, "source2.epub", "source_dir2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source1));
-            when(bookRepository.findByIdWithBookFiles(3L)).thenReturn(Optional.of(source2));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source1);
+            when(jooqBookEntityRepository.findByIdFull(3L)).thenReturn(source2);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 
@@ -652,10 +652,8 @@ class BookFileAttachmentServiceTest {
             BookEntity source = createBook(2L);
             createBookFile(20L, source, "source.epub", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
-
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             BookLoreUser user = BookLoreUser.builder().id(1L).username("testuser").build();
             when(authenticationService.getAuthenticatedUser()).thenReturn(user);
@@ -693,15 +691,15 @@ class BookFileAttachmentServiceTest {
             createBookFile(21L, source, "cover.jpg", "sub2", false, false);
             createBookFile(22L, source, "metadata.xml", "sub2", false, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
             setupGetUpdatedBookMocks(1L, target);
 
             AttachBookFileResponse result = service.attachBookFiles(1L, List.of(2L), false);
 
             // Should not delete source since it has remaining non-book files
-            verify(bookRepository, never()).deleteAll(anyList());
+            verify(jooqBookRepository, never()).deleteByIds(anyList());
             assertTrue(result.deletedSourceBookIds().isEmpty());
         }
 
@@ -715,23 +713,22 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.epub", "sub2", true, false);
             createBookFile(21L, source, "source.pdf", "sub2", true, false);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
 
-            when(bookRepository.findAllById(List.of(2L))).thenReturn(List.of(source));
             setupGetUpdatedBookMocks(1L, target);
 
             service.attachBookFiles(1L, List.of(2L), false);
 
-            verify(bookFileRepository).reassignFilesToBook(eq(1L), anyList());
-            verify(bookRepository).deleteAll(List.of(source));
+            verify(jooqBookRepository).reassignFilesToBook(eq(1L), anyList());
+            verify(jooqBookRepository).deleteByIds(List.of(2L));
         }
 
         @Test
         @DisplayName("Empty source book IDs list after filtering self-references")
         void attachBookFiles_emptySourceAfterFilter_noopValidation() {
             BookEntity target = createBook(1L);
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
 
             APIException ex = assertThrows(APIException.class,
                     () -> service.attachBookFiles(1L, List.of(1L), false));
@@ -748,8 +745,8 @@ class BookFileAttachmentServiceTest {
             createBookFile(20L, source, "source.pdf", "source_dir", true, false);
             source.getBookFiles().getFirst().setBookType(BookFileType.PDF);
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "{title}");
 
@@ -766,7 +763,10 @@ class BookFileAttachmentServiceTest {
                     .library(library)
                     .path(tempDir.resolve("other_root").toString())
                     .build();
-            library.setLibraryPaths(new ArrayList<>(List.of(libraryPath, otherLibraryPath)));
+            lenient().when(jooqLibraryPathRepository.findPathsByLibraryId(1L)).thenReturn(List.of(
+                    new LibraryPathRow(libraryPath.getId(), libraryPath.getPath()),
+                    new LibraryPathRow(otherLibraryPath.getId(), otherLibraryPath.getPath())
+            ));
 
             Files.createDirectories(tempDir.resolve("other_root"));
 
@@ -788,19 +788,20 @@ class BookFileAttachmentServiceTest {
                     .folderBased(false)
                     .bookType(BookFileType.PDF)
                     .build();
+            source.getBookFiles().add(sourceFile);
             Path sourceDir = tempDir.resolve("other_root/source_dir");
             Files.createDirectories(sourceDir);
             Files.createFile(sourceDir.resolve("source.pdf"));
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
 
             AttachBookFileResponse result = service.attachBookFiles(1L, List.of(2L), false);
 
             assertTrue(Files.exists(sourceDir.resolve("source.pdf")),
                     "Source file should remain at original location");
-            verify(bookFileRepository).reassignFileToBookWithPath(eq(1L), anyString(), eq(20L));
+            verify(jooqBookRepository).reassignFileWithNewNameAndPath(eq(20L), eq(1L), anyString(), eq("source.pdf"));
             assertEquals(List.of(2L), result.deletedSourceBookIds());
         }
 
@@ -820,11 +821,12 @@ class BookFileAttachmentServiceTest {
                     .folderBased(false)
                     .bookType(BookFileType.EPUB)
                     .build();
+            source.getBookFiles().add(sourceFile);
             Files.createDirectories(tempDir.resolve("source_dir"));
             Files.createFile(tempDir.resolve("source_dir/noextension"));
 
-            when(bookRepository.findByIdWithBookFiles(1L)).thenReturn(Optional.of(target));
-            when(bookRepository.findByIdWithBookFiles(2L)).thenReturn(Optional.of(source));
+            when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(target);
+            when(jooqBookEntityRepository.findByIdFull(2L)).thenReturn(source);
             setupGetUpdatedBookMocks(1L, target);
             setupFileMoveStubs(target, "target_dir/{title}");
 

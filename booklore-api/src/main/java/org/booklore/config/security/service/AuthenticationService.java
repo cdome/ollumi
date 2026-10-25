@@ -10,11 +10,11 @@ import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.UserLoginRequest;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
+import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.model.enums.ProvisioningMethod;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.RefreshTokenRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.user.DefaultSettingInitializer;
 import org.booklore.service.user.UserProvisioningService;
@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.service.audit.AuditService;
 import org.booklore.util.RequestUtils;
@@ -40,8 +39,8 @@ public class AuthenticationService {
     private String dummyPasswordHash;
 
     private final AppProperties appProperties;
-    private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final JooqUserRepository userRepository;
+    private final JooqRefreshTokenRepository refreshTokenRepository;
     private final UserProvisioningService userProvisioningService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
@@ -52,8 +51,8 @@ public class AuthenticationService {
 
     public AuthenticationService(
             AppProperties appProperties,
-            UserRepository userRepository,
-            RefreshTokenRepository refreshTokenRepository,
+            JooqUserRepository userRepository,
+            JooqRefreshTokenRepository refreshTokenRepository,
             UserProvisioningService userProvisioningService,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
@@ -128,7 +127,7 @@ public class AuthenticationService {
     @Transactional
     public ResponseEntity<Map<String, String>> loginUser(UserLoginRequest loginRequest) {
         if (appSettingService.getAppSettings().isOidcForceOnlyMode()) {
-            BookLoreUserEntity oidcCheckUser = userRepository.findByUsername(loginRequest.getUsername()).orElse(null);
+            BookLoreUserEntity oidcCheckUser = userRepository.findByUsername(loginRequest.getUsername());
             if (oidcCheckUser == null || !oidcCheckUser.getPermissions().isPermissionAdmin()) {
                 throw ApiError.OIDC_ONLY_MODE.createException();
             }
@@ -139,7 +138,7 @@ public class AuthenticationService {
         authRateLimitService.checkLoginRateLimit(ip);
         authRateLimitService.checkLoginRateLimitByUsername(username);
 
-        BookLoreUserEntity user = userRepository.findByUsername(username).orElse(null);
+        BookLoreUserEntity user = userRepository.findByUsername(username);
 
         if (user == null) {
             // Constant-time dummy BCrypt check prevents timing-based user enumeration:
@@ -169,16 +168,16 @@ public class AuthenticationService {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Remote-User header is missing");
         }
 
-        Optional<BookLoreUserEntity> user = userRepository.findByUsername(username);
-        if (user.isEmpty() && appProperties.getRemoteAuth().isCreateNewUsers()) {
-            user = Optional.of(userProvisioningService.provisionRemoteUserFromHeaders(name, username, email, groups));
+        BookLoreUserEntity user = userRepository.findByUsername(username);
+        if (user == null && appProperties.getRemoteAuth().isCreateNewUsers()) {
+            user = userProvisioningService.provisionRemoteUserFromHeaders(name, username, email, groups);
         }
 
-        if (user.isEmpty()) {
+        if (user == null) {
             throw ApiError.INTERNAL_SERVER_ERROR.createException("User not found and remote user creation is disabled");
         }
 
-        return loginUser(user.get());
+        return loginUser(user);
     }
 
     public ResponseEntity<Map<String, String>> loginUser(BookLoreUserEntity user) {
@@ -191,19 +190,12 @@ public class AuthenticationService {
 
         long expirationMs = customRefreshTokenExpirationMs != null ? customRefreshTokenExpirationMs : jwtUtils.getRefreshTokenExpirationMs();
 
-        RefreshTokenEntity refreshTokenEntity = RefreshTokenEntity.builder()
-                .user(user)
-                .token(refreshToken)
-                .expiryDate(Instant.now().plusMillis(expirationMs))
-                .revoked(false)
-                .build();
-
-        refreshTokenRepository.save(refreshTokenEntity);
+        refreshTokenRepository.insert(user.getId(), refreshToken, Instant.now().plusMillis(expirationMs), false);
         auditService.log(AuditAction.LOGIN_SUCCESS, "User", user.getId(), "Login successful for user: " + user.getUsername());
 
         return ResponseEntity.ok(Map.of(
                 "accessToken", accessToken,
-                "refreshToken", refreshTokenEntity.getToken(),
+                "refreshToken", refreshToken,
                 "isDefaultPassword", String.valueOf(user.isDefaultPassword())
         ));
     }
@@ -213,31 +205,26 @@ public class AuthenticationService {
         String ip = RequestUtils.getCurrentRequest().getRemoteAddr();
         authRateLimitService.checkRefreshRateLimit(ip);
 
-        RefreshTokenEntity storedToken = refreshTokenRepository.findByToken(token).orElseThrow(() -> {
+        RefreshToken storedToken = refreshTokenRepository.findByToken(token);
+        if (storedToken == null) {
             authRateLimitService.recordFailedRefreshAttempt(ip);
-            return ApiError.INVALID_CREDENTIALS.createException("Refresh token not found");
-        });
+            throw ApiError.INVALID_CREDENTIALS.createException("Refresh token not found");
+        }
 
-        if (storedToken.isRevoked() || storedToken.getExpiryDate().isBefore(Instant.now()) || !jwtUtils.validateToken(token)) {
+        if (storedToken.getRevoked() || storedToken.getExpiryDate().isBefore(Instant.now()) || !jwtUtils.validateToken(token)) {
             authRateLimitService.recordFailedRefreshAttempt(ip);
             throw ApiError.INVALID_CREDENTIALS.createException("Invalid or expired refresh token");
         }
 
-        BookLoreUserEntity user = storedToken.getUser();
+        BookLoreUserEntity user = userRepository.findById(storedToken.getUserId());
+        if (user == null) {
+            throw ApiError.INVALID_CREDENTIALS.createException("Refresh token user not found");
+        }
 
-        storedToken.setRevoked(true);
-        storedToken.setRevocationDate(Instant.now());
-        refreshTokenRepository.save(storedToken);
+        refreshTokenRepository.revokeById(storedToken.getId(), Instant.now());
 
         String newRefreshToken = jwtUtils.generateRefreshToken(user);
-        RefreshTokenEntity newRefreshTokenEntity = RefreshTokenEntity.builder()
-                .user(user)
-                .token(newRefreshToken)
-                .expiryDate(Instant.now().plusMillis(jwtUtils.getRefreshTokenExpirationMs()))
-                .revoked(false)
-                .build();
-
-        refreshTokenRepository.save(newRefreshTokenEntity);
+        refreshTokenRepository.insert(user.getId(), newRefreshToken, Instant.now().plusMillis(jwtUtils.getRefreshTokenExpirationMs()), false);
 
         authRateLimitService.resetRefreshAttempts(ip);
 

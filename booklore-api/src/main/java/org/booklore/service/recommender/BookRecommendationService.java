@@ -6,10 +6,11 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.mapper.BookMapper;
 import org.booklore.model.dto.*;
-import org.booklore.model.entity.AuthorEntity;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.book.BookQueryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,23 +27,28 @@ import java.util.stream.Collectors;
 public class BookRecommendationService {
 
     private final BookSimilarityService similarityService;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookQueryService bookQueryService;
     private final BookMapper bookMapper;
     private final AuthenticationService authenticationService;
+    private final JooqBookMetadataRelationsRepository bookMetadataRelationsRepository;
 
     private static final int MAX_BOOKS_PER_AUTHOR = 3;
 
     @Transactional
     public List<BookRecommendation> getRecommendations(Long bookId, int limit) {
-        BookEntity book = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (book == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         Set<BookRecommendationLite> recommendations = book.getSimilarBooksJson();
         if (recommendations == null || recommendations.isEmpty()) {
             log.info("Recommendations for book ID {} are missing or empty. Computing similarity...", bookId);
             recommendations = findSimilarBookIds(bookId, limit);
             book.setSimilarBooksJson(recommendations);
-            bookRepository.save(book);
+            jooqBookRepository.updateSimilarBooksJson(bookId, recommendations);
         }
 
         Set<Long> recommendedBookIds = recommendations.stream()
@@ -90,7 +96,10 @@ public class BookRecommendationService {
     }
 
     protected List<BookRecommendation> findSimilarBooks(Long bookId, int limit) {
-        BookEntity target = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity target = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (target == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         List<BookEntity> candidates = bookQueryService.getAllFullBookEntities();
 
@@ -98,6 +107,15 @@ public class BookRecommendationService {
                 .map(BookMetadataEntity::getSeriesName)
                 .map(String::toLowerCase)
                 .orElse(null);
+
+        // Batch-load author/category names for the target + all candidates once (avoids a per-pair query).
+        List<Long> similarityIds = new ArrayList<>();
+        similarityIds.add(target.getId());
+        candidates.forEach(c -> {
+            if (c.getId() != null) similarityIds.add(c.getId());
+        });
+        Map<Long, Set<String>> authorNamesByBook = lowercaseNames(bookMetadataRelationsRepository.findAuthorNamesByBookIds(similarityIds));
+        Map<Long, Set<String>> categoryNamesByBook = lowercaseNames(bookMetadataRelationsRepository.findCategoryNamesByBookIds(similarityIds));
 
         List<SimpleEntry<BookEntity, Double>> scored = candidates.stream()
                 .filter(candidate -> !candidate.getId().equals(bookId))
@@ -108,7 +126,7 @@ public class BookRecommendationService {
                             .orElse(null);
                     return targetSeriesName == null || !targetSeriesName.equals(candidateSeriesName);
                 })
-                .map(candidate -> new SimpleEntry<>(candidate, similarityService.calculateSimilarity(target, candidate)))
+                .map(candidate -> new SimpleEntry<>(candidate, similarityService.calculateSimilarity(target, candidate, authorNamesByBook, categoryNamesByBook)))
                 .filter(entry -> entry.getValue() > 0.0)
                 .sorted(Map.Entry.<BookEntity, Double>comparingByValue().reversed())
                 .toList();
@@ -132,10 +150,21 @@ public class BookRecommendationService {
         return recommendations;
     }
 
+    private Map<Long, Set<String>> lowercaseNames(Map<Long, ? extends Collection<String>> raw) {
+        Map<Long, Set<String>> out = new HashMap<>();
+        raw.forEach((id, names) -> {
+            Set<String> lowered = new HashSet<>();
+            for (String n : names) {
+                if (n != null) lowered.add(n.toLowerCase());
+            }
+            out.put(id, lowered);
+        });
+        return out;
+    }
+
     private Set<String> getAuthorNames(BookEntity book) {
-        if (book.getMetadata() == null || book.getMetadata().getAuthors() == null) return Collections.emptySet();
-        return book.getMetadata().getAuthors().stream()
-                .map(AuthorEntity::getName)
+        if (book.getId() == null) return Collections.emptySet();
+        return bookMetadataRelationsRepository.findAuthorNamesByBookId(book.getId()).stream()
                 .filter(Objects::nonNull)
                 .map(String::toLowerCase)
                 .collect(Collectors.toSet());

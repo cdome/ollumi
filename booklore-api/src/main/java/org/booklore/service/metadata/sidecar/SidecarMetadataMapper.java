@@ -1,10 +1,12 @@
 package org.booklore.service.metadata.sidecar;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.ComicMetadata;
 import org.booklore.model.dto.sidecar.*;
 import org.booklore.model.entity.*;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -16,7 +18,11 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SidecarMetadataMapper {
+
+    private final JooqBookMetadataRelationsRepository relationsRepository;
+    private final org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
 
     public SidecarMetadata toSidecarMetadata(BookMetadataEntity entity, String coverFileName) {
         if (entity == null) {
@@ -26,7 +32,7 @@ public class SidecarMetadataMapper {
         SidecarBookMetadata bookMetadata = SidecarBookMetadata.builder()
                 .title(entity.getTitle())
                 .subtitle(entity.getSubtitle())
-                .authors(extractNames(entity.getAuthors()))
+                .authors(relationsRepository.findAuthorNamesByBookId(entity.getBookId()))
                 .publisher(entity.getPublisher())
                 .publishedDate(entity.getPublishedDate())
                 .description(entity.getDescription())
@@ -34,9 +40,9 @@ public class SidecarMetadataMapper {
                 .isbn13(entity.getIsbn13())
                 .language(entity.getLanguage())
                 .pageCount(entity.getPageCount())
-                .categories(extractCategoryNames(entity.getCategories()))
-                .moods(extractMoodNames(entity.getMoods()))
-                .tags(extractTagNames(entity.getTags()))
+                .categories(relationsRepository.findCategoryNamesByBookId(entity.getBookId()))
+                .moods(relationsRepository.findMoodNamesByBookId(entity.getBookId()))
+                .tags(relationsRepository.findTagNamesByBookId(entity.getBookId()))
                 .series(buildSeries(entity))
                 .identifiers(buildIdentifiers(entity))
                 .ratings(buildRatings(entity))
@@ -146,34 +152,6 @@ public class SidecarMetadataMapper {
         return baseName + ".cover.jpg";
     }
 
-    private List<String> extractNames(List<AuthorEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(AuthorEntity::getName)
-                .toList();
-    }
-
-    private Set<String> extractCategoryNames(Set<CategoryEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(CategoryEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
-    private Set<String> extractMoodNames(Set<MoodEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(MoodEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
-    private Set<String> extractTagNames(Set<TagEntity> entities) {
-        if (entities == null) return null;
-        return entities.stream()
-                .map(TagEntity::getName)
-                .collect(Collectors.toSet());
-    }
-
     private SidecarSeries buildSeries(BookMetadataEntity entity) {
         if (entity.getSeriesName() == null && entity.getSeriesNumber() == null && entity.getSeriesTotal() == null) {
             return null;
@@ -239,12 +217,9 @@ public class SidecarMetadataMapper {
                 .readingDirection(entity.getReadingDirection())
                 .webLink(entity.getWebLink())
                 .notes(entity.getNotes())
-                .characters(entity.getCharacters() != null ?
-                        entity.getCharacters().stream().map(ComicCharacterEntity::getName).collect(Collectors.toSet()) : null)
-                .teams(entity.getTeams() != null ?
-                        entity.getTeams().stream().map(ComicTeamEntity::getName).collect(Collectors.toSet()) : null)
-                .locations(entity.getLocations() != null ?
-                        entity.getLocations().stream().map(ComicLocationEntity::getName).collect(Collectors.toSet()) : null)
+                .characters(comicRelationsRepository.findCharacterNamesByBookId(entity.getBookId()))
+                .teams(comicRelationsRepository.findTeamNamesByBookId(entity.getBookId()))
+                .locations(comicRelationsRepository.findLocationNamesByBookId(entity.getBookId()))
                 .build();
     }
 }

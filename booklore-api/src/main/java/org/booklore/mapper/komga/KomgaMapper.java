@@ -2,9 +2,12 @@ package org.booklore.mapper.komga;
 
 import org.booklore.context.KomgaCleanContext;
 import org.booklore.model.dto.MagicShelf;
+import org.booklore.model.dto.OpdsUserV2;
 import org.booklore.model.dto.komga.*;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.appsettings.AppSettingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,16 +28,17 @@ public class KomgaMapper {
 
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final String UNKNOWN_SERIES = "Unknown Series";
 
     public KomgaLibraryDto toKomgaLibraryDto(LibraryEntity library) {
+        List<LibraryPathRow> paths = jooqLibraryPathRepository.findPathsByLibraryId(library.getId());
         return KomgaLibraryDto.builder()
                 .id(library.getId().toString())
                 .name(library.getName())
-                .root(library.getLibraryPaths() != null && !library.getLibraryPaths().isEmpty() 
-                      ? library.getLibraryPaths().get(0).getPath() 
-                      : "")
+                .root(paths.isEmpty() ? "" : paths.get(0).getPath())
                 .unavailable(false)
                 .build();
     }
@@ -115,22 +119,14 @@ public class KomgaMapper {
             return KomgaBookMetadataDto.builder().build();
         }
         
-        List<KomgaAuthorDto> authors = new ArrayList<>();
-        if (metadata.getAuthors() != null) {
-            authors = metadata.getAuthors().stream()
-                    .map(author -> KomgaAuthorDto.builder()
-                            .name(author.getName())
-                            .role("writer")
-                            .build())
-                    .collect(Collectors.toList());
-        }
+        List<KomgaAuthorDto> authors = relationsRepository.findAuthorNamesByBookId(metadata.getBookId()).stream()
+                .map(name -> KomgaAuthorDto.builder()
+                        .name(name)
+                        .role("writer")
+                        .build())
+                .collect(Collectors.toList());
         
-        List<String> tags = new ArrayList<>();
-        if (metadata.getTags() != null) {
-            tags = metadata.getTags().stream()
-                    .map(TagEntity::getName)
-                    .collect(Collectors.toList());
-        }
+        List<String> tags = new ArrayList<>(relationsRepository.findTagNamesByBookId(metadata.getBookId()));
         
         return KomgaBookMetadataDto.builder()
                 .title(nullIfEmptyInCleanMode(metadata.getTitle(), ""))
@@ -162,16 +158,8 @@ public class KomgaMapper {
         List<String> tags = new ArrayList<>();
         
         if (firstMetadata != null) {
-            if (firstMetadata.getCategories() != null) {
-                genres = firstMetadata.getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .collect(Collectors.toList());
-            }
-            if (firstMetadata.getTags() != null) {
-                tags = firstMetadata.getTags().stream()
-                        .map(TagEntity::getName)
-                        .collect(Collectors.toList());
-            }
+            genres = new ArrayList<>(relationsRepository.findCategoryNamesByBookId(firstMetadata.getBookId()));
+            tags = new ArrayList<>(relationsRepository.findTagNamesByBookId(firstMetadata.getBookId()));
         }
         String language = firstMetadata != null ? firstMetadata.getLanguage() : null;
         String description = firstMetadata != null ? firstMetadata.getDescription() : null;
@@ -213,13 +201,9 @@ public class KomgaMapper {
             for (BookEntity book : books) {
             BookMetadataEntity metadata = book.getMetadata();
             if (metadata != null) {
-                if (metadata.getAuthors() != null) {
-                    metadata.getAuthors().forEach(author -> authorNames.add(author.getName()));
-                }
+                authorNames.addAll(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()));
                 
-                if (metadata.getTags() != null) {
-                    metadata.getTags().forEach(tag -> allTags.add(tag.getName()));
-                }
+                allTags.addAll(relationsRepository.findTagNamesByBookId(metadata.getBookId()));
                 
                 if (releaseDate == null && metadata.getPublishedDate() != null) {
                     releaseDate = metadata.getPublishedDate().format(DATE_FORMATTER);
@@ -351,7 +335,7 @@ public class KomgaMapper {
         return value != null ? value : defaultValue;
     }
 
-    public KomgaUserDto toKomgaUserDto(OpdsUserV2Entity opdsUser) {
+    public KomgaUserDto toKomgaUserDto(OpdsUserV2 opdsUser) {
         return KomgaUserDto.builder()
                 .id(opdsUser.getId().toString())
                 .email(opdsUser.getUsername() + "@booklore.local")

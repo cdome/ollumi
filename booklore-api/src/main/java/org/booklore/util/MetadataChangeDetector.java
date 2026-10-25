@@ -247,19 +247,19 @@ public class MetadataChangeDetector {
 
     private static final List<CollectionFieldDescriptor> COLLECTION_FIELDS = List.of(
             new CollectionFieldDescriptor("authors",
-                    BookMetadata::getAuthors, BookMetadataEntity::getAuthors,
+                    BookMetadata::getAuthors, BookMetadataEntity::getAuthorNames,
                     BookMetadata::getAuthorsLocked, BookMetadataEntity::getAuthorsLocked,
                     MetadataClearFlags::isAuthors, true, true),
             new CollectionFieldDescriptor("categories",
-                    BookMetadata::getCategories, BookMetadataEntity::getCategories,
+                    BookMetadata::getCategories, BookMetadataEntity::getCategoryNames,
                     BookMetadata::getCategoriesLocked, BookMetadataEntity::getCategoriesLocked,
                     MetadataClearFlags::isCategories, true),
             new CollectionFieldDescriptor("moods",
-                    BookMetadata::getMoods, BookMetadataEntity::getMoods,
+                    BookMetadata::getMoods, BookMetadataEntity::getMoodNames,
                     BookMetadata::getMoodsLocked, BookMetadataEntity::getMoodsLocked,
                     MetadataClearFlags::isMoods, false),
             new CollectionFieldDescriptor("tags",
-                    BookMetadata::getTags, BookMetadataEntity::getTags,
+                    BookMetadata::getTags, BookMetadataEntity::getTagNames,
                     BookMetadata::getTagsLocked, BookMetadataEntity::getTagsLocked,
                     MetadataClearFlags::isTags, false)
     );
@@ -401,10 +401,6 @@ public class MetadataChangeDetector {
         }
         return entities.stream()
                 .map(e -> switch (e) {
-                    case AuthorEntity author -> author.getName();
-                    case CategoryEntity category -> category.getName();
-                    case MoodEntity mood -> mood.getName();
-                    case TagEntity tag -> tag.getName();
                     default -> e.toString();
                 })
                 .toList();
@@ -416,10 +412,6 @@ public class MetadataChangeDetector {
         }
         return entities.stream()
                 .map(e -> switch (e) {
-                    case AuthorEntity author -> author.getName();
-                    case CategoryEntity category -> category.getName();
-                    case MoodEntity mood -> mood.getName();
-                    case TagEntity tag -> tag.getName();
                     default -> e.toString();
                 })
                 .collect(Collectors.toSet());
@@ -454,9 +446,9 @@ public class MetadataChangeDetector {
                 || differsValue(comicDto.getReadingDirection(), comicEntity.getReadingDirection())
                 || differsValue(comicDto.getWebLink(), comicEntity.getWebLink())
                 || differsValue(comicDto.getNotes(), comicEntity.getNotes())
-                || !stringSetsEqual(comicDto.getCharacters(), extractCharacterNames(comicEntity.getCharacters()))
-                || !stringSetsEqual(comicDto.getTeams(), extractTeamNames(comicEntity.getTeams()))
-                || !stringSetsEqual(comicDto.getLocations(), extractLocationNames(comicEntity.getLocations()))
+                || !stringSetsEqual(comicDto.getCharacters(), comicEntity.getCharacterNames())
+                || !stringSetsEqual(comicDto.getTeams(), comicEntity.getTeamNames())
+                || !stringSetsEqual(comicDto.getLocations(), comicEntity.getLocationNames())
                 || hasCreatorChanges(comicDto, comicEntity);
     }
 
@@ -541,21 +533,6 @@ public class MetadataChangeDetector {
         return set1.equals(set2);
     }
 
-    private static Set<String> extractCharacterNames(Set<ComicCharacterEntity> entities) {
-        if (entities == null) return Collections.emptySet();
-        return entities.stream().map(ComicCharacterEntity::getName).collect(Collectors.toSet());
-    }
-
-    private static Set<String> extractTeamNames(Set<ComicTeamEntity> entities) {
-        if (entities == null) return Collections.emptySet();
-        return entities.stream().map(ComicTeamEntity::getName).collect(Collectors.toSet());
-    }
-
-    private static Set<String> extractLocationNames(Set<ComicLocationEntity> entities) {
-        if (entities == null) return Collections.emptySet();
-        return entities.stream().map(ComicLocationEntity::getName).collect(Collectors.toSet());
-    }
-
     private static boolean hasCreatorChanges(ComicMetadata dto, ComicMetadataEntity entity) {
         // For creators, we do a simplified comparison based on whether there are any creators in DTO
         boolean dtoHasCreators = (dto.getPencillers() != null && !dto.getPencillers().isEmpty())
@@ -565,7 +542,10 @@ public class MetadataChangeDetector {
                 || (dto.getCoverArtists() != null && !dto.getCoverArtists().isEmpty())
                 || (dto.getEditors() != null && !dto.getEditors().isEmpty());
 
-        boolean entityHasCreators = entity.getCreatorMappings() != null && !entity.getCreatorMappings().isEmpty();
+        int entityCreatorCount = countNonNull(entity.getPencillerNames()) + countNonNull(entity.getInkerNames())
+                + countNonNull(entity.getColoristNames()) + countNonNull(entity.getLettererNames())
+                + countNonNull(entity.getCoverArtistNames()) + countNonNull(entity.getEditorNames());
+        boolean entityHasCreators = entityCreatorCount > 0;
 
         // If both have no creators, no change
         if (!dtoHasCreators && !entityHasCreators) return false;
@@ -578,7 +558,7 @@ public class MetadataChangeDetector {
                 + countNonNull(dto.getColorists()) + countNonNull(dto.getLetterers())
                 + countNonNull(dto.getCoverArtists()) + countNonNull(dto.getEditors());
 
-        return dtoCount != entity.getCreatorMappings().size();
+        return dtoCount != entityCreatorCount;
     }
 
     private static int countNonNull(Set<String> set) {

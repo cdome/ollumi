@@ -3,11 +3,10 @@ package org.booklore.service.kobo;
 import org.booklore.model.dto.KoboSyncSettings;
 import org.booklore.model.dto.kobo.ChangedReadingState;
 import org.booklore.model.dto.kobo.KoboReadingState;
-import org.booklore.model.entity.UserBookProgressEntity;
-import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.ReadStatus;
-import org.booklore.repository.KoboDeletedBookProgressRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.util.kobo.BookloreSyncTokenGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,9 +38,9 @@ class KoboLibrarySyncServiceTest {
     @Mock
     private KoboEntitlementService entitlementService;
     @Mock
-    private KoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
+    private JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
     @Mock
-    private UserBookProgressRepository userBookProgressRepository;
+    private JooqUserBookProgressRepository userBookProgressRepository;
     @Mock
     private KoboServerProxy koboServerProxy;
     @Mock
@@ -70,7 +69,7 @@ class KoboLibrarySyncServiceTest {
         void filterWebReaderOnlyEntries_whenToggleOff() {
             testSettings.setTwoWayProgressSync(false);
 
-            UserBookProgressEntity webReaderOnly = createProgress(1L);
+            UserBookProgressRow webReaderOnly = createProgress(1L);
             webReaderOnly.setEpubProgress("epubcfi(/6/4)");
             webReaderOnly.setEpubProgressPercent(50f);
             webReaderOnly.setLastReadTime(Instant.now());
@@ -87,7 +86,7 @@ class KoboLibrarySyncServiceTest {
         void includeKoboProgressEntries_alwaysIncluded() {
             testSettings.setTwoWayProgressSync(false);
 
-            UserBookProgressEntity koboProgress = createProgress(1L);
+            UserBookProgressRow koboProgress = createProgress(1L);
             koboProgress.setKoboProgressPercent(75f);
             koboProgress.setKoboProgressReceivedTime(Instant.now());
             koboProgress.setKoboProgressSentTime(null);
@@ -100,7 +99,7 @@ class KoboLibrarySyncServiceTest {
         void includeStatusEntries_alwaysIncluded() {
             testSettings.setTwoWayProgressSync(false);
 
-            UserBookProgressEntity statusProgress = createProgress(1L);
+            UserBookProgressRow statusProgress = createProgress(1L);
             statusProgress.setReadStatus(ReadStatus.READ);
             statusProgress.setReadStatusModifiedTime(Instant.now());
             statusProgress.setKoboStatusSentTime(null);
@@ -113,7 +112,7 @@ class KoboLibrarySyncServiceTest {
         void includeWebReaderEntries_whenToggleOn() {
             testSettings.setTwoWayProgressSync(true);
 
-            UserBookProgressEntity webReaderProgress = createProgress(1L);
+            UserBookProgressRow webReaderProgress = createProgress(1L);
             webReaderProgress.setEpubProgress("epubcfi(/6/4)");
             webReaderProgress.setEpubProgressPercent(50f);
             webReaderProgress.setLastReadTime(Instant.now());
@@ -130,7 +129,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should detect unsynced Kobo progress when never sent")
         void needsKoboProgressSync_neverSent() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setKoboProgressReceivedTime(Instant.now());
             progress.setKoboProgressSentTime(null);
 
@@ -140,7 +139,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should detect unsynced Kobo progress when received after sent")
         void needsKoboProgressSync_receivedAfterSent() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setKoboProgressReceivedTime(Instant.now());
             progress.setKoboProgressSentTime(Instant.now().minusSeconds(60));
 
@@ -150,7 +149,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should not detect sync needed when sent after received")
         void needsKoboProgressSync_alreadySynced() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setKoboProgressReceivedTime(Instant.now().minusSeconds(60));
             progress.setKoboProgressSentTime(Instant.now());
 
@@ -160,7 +159,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should not detect sync needed when no progress received")
         void needsKoboProgressSync_noProgressReceived() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setKoboProgressReceivedTime(null);
 
             assertFalse(needsKoboProgressSync(progress));
@@ -174,7 +173,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should detect unsynced status when never sent")
         void needsStatusSync_neverSent() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setReadStatusModifiedTime(Instant.now());
             progress.setKoboStatusSentTime(null);
 
@@ -184,7 +183,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should detect unsynced status when modified after sent")
         void needsStatusSync_modifiedAfterSent() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setReadStatusModifiedTime(Instant.now());
             progress.setKoboStatusSentTime(Instant.now().minusSeconds(60));
 
@@ -194,7 +193,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should not detect status sync when already sent")
         void needsStatusSync_alreadySynced() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setReadStatusModifiedTime(Instant.now().minusSeconds(60));
             progress.setKoboStatusSentTime(Instant.now());
 
@@ -204,7 +203,7 @@ class KoboLibrarySyncServiceTest {
         @Test
         @DisplayName("Should not detect status sync when no modification time")
         void needsStatusSync_noModificationTime() {
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setReadStatusModifiedTime(null);
 
             assertFalse(needsStatusSync(progress));
@@ -220,7 +219,7 @@ class KoboLibrarySyncServiceTest {
         void needsProgressSync_webReaderNewer() {
             testSettings.setTwoWayProgressSync(true);
 
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setEpubProgress("epubcfi(/6/4)");
             progress.setEpubProgressPercent(65f);
             progress.setLastReadTime(Instant.now());
@@ -235,7 +234,7 @@ class KoboLibrarySyncServiceTest {
         void needsProgressSync_toggleOff() {
             testSettings.setTwoWayProgressSync(false);
 
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setEpubProgress("epubcfi(/6/4)");
             progress.setEpubProgressPercent(65f);
             progress.setLastReadTime(Instant.now());
@@ -250,7 +249,7 @@ class KoboLibrarySyncServiceTest {
         void needsProgressSync_preventBounce() {
             testSettings.setTwoWayProgressSync(true);
 
-            UserBookProgressEntity progress = createProgress(1L);
+            UserBookProgressRow progress = createProgress(1L);
             progress.setEpubProgress("epubcfi(/6/4)");
             progress.setEpubProgressPercent(65f);
             progress.setLastReadTime(Instant.now().minusSeconds(120));
@@ -261,28 +260,26 @@ class KoboLibrarySyncServiceTest {
         }
     }
 
-    private UserBookProgressEntity createProgress(Long bookId) {
-        BookEntity book = new BookEntity();
-        book.setId(bookId);
-        UserBookProgressEntity progress = new UserBookProgressEntity();
-        progress.setBook(book);
+    private UserBookProgressRow createProgress(Long bookId) {
+        UserBookProgressRow progress = new UserBookProgressRow();
+        progress.setBookId(bookId);
         return progress;
     }
 
-    private boolean needsStatusSync(UserBookProgressEntity progress) {
+    private boolean needsStatusSync(UserBookProgressRow progress) {
         Instant modifiedTime = progress.getReadStatusModifiedTime();
         if (modifiedTime == null) return false;
         Instant sentTime = progress.getKoboStatusSentTime();
         return sentTime == null || modifiedTime.isAfter(sentTime);
     }
 
-    private boolean needsKoboProgressSync(UserBookProgressEntity progress) {
+    private boolean needsKoboProgressSync(UserBookProgressRow progress) {
         Instant sentTime = progress.getKoboProgressSentTime();
         Instant receivedTime = progress.getKoboProgressReceivedTime();
         return receivedTime != null && (sentTime == null || receivedTime.isAfter(sentTime));
     }
 
-    private boolean needsProgressSync(UserBookProgressEntity progress) {
+    private boolean needsProgressSync(UserBookProgressRow progress) {
         if (needsKoboProgressSync(progress)) return true;
 
         if (testSettings.isTwoWayProgressSync()
@@ -296,7 +293,7 @@ class KoboLibrarySyncServiceTest {
         return false;
     }
 
-    private boolean needsProgressSyncWebReader(UserBookProgressEntity progress) {
+    private boolean needsProgressSyncWebReader(UserBookProgressRow progress) {
         if (!testSettings.isTwoWayProgressSync()) return false;
         if (progress.getEpubProgress() == null || progress.getEpubProgressPercent() == null) return false;
 

@@ -1,0 +1,94 @@
+plugins {
+    id 'java'
+    // NOTE: plugin versions in this block must be literals — keep in sync with gradle.properties.
+    // 3.15.0+ is required for Gradle 9 compatibility (older versions reference Project.reportsDir,
+    // which was removed in Gradle 9).
+    id 'io.gatling.gradle' version '3.15.0'
+}
+
+group = 'org.booklore.perf'
+version = '1.0.0'
+
+java {
+    // Compile against Java 17 APIs even when running on a newer JDK:
+    // keeps Gatling happy and decouples us from the app's Java version.
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // JDBC driver for the database seeder (gatlingImplementation = gatling source set)
+    gatlingImplementation "org.mariadb.jdbc:mariadb-java-client:${property('mariadbDriverVersion')}"
+    // BCrypt hashing for seeded user passwords (standalone, no Spring context needed)
+    gatlingImplementation "org.springframework.security:spring-security-crypto:${property('springSecurityCryptoVersion')}"
+    // spring-security-crypto logs via commons-logging at runtime
+    gatlingRuntimeOnly 'commons-logging:commons-logging:1.3.5'
+}
+
+gatling {
+    gatlingVersion = "${property('gatlingVersion')}"
+}
+
+// ---------------------------------------------------------------------------
+// System property forwarding
+// ---------------------------------------------------------------------------
+// All perf.* -D system properties given on the command line (e.g.
+// -Dperf.baseUrl=https://staging:6060) must reach the forked JVMs that run
+// the seeder and the Gatling simulations.
+def forwardedPerfProps = System.getProperties()
+        .findAll { k, v -> k.toString().startsWith('perf.') }
+        .collectEntries { k, v -> [(k.toString()): v.toString()] }
+
+tasks.withType(JavaExec).configureEach {
+    systemProperties forwardedPerfProps
+}
+
+// GatlingRunTask is NOT a JavaExec — it has its own systemProperties map (pre-populated
+// with Gatling defaults on plugin-registered tasks, null on our own — so merge defensively).
+tasks.withType(io.gatling.gradle.GatlingRunTask).configureEach {
+    if (systemProperties == null) {
+        systemProperties = [:]
+    }
+    forwardedPerfProps.each { k, v -> systemProperties[k] = v }
+}
+
+// The plugin registers a single 'gatlingRun' task; add deterministic per-simulation tasks.
+['SmokeSimulation', 'MixedLoadSimulation'].each { sim ->
+    tasks.register("gatlingRun-${sim}", io.gatling.gradle.GatlingRunTask) {
+        group = 'performance'
+        description = "Runs the ${sim} Gatling simulation"
+        simulationClassName = "org.booklore.perf.simulation.${sim}"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Seeding tasks
+// ---------------------------------------------------------------------------
+tasks.register('seedData', JavaExec) {
+    group = 'performance'
+    description = 'Seeds the target database with perf test data (books, users, shelves, progress, sessions)'
+    classpath = sourceSets.gatling.runtimeClasspath
+    mainClass = 'org.booklore.perf.seed.DataSeeder'
+}
+
+tasks.register('cleanData', JavaExec) {
+    group = 'performance'
+    description = 'Removes all perf test data (perf-* users, perf-* libraries and cascaded rows)'
+    classpath = sourceSets.gatling.runtimeClasspath
+    mainClass = 'org.booklore.perf.seed.DataCleaner'
+}
+
+// gatlingRun-* tasks are created lazily by the plugin (per discovered simulation class)
+tasks.matching { it.name == 'gatlingRun-MixedLoadSimulation' }.configureEach {
+    mustRunAfter 'seedData'
+}
+
+tasks.register('perfTest') {
+    group = 'performance'
+    description = 'Seeds data, then runs the mixed load simulation'
+    dependsOn 'seedData', 'gatlingRun-MixedLoadSimulation'
+}

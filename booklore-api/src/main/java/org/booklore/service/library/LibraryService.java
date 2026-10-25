@@ -18,10 +18,13 @@ import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryPathRepository;
-import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.monitoring.LibraryWatchService;
@@ -64,9 +67,11 @@ public class LibraryService {
         return scanningLibraries.contains(libraryId);
     }
 
-    private final LibraryRepository libraryRepository;
-    private final LibraryPathRepository libraryPathRepository;
-    private final BookRepository bookRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final LibraryProcessingService libraryProcessingService;
     private final BookMapper bookMapper;
     private final LibraryMapper libraryMapper;
@@ -74,7 +79,7 @@ public class LibraryService {
     private final FileService fileService;
     private final LibraryWatchService libraryWatchService;
     private final AuthenticationService authenticationService;
-    private final UserRepository userRepository;
+    private final JooqUserRepository userRepository;
     private final AuditService auditService;
 
     @Transactional
@@ -87,8 +92,10 @@ public class LibraryService {
 
     @Transactional
     public Library updateLibrary(CreateLibraryRequest request, Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
 
         library.setName(request.getName());
         library.setIcon(request.getIcon());
@@ -103,8 +110,9 @@ public class LibraryService {
             library.setOrganizationMode(request.getOrganizationMode());
         }
 
-        Set<String> currentPaths = library.getLibraryPaths().stream()
-                .map(LibraryPathEntity::getPath)
+        List<LibraryPathRow> currentPathRows = jooqLibraryPathRepository.findPathsByLibraryId(libraryId);
+        Set<String> currentPaths = currentPathRows.stream()
+                .map(LibraryPathRow::getPath)
                 .collect(Collectors.toSet());
         Set<String> updatedPaths = request.getPaths().stream()
                 .map(LibraryPath::getPath)
@@ -118,28 +126,26 @@ public class LibraryService {
                 .collect(Collectors.toSet());
 
         if (!deletedPaths.isEmpty()) {
-            Set<LibraryPathEntity> pathsToRemove = library.getLibraryPaths().stream()
-                    .filter(pathEntity -> deletedPaths.contains(pathEntity.getPath()))
+            Set<Long> idsToRemove = currentPathRows.stream()
+                    .filter(row -> deletedPaths.contains(row.getPath()))
+                    .map(LibraryPathRow::getId)
                     .collect(Collectors.toSet());
 
-            library.getLibraryPaths().removeAll(pathsToRemove);
-            List<Long> books = bookRepository.findAllBookIdsByLibraryPathIdIn(
-                    pathsToRemove.stream().map(LibraryPathEntity::getId).collect(Collectors.toSet()));
+            List<Long> books = jooqBookRepository.findBookIdsByLibraryPathIds(idsToRemove);
 
             if (!books.isEmpty()) {
                 notificationService.sendMessage(Topic.BOOKS_REMOVE, books);
             }
 
-            libraryPathRepository.deleteAll(pathsToRemove);
+            jooqLibraryPathRepository.deleteAllById(idsToRemove);
         }
 
         if (!newPaths.isEmpty()) {
-            Set<LibraryPathEntity> newPathEntities = newPaths.stream()
+            List<LibraryPathEntity> newPathEntities = newPaths.stream()
                     .map(path -> LibraryPathEntity.builder().path(path).library(library).build())
-                    .collect(Collectors.toSet());
+                    .collect(Collectors.toList());
 
-            library.getLibraryPaths().addAll(newPathEntities);
-            libraryPathRepository.saveAll(library.getLibraryPaths());
+            jooqLibraryPathRepository.insertAll(newPathEntities);
         }
 
         LibraryEntity savedLibrary = libraryRepository.save(library);
@@ -160,18 +166,8 @@ public class LibraryService {
 
     @Transactional
     public Library createLibrary(CreateLibraryRequest request) {
-        BookLoreUser bookLoreUser = authenticationService.getAuthenticatedUser();
-        Optional<BookLoreUserEntity> user = userRepository.findById(bookLoreUser.getId());
-
         LibraryEntity libraryEntity = LibraryEntity.builder()
                 .name(request.getName())
-                .libraryPaths(
-                        request.getPaths() == null || request.getPaths().isEmpty() ?
-                                Collections.emptyList() :
-                                request.getPaths().stream()
-                                        .map(path -> LibraryPathEntity.builder().path(path.getPath()).build())
-                                        .collect(Collectors.toList())
-                )
                 .icon(request.getIcon())
                 .iconType(request.getIconType())
                 .watch(request.isWatch())
@@ -179,14 +175,24 @@ public class LibraryService {
                 .allowedFormats(request.getAllowedFormats())
                 .metadataSource(request.getMetadataSource())
                 .organizationMode(request.getOrganizationMode())
-                .users(List.of(user.get()))
                 .build();
 
-        libraryEntity = libraryRepository.save(libraryEntity);
+        final LibraryEntity savedLibraryEntity = libraryRepository.save(libraryEntity);
+        libraryEntity = savedLibraryEntity;
         Long libraryId = libraryEntity.getId();
 
+        List<LibraryPathEntity> pathEntities = request.getPaths() == null || request.getPaths().isEmpty() ?
+                Collections.emptyList() :
+                request.getPaths().stream()
+                        .map(path -> LibraryPathEntity.builder().path(path.getPath()).library(savedLibraryEntity).build())
+                        .collect(Collectors.toList());
+
+        if (!pathEntities.isEmpty()) {
+            jooqLibraryPathRepository.insertAll(pathEntities);
+        }
+
         if (request.isWatch()) {
-            for (LibraryPathEntity pathEntity : libraryEntity.getLibraryPaths()) {
+            for (LibraryPathEntity pathEntity : pathEntities) {
                 Path path = Paths.get(pathEntity.getPath());
                 libraryWatchService.registerPath(path, libraryId);
             }
@@ -199,7 +205,10 @@ public class LibraryService {
     }
 
     public void rescanLibrary(long libraryId) {
-        LibraryEntity lib = libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity lib = libraryRepository.findById(libraryId);
+        if (lib == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
         auditService.log(AuditAction.LIBRARY_SCANNED, "Library", libraryId, "Scanned library: " + lib.getName());
 
         SecurityContextVirtualThread.runWithSecurityContext(() -> {
@@ -225,7 +234,10 @@ public class LibraryService {
 
     @Transactional(readOnly = true)
     public Library getLibrary(long libraryId) {
-        LibraryEntity libraryEntity = libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity libraryEntity = libraryRepository.findById(libraryId);
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
         return libraryMapper.toLibrary(libraryEntity);
     }
 
@@ -238,12 +250,15 @@ public class LibraryService {
     @Transactional(readOnly = true)
     public List<Library> getLibraries() {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookLoreUserEntity userEntity = userRepository.findByIdWithLibraries(user.getId()).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        BookLoreUserEntity userEntity = userRepository.findByIdWithLibraries(user.getId());
+        if (userEntity == null) {
+            throw new UsernameNotFoundException("User not found");
+        }
         List<LibraryEntity> libraries;
         if (userEntity.getPermissions().isPermissionAdmin()) {
             libraries = libraryRepository.findAll();
         } else {
-            List<Long> libraryIds = userEntity.getLibraries().stream().map(LibraryEntity::getId).toList();
+            List<Long> libraryIds = new ArrayList<>(jooqUserLibraryRepository.findLibraryIdsByUserId(user.getId()));
             libraries = libraryRepository.findByIdIn(libraryIds);
         }
         return libraries.stream().map(libraryMapper::toLibrary).toList();
@@ -251,10 +266,12 @@ public class LibraryService {
 
     @Transactional
     public void deleteLibrary(long id) {
-        LibraryEntity library = libraryRepository.findByIdWithBooks(id)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(id));
+        LibraryEntity library = libraryRepository.findById(id);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(id);
+        }
         libraryWatchService.unregisterLibrary(id);
-        Set<Long> bookIds = library.getBookEntities().stream().map(BookEntity::getId).collect(Collectors.toSet());
+        Set<Long> bookIds = jooqBookRepository.findBookIdsByLibraryId(id);
         fileService.deleteBookCovers(bookIds);
         String libraryName = library.getName();
         libraryRepository.deleteById(id);
@@ -264,21 +281,31 @@ public class LibraryService {
 
     @Transactional(readOnly = true)
     public Book getBook(long libraryId, long bookId) {
-        libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).filter(b -> b.getLibrary().getId() == libraryId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        if (libraryRepository.findById(libraryId) == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null || bookEntity.getLibrary().getId() != libraryId) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         return bookMapper.toBook(bookEntity);
     }
 
     @Transactional(readOnly = true)
     public List<Book> getBooks(long libraryId) {
-        libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
-        List<BookEntity> bookEntities = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        if (libraryRepository.findById(libraryId) == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
+        List<BookEntity> bookEntities = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         return bookEntities.stream().map(bookMapper::toBook).toList();
     }
 
     @Transactional
     public Library setFileNamingPattern(long libraryId, String pattern) {
-        LibraryEntity library = libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
         library.setFileNamingPattern(pattern);
         Library result = libraryMapper.toLibrary(libraryRepository.save(library));
         auditService.log(AuditAction.NAMING_PATTERN_CHANGED, "Library", libraryId, "Changed naming pattern for library: " + library.getName() + " to: " + pattern);
@@ -287,10 +314,12 @@ public class LibraryService {
 
     @Transactional(readOnly = true)
     public Map<String, Long> getBookCountsByFormat(long libraryId) {
-        libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        if (libraryRepository.findById(libraryId) == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
         Map<String, Long> counts = new HashMap<>();
         for (BookFileType type : BookFileType.values()) {
-            long count = bookRepository.countByLibraryIdAndBookType(libraryId, type);
+            long count = jooqBookRepository.countByLibraryIdAndBookType(libraryId, type);
             if (count > 0) {
                 counts.put(type.name(), count);
             }

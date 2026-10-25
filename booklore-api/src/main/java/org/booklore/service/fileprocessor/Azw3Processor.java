@@ -7,8 +7,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
 import org.booklore.service.metadata.extractor.Azw3MetadataExtractor;
@@ -33,15 +31,13 @@ public class Azw3Processor extends AbstractFileProcessor implements BookFileProc
 
     private final Azw3MetadataExtractor azw3MetadataExtractor;
 
-    public Azw3Processor(BookRepository bookRepository,
-                         BookAdditionalFileRepository bookAdditionalFileRepository,
-                         BookCreatorService bookCreatorService,
+    public Azw3Processor(BookCreatorService bookCreatorService,
                          BookMapper bookMapper,
                          FileService fileService,
                          MetadataMatchService metadataMatchService,
                          SidecarMetadataWriter sidecarMetadataWriter,
                          Azw3MetadataExtractor azw3MetadataExtractor) {
-        super(bookRepository, bookAdditionalFileRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
+        super(bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         this.azw3MetadataExtractor = azw3MetadataExtractor;
     }
 

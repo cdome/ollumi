@@ -13,7 +13,7 @@ import org.booklore.model.dto.response.CbxPageInfo;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.util.ArchiveUtils;
 import org.booklore.util.FileUtils;
 import org.booklore.util.UnrarHelper;
@@ -53,7 +53,7 @@ public class CbxReaderService {
     private static final Set<String> SYSTEM_FILES = Set.of(".ds_store", "thumbs.db", "desktop.ini");
     private static final Pattern DIGIT_PATTERN = Pattern.compile("\\d+");
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final Map<String, CachedArchiveMetadata> archiveCache = new ConcurrentHashMap<>();
 
     private static class CachedArchiveMetadata {
@@ -135,7 +135,10 @@ public class CbxReaderService {
     }
 
     private Path getBookPath(Long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
             BookFileEntity bookFile = bookEntity.getBookFiles().stream()

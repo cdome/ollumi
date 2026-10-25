@@ -1,19 +1,18 @@
 package org.booklore.service.book;
 
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
-import org.booklore.mapper.BookReviewMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.BookReview;
 import org.booklore.model.dto.settings.MetadataPublicReviewsSettings;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.BookReviewRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookReviewRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.BookReviewUpdateService;
 import org.booklore.service.metadata.MetadataRefreshService;
@@ -30,20 +29,20 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class BookReviewService {
 
-    private final BookReviewRepository bookReviewRepository;
-    private final BookReviewMapper mapper;
+    private final JooqBookReviewRepository bookReviewRepository;
     private final BookReviewUpdateService bookReviewUpdateService;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final AppSettingService appSettingService;
     private final MetadataRefreshService metadataRefreshService;
     private final AuthenticationService authenticationService;
 
     public List<BookReview> getByBookId(Long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
-        List<BookReview> existingReviews = bookReviewRepository.findByBookMetadataBookId(bookId).stream()
-                .map(mapper::toDto)
-                .collect(Collectors.toList());
+        List<BookReview> existingReviews = bookReviewRepository.findByBookId(bookId);
 
         MetadataPublicReviewsSettings reviewSettings = appSettingService.getAppSettings().getMetadataPublicReviewsSettings();
 
@@ -64,10 +63,7 @@ public class BookReviewService {
             List<BookReview> fetchedReviews = fetchBookReviews(bookEntity);
             if (!fetchedReviews.isEmpty()) {
                 bookReviewUpdateService.addReviewsToBook(fetchedReviews, bookEntity.getMetadata());
-                bookRepository.save(bookEntity);
-                return bookReviewRepository.findByBookMetadataBookId(bookId).stream()
-                        .map(mapper::toDto)
-                        .collect(Collectors.toList());
+                return bookReviewRepository.findByBookId(bookId);
             }
         } catch (Exception e) {
             log.warn("Failed to auto-fetch reviews for book {}: {}", bookId, e.getMessage());
@@ -106,28 +102,24 @@ public class BookReviewService {
 
     @Transactional
     public List<BookReview> refreshReviews(Long bookId) {
-        BookEntity bookEntity = bookRepository.findByIdWithMetadata(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
-        bookEntity.getMetadata().getReviews().clear();
-        bookRepository.save(bookEntity);
-
-        bookReviewRepository.deleteByBookMetadataBookId(bookId);
+        bookReviewRepository.deleteByBookId(bookId);
 
         List<BookReview> freshReviews = fetchBookReviews(bookEntity);
         bookReviewUpdateService.addReviewsToBook(freshReviews, bookEntity.getMetadata());
-        bookRepository.save(bookEntity);
 
-        return bookReviewRepository.findByBookMetadataBookId(bookId).stream()
-                .map(mapper::toDto)
-                .collect(Collectors.toList());
+        return bookReviewRepository.findByBookId(bookId);
     }
 
     @Transactional
     public void deleteAllByBookId(Long bookId) {
-        if (!bookRepository.existsById(bookId)) {
+        if (!jooqBookEntityRepository.existsById(bookId)) {
             throw ApiError.BOOK_NOT_FOUND.createException(bookId);
         }
-        bookReviewRepository.deleteByBookMetadataBookId(bookId);
+        bookReviewRepository.deleteByBookId(bookId);
     }
 }

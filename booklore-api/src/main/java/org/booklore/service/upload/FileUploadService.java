@@ -14,9 +14,11 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.file.FileMovingHelper;
@@ -35,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.service.audit.AuditService;
@@ -49,9 +52,11 @@ public class FileUploadService {
     private static final long BYTES_TO_KB_DIVISOR = 1024L;
     private static final long MB_TO_BYTES_MULTIPLIER = 1024L * 1024L;
 
-    private final LibraryRepository libraryRepository;
-    private final BookRepository bookRepository;
-    private final BookAdditionalFileRepository additionalFileRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final AppSettingService appSettingService;
     private final AppProperties appProperties;
     private final MetadataExtractorFactory metadataExtractorFactory;
@@ -64,7 +69,7 @@ public class FileUploadService {
         validateFile(file);
 
         final LibraryEntity libraryEntity = findLibraryById(libraryId);
-        final LibraryPathEntity libraryPathEntity = findLibraryPathById(libraryEntity, pathId);
+        final String libraryPath = findLibraryPath(libraryId, pathId);
         final String originalFileName = getValidatedFileName(file);
         final BookFileExtension fileExtension = getFileExtension(originalFileName);
         validateAllowedFormat(libraryEntity, fileExtension.getType());
@@ -77,7 +82,7 @@ public class FileUploadService {
             final String uploadPattern = fileMovingHelper.getFileNamingPattern(libraryEntity);
 
             final String relativePath = PathPatternResolver.resolvePattern(metadata, uploadPattern, originalFileName);
-            final Path finalPath = Paths.get(libraryPathEntity.getPath(), relativePath);
+            final Path finalPath = Paths.get(libraryPath, relativePath);
 
             validateFinalPath(finalPath);
             moveFileToFinalLocation(tempPath, finalPath);
@@ -125,6 +130,11 @@ public class FileUploadService {
                     book.setLibraryPath(libraryPath);
                 }
 
+                // authors is no longer a Hibernate-managed collection; PathPatternResolver's entity-based
+                // overloads read BookMetadataEntity.authorNames (a @Transient scratch field).
+                if (book.getMetadata() != null) {
+                    book.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(book.getId()));
+                }
                 String pattern = fileMovingHelper.getFileNamingPattern(book.getLibrary());
                 String resolvedRelativePath = PathPatternResolver.resolvePattern(book.getMetadata(), pattern, sanitizedFileName);
                 finalFileName = Paths.get(resolvedRelativePath).getFileName().toString();
@@ -136,6 +146,9 @@ public class FileUploadService {
                 effectiveBookType = BookFileType.fromExtension(extension)
                         .orElseThrow(() -> ApiError.INVALID_FILE_FORMAT.createException("Unsupported book file extension: " + extension));
             } else if (isBook) {
+                if (book.getMetadata() != null) {
+                    book.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(book.getId()));
+                }
                 String pattern = fileMovingHelper.getFileNamingPattern(book.getLibrary());
                 String resolvedRelativePath = PathPatternResolver.resolvePattern(book.getMetadata(), pattern, sanitizedFileName);
                 finalFileName = Paths.get(resolvedRelativePath).getFileName().toString();
@@ -162,9 +175,18 @@ public class FileUploadService {
             log.info("Additional file uploaded to final location: {}", finalPath);
 
             final BookFileEntity entity = createAdditionalFileEntityWithSubPath(book, finalFileName, fileSubPath, isBook, effectiveBookType, file.getSize(), fileHash, description);
-            final BookFileEntity savedEntity = additionalFileRepository.save(entity);
+            // Hibernate bytecode enhancement (enableAssociationManagement) auto-adds entity to
+            // book.getBookFiles() the moment .book(book) is set, making it reachable by that
+            // collection's cascade=ALL at commit-time flush - since it's never persist()'d, Hibernate
+            // then rejects it as a "detached entity" once it has an id. Remove it from the collection
+            // (entity.getBook() still returns book, needed below) so it's never swept into the cascade.
+            book.getBookFiles().remove(entity);
+            final long fileId = jooqBookRepository.insertBookFile(book.getId(), entity.getFileName(), entity.getFileSubPath(),
+                    entity.isBookFormat(), entity.isFolderBased(), entity.getBookType(), entity.getFileSizeKb(),
+                    entity.getInitialHash(), entity.getCurrentHash(), entity.getDescription(), entity.getAddedOn());
+            entity.setId(fileId);
 
-            return additionalFileMapper.toAdditionalFile(savedEntity);
+            return additionalFileMapper.toAdditionalFile(entity);
 
         } catch (IOException e) {
             log.error("Failed to upload additional file for book {}: {}", bookId, sanitizedFileName, e);
@@ -172,8 +194,8 @@ public class FileUploadService {
         } finally {
             if (monitoringUnregistered) {
                 try {
-                    if (book.getLibrary() != null && book.getLibrary().getLibraryPaths() != null) {
-                        for (LibraryPathEntity libPath : book.getLibrary().getLibraryPaths()) {
+                    if (book.getLibrary() != null) {
+                        for (org.booklore.repository.jooq.dto.LibraryPathRow libPath : jooqLibraryPathRepository.findPathsByLibraryId(book.getLibrary().getId())) {
                             Path libraryRoot = Path.of(libPath.getPath());
                             log.debug("Re-registering library {} for monitoring", libraryId);
                             monitoringRegistrationService.registerLibraryPaths(libraryId, libraryRoot);
@@ -188,11 +210,15 @@ public class FileUploadService {
     }
 
     private LibraryPathEntity determineLibraryPathForPhysicalBook(BookEntity book) {
-        if (book.getLibrary() == null || book.getLibrary().getLibraryPaths() == null || book.getLibrary().getLibraryPaths().isEmpty()) {
+        if (book.getLibrary() == null) {
+            throw new IllegalStateException("Cannot upload file to physical book: library has no paths configured");
+        }
+        List<LibraryPathEntity> paths = jooqLibraryPathRepository.findByLibraryId(book.getLibrary().getId());
+        if (paths.isEmpty()) {
             throw new IllegalStateException("Cannot upload file to physical book: library has no paths configured");
         }
         // Use the first library path for physical books
-        return book.getLibrary().getLibraryPaths().iterator().next();
+        return paths.get(0);
     }
 
     private BookFileEntity createAdditionalFileEntityWithSubPath(BookEntity book, String fileName, String fileSubPath, boolean isBook, BookFileType bookType, long fileSize, String fileHash, String description) {
@@ -237,21 +263,32 @@ public class FileUploadService {
     }
 
     private LibraryEntity findLibraryById(long libraryId) {
-        return libraryRepository.findById(libraryId)
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
+        return library;
     }
 
-    private LibraryPathEntity findLibraryPathById(LibraryEntity libraryEntity, long pathId) {
-        return libraryEntity.getLibraryPaths()
-                .stream()
-                .filter(p -> p.getId() == pathId)
-                .findFirst()
-                .orElseThrow(() -> ApiError.INVALID_LIBRARY_PATH.createException(libraryEntity.getId()));
+    /**
+     * Resolves the library path by id via jOOQ rather than walking LibraryEntity.libraryPaths: that
+     * collection is LAZY and this method runs outside a transaction, which throws
+     * LazyInitializationException with open-in-view disabled.
+     */
+    private String findLibraryPath(long libraryId, long pathId) {
+        final String path = jooqLibraryPathRepository.findPathByIdAndLibraryId(pathId, libraryId);
+        if (path == null) {
+            throw ApiError.INVALID_LIBRARY_PATH.createException(libraryId);
+        }
+        return path;
     }
 
     private BookEntity findBookById(Long bookId) {
-        return bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new IllegalArgumentException("Book not found with id: " + bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new IllegalArgumentException("Book not found with id: " + bookId);
+        }
+        return book;
     }
 
     private String getValidatedFileName(MultipartFile file) {
@@ -294,8 +331,8 @@ public class FileUploadService {
     }
 
     private void validateAlternativeFormatDuplicate(String fileHash) {
-        final Optional<BookFileEntity> existingAltFormat = additionalFileRepository.findByAltFormatCurrentHash(fileHash);
-        if (existingAltFormat.isPresent()) {
+        final BookFileEntity existingAltFormat = jooqBookEntityRepository.findBookFileByAltFormatCurrentHash(fileHash);
+        if (existingAltFormat != null) {
             throw new IllegalArgumentException("Alternative format file already exists with same content");
         }
     }

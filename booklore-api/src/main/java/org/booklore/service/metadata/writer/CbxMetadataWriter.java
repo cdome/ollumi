@@ -62,6 +62,8 @@ public class CbxMetadataWriter implements MetadataWriter {
     }
 
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
+    private final org.booklore.repository.jooq.JooqComicMetadataRepository comicRelationsRepository;
 
     @Override
     public void saveMetadataToFile(File file, BookMetadataEntity metadata, String thumbnailUrl, MetadataClearFlags clearFlags) {
@@ -265,7 +267,8 @@ public class CbxMetadataWriter implements MetadataWriter {
         helper.copyPageCount(clearFlags != null && clearFlags.isPageCount(), info::setPageCount);
         helper.copyLanguage(clearFlags != null && clearFlags.isLanguage(), info::setLanguageISO);
         
-        helper.copyAuthors(clearFlags != null && clearFlags.isAuthors(), set -> {
+        java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+        helper.copyAuthors(clearFlags != null && clearFlags.isAuthors(), currentAuthorNames, set -> {
             info.setWriter(joinStrings(set));
             info.setPenciller(null);
             info.setInker(null);
@@ -275,13 +278,15 @@ public class CbxMetadataWriter implements MetadataWriter {
         });
 
         // Genre - categories
-        helper.copyCategories(clearFlags != null && clearFlags.isCategories(), set -> {
+        java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+        helper.copyCategories(clearFlags != null && clearFlags.isCategories(), currentCategoryNames, set -> {
             info.setGenre(joinStrings(set));
         });
         
         // Tags - separate from Genre per Anansi v2.1
-        if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
-            info.setTags(joinStrings(metadata.getTags().stream().map(TagEntity::getName).collect(Collectors.toSet())));
+        Set<String> currentTagNames1 = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+        if (!currentTagNames1.isEmpty()) {
+            info.setTags(joinStrings(currentTagNames1));
         }
 
         // CommunityRating - normalized to 0-5 scale
@@ -322,12 +327,8 @@ public class CbxMetadataWriter implements MetadataWriter {
              }
         }
 
-        if (metadata.getMoods() != null) {
-            appendBookLoreTag(notesBuilder, "Moods", joinStrings(metadata.getMoods().stream().map(MoodEntity::getName).collect(Collectors.toSet())));
-        }
-        if (metadata.getTags() != null) {
-            appendBookLoreTag(notesBuilder, "Tags", joinStrings(metadata.getTags().stream().map(TagEntity::getName).collect(Collectors.toSet())));
-        }
+        appendBookLoreTag(notesBuilder, "Moods", joinStrings(relationsRepository.findMoodNamesByBookId(metadata.getBookId())));
+        appendBookLoreTag(notesBuilder, "Tags", joinStrings(relationsRepository.findTagNamesByBookId(metadata.getBookId())));
         appendBookLoreTag(notesBuilder, "Subtitle", metadata.getSubtitle());
         
         if (metadata.getIsbn13() != null && !metadata.getIsbn13().isBlank()) {
@@ -398,45 +399,37 @@ public class CbxMetadataWriter implements MetadataWriter {
             }
             
             // Characters (comma-separated)
-            if (comic.getCharacters() != null && !comic.getCharacters().isEmpty()) {
-                String chars = comic.getCharacters().stream()
-                        .map(ComicCharacterEntity::getName)
-                        .collect(Collectors.joining(", "));
+            String chars = joinStrings(comicRelationsRepository.findCharacterNamesByBookId(comic.getBookId()));
+            if (chars != null) {
                 info.setCharacters(chars);
             }
-            
+
             // Teams (comma-separated)
-            if (comic.getTeams() != null && !comic.getTeams().isEmpty()) {
-                String teams = comic.getTeams().stream()
-                        .map(ComicTeamEntity::getName)
-                        .collect(Collectors.joining(", "));
+            String teams = joinStrings(comicRelationsRepository.findTeamNamesByBookId(comic.getBookId()));
+            if (teams != null) {
                 info.setTeams(teams);
             }
-            
+
             // Locations (comma-separated)
-            if (comic.getLocations() != null && !comic.getLocations().isEmpty()) {
-                String locs = comic.getLocations().stream()
-                        .map(ComicLocationEntity::getName)
-                        .collect(Collectors.joining(", "));
+            String locs = joinStrings(comicRelationsRepository.findLocationNamesByBookId(comic.getBookId()));
+            if (locs != null) {
                 info.setLocations(locs);
             }
-            
+
             // Creators by role (overrides the author-based writer if present)
-            if (comic.getCreatorMappings() != null && !comic.getCreatorMappings().isEmpty()) {
-                String pencillers = getCreatorsByRole(comic, ComicCreatorRole.PENCILLER);
-                String inkers = getCreatorsByRole(comic, ComicCreatorRole.INKER);
-                String colorists = getCreatorsByRole(comic, ComicCreatorRole.COLORIST);
-                String letterers = getCreatorsByRole(comic, ComicCreatorRole.LETTERER);
-                String coverArtists = getCreatorsByRole(comic, ComicCreatorRole.COVER_ARTIST);
-                String editors = getCreatorsByRole(comic, ComicCreatorRole.EDITOR);
-                
-                if (!pencillers.isEmpty()) info.setPenciller(pencillers);
-                if (!inkers.isEmpty()) info.setInker(inkers);
-                if (!colorists.isEmpty()) info.setColorist(colorists);
-                if (!letterers.isEmpty()) info.setLetterer(letterers);
-                if (!coverArtists.isEmpty()) info.setCoverArtist(coverArtists);
-                if (!editors.isEmpty()) info.setEditor(editors);
-            }
+            String pencillers = getCreatorsByRole(comic, ComicCreatorRole.PENCILLER);
+            String inkers = getCreatorsByRole(comic, ComicCreatorRole.INKER);
+            String colorists = getCreatorsByRole(comic, ComicCreatorRole.COLORIST);
+            String letterers = getCreatorsByRole(comic, ComicCreatorRole.LETTERER);
+            String coverArtists = getCreatorsByRole(comic, ComicCreatorRole.COVER_ARTIST);
+            String editors = getCreatorsByRole(comic, ComicCreatorRole.EDITOR);
+
+            if (!pencillers.isEmpty()) info.setPenciller(pencillers);
+            if (!inkers.isEmpty()) info.setInker(inkers);
+            if (!colorists.isEmpty()) info.setColorist(colorists);
+            if (!letterers.isEmpty()) info.setLetterer(letterers);
+            if (!coverArtists.isEmpty()) info.setCoverArtist(coverArtists);
+            if (!editors.isEmpty()) info.setEditor(editors);
             
             // Store comic-specific metadata in notes as well
             appendBookLoreTag(notesBuilder, "VolumeName", comic.getVolumeName());
@@ -453,11 +446,8 @@ public class CbxMetadataWriter implements MetadataWriter {
     }
     
     private String getCreatorsByRole(ComicMetadataEntity comic, ComicCreatorRole role) {
-        if (comic.getCreatorMappings() == null) return "";
-        return comic.getCreatorMappings().stream()
-                .filter(m -> m.getRole() == role)
-                .map(m -> m.getCreator().getName())
-                .collect(Collectors.joining(", "));
+        Set<String> names = comicRelationsRepository.findCreatorNamesByBookIdAndRole(comic.getBookId(), role);
+        return String.join(", ", names);
     }
     
     private String mapAgeRatingToComicInfo(Integer ageRating) {
@@ -753,7 +743,7 @@ public class CbxMetadataWriter implements MetadataWriter {
         return null;
     }
 
-    private String joinStrings(Set<String> values) {
+    private String joinStrings(java.util.Collection<String> values) {
         return (values == null || values.isEmpty()) ? null : String.join(", ", values);
     }
 

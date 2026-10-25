@@ -1,7 +1,8 @@
 package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.service.migration.Migration;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PopulateFileHashesMigration implements Migration {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
 
     @Override
     public String getKey() {
@@ -33,7 +35,9 @@ public class PopulateFileHashesMigration implements Migration {
     public void execute() {
         log.info("Starting migration: {}", getKey());
 
-        List<BookEntity> books = bookRepository.findAll();
+        // Deliberately excludes soft-deleted books (unlike the old unfiltered findAll()) - backfilling
+        // hash values for a book pending permanent deletion has no benefit.
+        List<BookEntity> books = jooqBookEntityRepository.findAllFullBooks();
         int updated = 0;
 
         for (BookEntity book : books) {
@@ -45,17 +49,18 @@ public class PopulateFileHashesMigration implements Migration {
 
             try {
                 String hash = FileFingerprint.generateHash(path);
+                Long fileId = book.getPrimaryBookFile().getId();
                 if (book.getPrimaryBookFile().getInitialHash() == null) {
                     book.getPrimaryBookFile().setInitialHash(hash);
+                    jooqBookRepository.updateInitialHashIfNull(fileId, hash);
                 }
                 book.getPrimaryBookFile().setCurrentHash(hash);
+                jooqBookRepository.updateBookFileHash(fileId, hash);
                 updated++;
             } catch (Exception e) {
                 log.error("Failed to compute hash for file: {}", path, e);
             }
         }
-
-        bookRepository.saveAll(books);
 
         log.info("Migration '{}' applied to {} books.", getKey(), updated);
     }

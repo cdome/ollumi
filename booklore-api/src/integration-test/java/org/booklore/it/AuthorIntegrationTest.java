@@ -6,7 +6,7 @@ import org.booklore.model.dto.AuthorSearchResult;
 import org.booklore.model.dto.AuthorSummary;
 import org.booklore.model.dto.CoverImage;
 import org.booklore.model.dto.request.AuthorMatchRequest;
-import org.booklore.model.entity.AuthorEntity;
+import org.booklore.repository.jooq.dto.AuthorRow;
 import org.booklore.model.enums.AuthorMetadataSource;
 import org.booklore.service.AuthorMetadataService;
 import org.junit.jupiter.api.AfterEach;
@@ -47,7 +47,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanSearchAuthorMetadataByQuery() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         AuthorSearchResult result = AuthorSearchResult.builder()
                 .source(AuthorMetadataSource.AUDNEXUS)
@@ -73,7 +73,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanLookupAuthorMetadataByAsin() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         AuthorSearchResult result = AuthorSearchResult.builder()
                 .source(AuthorMetadataSource.AUDNEXUS)
@@ -97,7 +97,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanMatchAuthor() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         AuthorDetails details = AuthorDetails.builder()
                 .id(author.getId())
@@ -127,7 +127,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanQuickMatchAuthor() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         AuthorDetails details = AuthorDetails.builder()
                 .id(author.getId())
@@ -152,7 +152,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanAutoMatchAuthorsWithSse() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         AuthorSummary summary = AuthorSummary.builder()
                 .id(author.getId())
@@ -183,7 +183,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanSearchAuthorPhotos() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         CoverImage image = new CoverImage("http://example.com/photo.jpg", 200, 300, 0);
         when(authorMetadataService.searchAuthorPhotos(author.getName())).thenReturn(List.of(image));
@@ -203,7 +203,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanUploadAuthorPhotoFromUrl() {
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        AuthorEntity author = data.createAuthor("TestAuthor" + UUID.randomUUID());
+        AuthorRow author = data.createAuthor("TestAuthor" + UUID.randomUUID());
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/v1/authors/" + author.getId() + "/photo/url?url=http://example.com/photo.jpg",

@@ -7,10 +7,10 @@ import org.booklore.model.dto.Book;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.request.MetadataRefreshOptions;
 import org.booklore.model.dto.settings.AppSettings;
-import org.booklore.model.entity.BookdropFileEntity;
 import org.booklore.model.enums.BookFileExtension;
 import org.booklore.model.enums.MetadataProvider;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.metadata.MetadataRefreshService;
 import org.booklore.service.metadata.extractor.MetadataExtractorFactory;
@@ -24,20 +24,19 @@ import org.apache.commons.io.FilenameUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
-import static org.booklore.model.entity.BookdropFileEntity.Status.PENDING_REVIEW;
+import static org.booklore.model.enums.BookdropFileStatus.PENDING_REVIEW;
 
 @Slf4j
 @AllArgsConstructor
 @Service
 public class BookdropMetadataService {
 
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
     private final AppSettingService appSettingService;
     private final ObjectMapper objectMapper;
     private final MetadataExtractorFactory metadataExtractorFactory;
@@ -45,8 +44,8 @@ public class BookdropMetadataService {
     private final FileService fileService;
 
     @Transactional
-    public BookdropFileEntity attachInitialMetadata(Long bookdropFileId) throws JacksonException {
-        BookdropFileEntity entity = getOrThrow(bookdropFileId);
+    public BookdropFileRow attachInitialMetadata(Long bookdropFileId) throws JacksonException {
+        BookdropFileRow entity = getOrThrow(bookdropFileId);
         BookMetadata initial = extractInitialMetadata(entity);
         if (initial == null) {
             log.warn("Metadata extraction returned null for file: {}. Using filename as fallback.", entity.getFileName());
@@ -56,14 +55,12 @@ public class BookdropMetadataService {
         }
         extractAndSaveCover(entity);
         String initialJson = objectMapper.writeValueAsString(initial);
-        entity.setOriginalMetadata(initialJson);
-        entity.setUpdatedAt(Instant.now());
-        return bookdropFileRepository.save(entity);
+        return bookdropFileRepository.updateOriginalMetadata(bookdropFileId, initialJson);
     }
 
     @Transactional
-    public BookdropFileEntity attachFetchedMetadata(Long bookdropFileId) throws JacksonException {
-        BookdropFileEntity entity = getOrThrow(bookdropFileId);
+    public BookdropFileRow attachFetchedMetadata(Long bookdropFileId) throws JacksonException {
+        BookdropFileRow entity = getOrThrow(bookdropFileId);
 
         AppSettings appSettings = appSettingService.getAppSettings();
 
@@ -73,9 +70,7 @@ public class BookdropMetadataService {
 
         if (!hasSearchableMetadata(initial, entity)) {
             log.info("Skipping online metadata fetch for '{}' — no reliable search data (title derived from filename, no ISBN or ASIN).", entity.getFileName());
-            entity.setStatus(PENDING_REVIEW);
-            entity.setUpdatedAt(Instant.now());
-            return bookdropFileRepository.save(entity);
+            return bookdropFileRepository.updateStatus(bookdropFileId, PENDING_REVIEW);
         }
 
         List<MetadataProvider> providers = metadataRefreshService.prepareProviders(refreshOptions);
@@ -95,14 +90,10 @@ public class BookdropMetadataService {
         BookMetadata fetchedMetadata = metadataRefreshService.buildFetchMetadata(initial, book.getId(), refreshOptions, metadataMap);
         String fetchedJson = objectMapper.writeValueAsString(fetchedMetadata);
 
-        entity.setFetchedMetadata(fetchedJson);
-        entity.setStatus(PENDING_REVIEW);
-        entity.setUpdatedAt(Instant.now());
-
-        return bookdropFileRepository.save(entity);
+        return bookdropFileRepository.updateFetchedMetadataAndStatus(bookdropFileId, fetchedJson, PENDING_REVIEW);
     }
 
-    private boolean hasSearchableMetadata(BookMetadata metadata, BookdropFileEntity entity) {
+    private boolean hasSearchableMetadata(BookMetadata metadata, BookdropFileRow entity) {
         if (hasAnyKnownIdentifier(metadata)) {
             return true;
         }
@@ -123,18 +114,18 @@ public class BookdropMetadataService {
         ).anyMatch(id -> id != null && !id.isBlank());
     }
 
-    private BookdropFileEntity getOrThrow(Long id) {
+    private BookdropFileRow getOrThrow(Long id) {
         return bookdropFileRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Bookdrop file not found: " + id));
     }
 
-    private BookMetadata extractInitialMetadata(BookdropFileEntity entity) {
+    private BookMetadata extractInitialMetadata(BookdropFileRow entity) {
         File file = new File(entity.getFilePath());
         BookFileExtension fileExt = BookFileExtension.fromFileName(file.getName())
             .orElseThrow(() -> ApiError.INVALID_FILE_FORMAT.createException("Unsupported file extension"));
         return metadataExtractorFactory.extractMetadata(fileExt, file);
     }
 
-    private void extractAndSaveCover(BookdropFileEntity entity) {
+    private void extractAndSaveCover(BookdropFileRow entity) {
         File file = new File(entity.getFilePath());
         BookFileExtension fileExt = BookFileExtension.fromFileName(file.getName())
             .orElseThrow(() -> ApiError.INVALID_FILE_FORMAT.createException("Unsupported file extension"));

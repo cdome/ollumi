@@ -1,7 +1,7 @@
 package org.booklore.service.migration.migrations;
 
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.book.BookQueryService;
 import org.booklore.service.metadata.MetadataMatchService;
 import org.booklore.service.migration.Migration;
@@ -16,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PopulateMetadataScoresMigration implements Migration {
 
-    private final BookRepository bookRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookQueryService bookQueryService;
     private final MetadataMatchService metadataMatchService;
 
@@ -39,9 +39,8 @@ public class PopulateMetadataScoresMigration implements Migration {
         for (BookEntity book : books) {
             Float score = metadataMatchService.calculateMatchScore(book);
             book.setMetadataMatchScore(score);
+            jooqBookRepository.updateMetadataMatchScore(book.getId(), score);
         }
-
-        bookRepository.saveAll(books);
 
         log.info("Migration '{}' applied to {} books.", getKey(), books.size());
     }

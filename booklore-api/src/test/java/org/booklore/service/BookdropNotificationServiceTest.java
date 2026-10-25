@@ -1,9 +1,9 @@
 package org.booklore.service;
 
 import org.booklore.model.dto.BookdropFileNotification;
-import org.booklore.model.entity.BookdropFileEntity;
+import org.booklore.model.enums.BookdropFileStatus;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.service.bookdrop.BookdropNotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,14 +16,14 @@ import static org.mockito.Mockito.*;
 
 class BookdropNotificationServiceTest {
 
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
     private NotificationService notificationService;
 
     private BookdropNotificationService bookdropNotificationService;
 
     @BeforeEach
     void setup() {
-        bookdropFileRepository = mock(BookdropFileRepository.class);
+        bookdropFileRepository = mock(JooqBookdropFileRepository.class);
         notificationService = mock(NotificationService.class);
 
         bookdropNotificationService = new BookdropNotificationService(bookdropFileRepository, notificationService);
@@ -34,7 +34,7 @@ class BookdropNotificationServiceTest {
         long pendingCount = 5L;
         long totalCount = 20L;
 
-        when(bookdropFileRepository.countByStatus(BookdropFileEntity.Status.PENDING_REVIEW)).thenReturn(pendingCount);
+        when(bookdropFileRepository.countByStatus(BookdropFileStatus.PENDING_REVIEW)).thenReturn(pendingCount);
         when(bookdropFileRepository.count()).thenReturn(totalCount);
 
         bookdropNotificationService.sendBookdropFileSummaryNotification();
@@ -51,7 +51,7 @@ class BookdropNotificationServiceTest {
 
     @Test
     void sendBookdropFileSummaryNotification_shouldSendEvenIfCountsAreZero() {
-        when(bookdropFileRepository.countByStatus(BookdropFileEntity.Status.PENDING_REVIEW)).thenReturn(0L);
+        when(bookdropFileRepository.countByStatus(BookdropFileStatus.PENDING_REVIEW)).thenReturn(0L);
         when(bookdropFileRepository.count()).thenReturn(0L);
 
         bookdropNotificationService.sendBookdropFileSummaryNotification();

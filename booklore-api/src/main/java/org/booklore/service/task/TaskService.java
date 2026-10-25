@@ -8,7 +8,7 @@ import org.booklore.model.dto.TaskInfo;
 import org.booklore.model.dto.request.TaskCreateRequest;
 import org.booklore.model.dto.response.TaskCancelResponse;
 import org.booklore.model.dto.response.TaskCreateResponse;
-import org.booklore.model.entity.TaskCronConfigurationEntity;
+import org.booklore.model.dto.response.CronConfig;
 import org.booklore.model.enums.TaskType;
 import org.booklore.task.TaskCancellationManager;
 import org.booklore.task.TaskStatus;
@@ -70,27 +70,21 @@ public class TaskService {
     }
 
     public void initializeScheduledTasks() {
-        List<TaskCronConfigurationEntity> enabledConfigs = taskCronService.getAllEnabledCronConfigs();
+        List<CronConfig> enabledConfigs = taskCronService.getAllEnabledCronConfigs();
         log.info("Initializing {} scheduled tasks", enabledConfigs.size());
         enabledConfigs.forEach(this::scheduleTask);
     }
 
     public void rescheduleTask(TaskType taskType) {
         cancelScheduledTask(taskType);
-        taskCronService.getCronConfigOrDefault(taskType);
         var cronConfig = taskCronService.getCronConfigOrDefault(taskType);
 
         if (cronConfig.getEnabled() != null && cronConfig.getEnabled() && cronConfig.getCronExpression() != null) {
-            TaskCronConfigurationEntity config = TaskCronConfigurationEntity.builder()
-                    .taskType(taskType)
-                    .cronExpression(cronConfig.getCronExpression())
-                    .enabled(cronConfig.getEnabled())
-                    .build();
-            scheduleTask(config);
+            scheduleTask(cronConfig);
         }
     }
 
-    private void scheduleTask(TaskCronConfigurationEntity config) {
+    private void scheduleTask(CronConfig config) {
         cancelScheduledTask(config.getTaskType());
 
         try {

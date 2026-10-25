@@ -9,16 +9,18 @@ import org.booklore.model.dto.response.AttachBookFileResponse;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryPathEntity;
-import org.booklore.model.entity.UserBookFileProgressEntity;
-import org.booklore.model.entity.UserBookProgressEntity;
-import org.booklore.repository.BookFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.UserBookProgressRepository;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.file.FileMoveHelper;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
 import org.booklore.service.progress.ReadingProgressService;
 import org.booklore.util.PathPatternResolver;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,21 +38,24 @@ import java.util.stream.Collectors;
 @Service
 public class BookFileAttachmentService {
 
-    private final BookRepository bookRepository;
-    private final BookFileRepository bookFileRepository;
-    private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final AuthenticationService authenticationService;
     private final ReadingProgressService readingProgressService;
     private final MonitoringRegistrationService monitoringRegistrationService;
     private final FileMoveHelper fileMoveHelper;
     private final BookMapper bookMapper;
     private final BookService bookService;
-    private final EntityManager entityManager;
 
     @Transactional
     public AttachBookFileResponse attachBookFiles(Long targetBookId, List<Long> sourceBookIds, boolean moveFiles) {
-        BookEntity targetBook = bookRepository.findByIdWithBookFiles(targetBookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(targetBookId));
+        BookEntity targetBook = jooqBookEntityRepository.findByIdFull(targetBookId);
+        if (targetBook == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(targetBookId);
+        }
 
         Set<Long> uniqueSourceBookIds = new LinkedHashSet<>(sourceBookIds);
         if (uniqueSourceBookIds.contains(targetBookId)) {
@@ -59,8 +64,10 @@ public class BookFileAttachmentService {
 
         List<BookEntity> sourceBooks = new ArrayList<>();
         for (Long sourceBookId : uniqueSourceBookIds) {
-            BookEntity sourceBook = bookRepository.findByIdWithBookFiles(sourceBookId)
-                    .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(sourceBookId));
+            BookEntity sourceBook = jooqBookEntityRepository.findByIdFull(sourceBookId);
+            if (sourceBook == null) {
+                throw ApiError.BOOK_NOT_FOUND.createException(sourceBookId);
+            }
             sourceBooks.add(sourceBook);
         }
 
@@ -121,7 +128,7 @@ public class BookFileAttachmentService {
                     List<Long> bookFileIds = bookFormatFiles.stream()
                             .map(BookFileEntity::getId)
                             .toList();
-                    bookFileRepository.reassignFilesToBook(targetBook.getId(), bookFileIds);
+                    jooqBookRepository.reassignFilesToBook(targetBook.getId(), bookFileIds);
                 } else {
                     Path sourceLibraryRoot = Paths.get(sourceBook.getLibraryPath().getPath()).toAbsolutePath().normalize();
                     for (BookFileEntity file : bookFormatFiles) {
@@ -129,7 +136,7 @@ public class BookFileAttachmentService {
                         String newSubPath = fileDir.equals(targetLibraryRoot)
                                 ? ""
                                 : targetLibraryRoot.relativize(fileDir).toString();
-                        bookFileRepository.reassignFileToBookWithPath(targetBook.getId(), newSubPath, file.getId());
+                        jooqBookRepository.reassignFileWithNewNameAndPath(file.getId(), targetBook.getId(), newSubPath, file.getFileName());
                     }
                 }
             }
@@ -140,12 +147,8 @@ public class BookFileAttachmentService {
             }
         }
 
-        entityManager.flush();
-        entityManager.clear();
-
         if (!sourceBooksToDeleteIds.isEmpty()) {
-            List<BookEntity> booksToDelete = bookRepository.findAllById(sourceBooksToDeleteIds);
-            bookRepository.deleteAll(booksToDelete);
+            jooqBookRepository.deleteByIds(sourceBooksToDeleteIds);
         }
 
         return sourceBooksToDeleteIds;
@@ -153,6 +156,11 @@ public class BookFileAttachmentService {
 
     private List<Long> attachWithFileMove(BookEntity targetBook, List<BookEntity> sourceBooks,
                                           BookFileEntity targetPrimaryFile) {
+        // authors is no longer a Hibernate-managed collection; PathPatternResolver's entity-based
+        // overloads read BookMetadataEntity.authorNames (a @Transient scratch field).
+        if (targetBook.getMetadata() != null) {
+            targetBook.getMetadata().setAuthorNames(relationsRepository.findAuthorNamesByBookId(targetBook.getId()));
+        }
         String fileNamingPattern = fileMoveHelper.getFileNamingPattern(targetBook.getLibrary());
         String patternResolvedPath = PathPatternResolver.resolvePattern(targetBook, targetPrimaryFile, fileNamingPattern);
         Path libraryRootPath = Paths.get(targetBook.getLibraryPath().getPath());
@@ -236,6 +244,7 @@ public class BookFileAttachmentService {
                             log.info("Organized file from {} to {}", currentPath, destinationPath);
                             existingFile.setFileSubPath(targetFileSubPath);
                             existingFile.setFileName(newFileName);
+                            jooqBookRepository.updateFileNameAndSubPath(existingFile.getId(), newFileName, targetFileSubPath);
                         } catch (IOException e) {
                             throw ApiError.INTERNAL_SERVER_ERROR.createException(
                                     "Failed to organize file " + currentPath + ": " + e.getMessage());
@@ -303,6 +312,7 @@ public class BookFileAttachmentService {
                     sourceBook.getBookFiles().remove(fileToMove);
                     fileToMove.setBook(targetBook);
                     targetBook.getBookFiles().add(fileToMove);
+                    jooqBookRepository.reassignFileWithNewNameAndPath(fileToMove.getId(), targetBook.getId(), targetFileSubPath, newFileName);
                 }
 
                 sourceDirectoriesToCleanup.addAll(sourceDirectories);
@@ -320,11 +330,11 @@ public class BookFileAttachmentService {
                     .toList();
 
             if (!sourceBooksToDelete.isEmpty()) {
-                bookRepository.deleteAll(sourceBooksToDelete);
+                jooqBookRepository.deleteByIds(deletedSourceBookIds);
             }
 
-            Set<Path> libraryRoots = targetBook.getLibrary().getLibraryPaths().stream()
-                    .map(LibraryPathEntity::getPath)
+            Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(targetBook.getLibrary().getId()).stream()
+                    .map(LibraryPathRow::getPath)
                     .map(Paths::get)
                     .map(Path::normalize)
                     .collect(Collectors.toSet());
@@ -349,12 +359,14 @@ public class BookFileAttachmentService {
 
     private Book getUpdatedBook(Long bookId) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity refreshedTarget = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity refreshedTarget = jooqBookEntityRepository.findByIdFull(bookId);
+        if (refreshedTarget == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
-        UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
-                .orElse(new UserBookProgressEntity());
-        UserBookFileProgressEntity fileProgress = readingProgressService
+        UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
+                .orElse(new UserBookProgressRow());
+        UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 

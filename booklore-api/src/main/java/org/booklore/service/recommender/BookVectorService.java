@@ -3,10 +3,9 @@ package org.booklore.service.recommender;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
-import org.booklore.model.entity.CategoryEntity;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -27,6 +26,8 @@ public class BookVectorService {
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
     private static final Pattern NON_ALPHANUMERIC_EXCEPT_SPACE_PATTERN = Pattern.compile("[^a-z0-9\\s]");
 
+    private final JooqBookMetadataRelationsRepository relationsRepository;
+
     public double[] generateEmbedding(BookEntity book) {
         if (book.getMetadata() == null) {
             return new double[VECTOR_DIMENSION];
@@ -39,19 +40,13 @@ public class BookVectorService {
             addTextFeatures(features, "title", metadata.getTitle(), 3.0);
         }
 
-        if (metadata.getAuthors() != null) {
-            metadata.getAuthors().stream()
-                    .map(AuthorEntity::getName)
-                    .filter(Objects::nonNull)
-                    .forEach(author -> features.put("author_" + author.toLowerCase(), 5.0));
-        }
+        relationsRepository.findAuthorNamesByBookId(book.getId()).stream()
+                .filter(Objects::nonNull)
+                .forEach(author -> features.put("author_" + author.toLowerCase(), 5.0));
 
-        if (metadata.getCategories() != null) {
-            metadata.getCategories().stream()
-                    .map(CategoryEntity::getName)
-                    .filter(Objects::nonNull)
-                    .forEach(cat -> features.put("category_" + cat.toLowerCase(), 4.0));
-        }
+        relationsRepository.findCategoryNamesByBookId(book.getId()).stream()
+                .filter(Objects::nonNull)
+                .forEach(cat -> features.put("category_" + cat.toLowerCase(), 4.0));
 
         if (metadata.getSeriesName() != null) {
             features.put("series_" + metadata.getSeriesName().toLowerCase(), 6.0);

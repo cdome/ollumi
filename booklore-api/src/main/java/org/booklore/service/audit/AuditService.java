@@ -4,9 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.response.AuditLogDto;
-import org.booklore.model.entity.AuditLogEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.AuditLogRepository;
+import org.booklore.repository.jooq.JooqAuditLogRepository;
 import org.booklore.util.RequestUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AuditService {
 
-    private final AuditLogRepository auditLogRepository;
+    private final JooqAuditLogRepository jooqAuditLogRepository;
     private final GeoIpService geoIpService;
 
     public void log(AuditAction action, String description) {
@@ -56,49 +55,21 @@ public class AuditService {
                 safeDescription = safeDescription.substring(0, MAX_DESCRIPTION_LENGTH - 3) + "...";
             }
 
-            AuditLogEntity entity = AuditLogEntity.builder()
-                    .userId(userId)
-                    .username(username)
-                    .action(action)
-                    .entityType(entityType)
-                    .entityId(entityId)
-                    .description(safeDescription)
-                    .ipAddress(ipAddress)
-                    .countryCode(countryCode)
-                    .build();
-
-            auditLogRepository.save(entity);
+            jooqAuditLogRepository.insert(userId, username, action, entityType, entityId, safeDescription, ipAddress, countryCode);
         } catch (Exception e) {
             log.warn("Failed to write audit log: action={}, description={}", action, description, e);
         }
     }
 
     public Page<AuditLogDto> getAuditLogs(Pageable pageable) {
-        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable)
-                .map(this::toDto);
+        return jooqAuditLogRepository.findAll(pageable);
     }
 
     public Page<AuditLogDto> getAuditLogs(AuditAction action, Long userId, String username, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        return auditLogRepository.findFiltered(action, userId, username, from, to, pageable)
-                .map(this::toDto);
+        return jooqAuditLogRepository.findFiltered(action, userId, username, from, to, pageable);
     }
 
     public List<String> getDistinctUsernames() {
-        return auditLogRepository.findDistinctUsernames();
-    }
-
-    private AuditLogDto toDto(AuditLogEntity entity) {
-        return AuditLogDto.builder()
-                .id(entity.getId())
-                .userId(entity.getUserId())
-                .username(entity.getUsername())
-                .action(entity.getAction())
-                .entityType(entity.getEntityType())
-                .entityId(entity.getEntityId())
-                .description(entity.getDescription())
-                .ipAddress(entity.getIpAddress())
-                .countryCode(entity.getCountryCode())
-                .createdAt(entity.getCreatedAt())
-                .build();
+        return jooqAuditLogRepository.findDistinctUsernames();
     }
 }

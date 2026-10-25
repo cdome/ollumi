@@ -6,12 +6,11 @@ import org.booklore.model.dto.FetchedProposal;
 import org.booklore.model.dto.MetadataBatchProgressNotification;
 import org.booklore.model.dto.MetadataFetchTask;
 import org.booklore.model.dto.response.MetadataTaskDetailsResponse;
-import org.booklore.model.entity.MetadataFetchJobEntity;
-import org.booklore.model.entity.MetadataFetchProposalEntity;
 import org.booklore.model.enums.FetchedMetadataProposalStatus;
 import org.booklore.model.enums.MetadataFetchTaskStatus;
-import org.booklore.repository.MetadataFetchJobRepository;
-import org.booklore.repository.MetadataFetchProposalRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
+import org.booklore.repository.jooq.dto.MetadataFetchJobRow;
+import org.booklore.repository.jooq.dto.MetadataFetchProposalRow;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +23,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class MetadataTaskService {
 
-    private final MetadataFetchJobRepository metadataFetchTaskRepository;
-    private final MetadataFetchProposalRepository proposalRepository;
+    private final JooqMetadataFetchJobRepository metadataFetchTaskRepository;
     private final FetchedProposalMapper fetchedProposalMapper;
     private final AuthenticationService authenticationService;
 
@@ -34,7 +32,7 @@ public class MetadataTaskService {
                 .map(this::buildTaskDetailsResponse);
     }
 
-    private MetadataTaskDetailsResponse buildTaskDetailsResponse(MetadataFetchJobEntity task) {
+    private MetadataTaskDetailsResponse buildTaskDetailsResponse(MetadataFetchJobRow task) {
         List<FetchedProposal> proposals = task.getProposals().stream()
                 .filter(p -> p.getStatus() == FetchedMetadataProposalStatus.FETCHED)
                 .map(fetchedProposalMapper::toDto)
@@ -56,24 +54,16 @@ public class MetadataTaskService {
 
     @Transactional
     public boolean deleteTaskAndProposals(String taskId) {
-        return metadataFetchTaskRepository.findById(taskId)
-                .map(task -> {
-                    metadataFetchTaskRepository.delete(task);
-                    return true;
-                })
-                .orElse(false);
+        return metadataFetchTaskRepository.deleteById(taskId);
     }
 
     public boolean updateProposalStatus(String taskId, Long proposalId, String statusStr) {
         Long userId = authenticationService.getAuthenticatedUser().getId();
         Optional<FetchedMetadataProposalStatus> statusOpt = parseStatus(statusStr);
-        return statusOpt.map(fetchedMetadataProposalStatus -> proposalRepository.findById(proposalId)
-                .filter(p -> p.getJob() != null && taskId.equals(p.getJob().getTaskId()))
+        return statusOpt.map(fetchedMetadataProposalStatus -> metadataFetchTaskRepository.findProposalById(proposalId)
+                .filter(p -> taskId.equals(p.getTaskId()))
                 .map(proposal -> {
-                    proposal.setStatus(fetchedMetadataProposalStatus);
-                    proposal.setReviewedAt(Instant.now());
-                    proposal.setReviewerUserId(userId);
-                    proposalRepository.save(proposal);
+                    metadataFetchTaskRepository.updateProposalReview(proposalId, fetchedMetadataProposalStatus, Instant.now(), userId);
                     return true;
                 })
                 .orElse(false)).orElse(false);
@@ -89,13 +79,13 @@ public class MetadataTaskService {
     }
 
     public List<MetadataBatchProgressNotification> getActiveTasks() {
-        List<MetadataFetchJobEntity> tasks = metadataFetchTaskRepository.findAllWithProposals();
+        List<MetadataFetchJobRow> tasks = metadataFetchTaskRepository.findAllWithProposals();
 
         return tasks.stream()
                 .filter(task -> task.getStatus() == MetadataFetchTaskStatus.COMPLETED || task.getStatus() == MetadataFetchTaskStatus.ERROR)
                 .map(task -> {
-                    List<MetadataFetchProposalEntity> proposals = task.getProposals();
-                    List<MetadataFetchProposalEntity> remaining = proposals.stream()
+                    List<MetadataFetchProposalRow> proposals = task.getProposals();
+                    List<MetadataFetchProposalRow> remaining = proposals.stream()
                             .filter(p -> p.getStatus() != FetchedMetadataProposalStatus.REJECTED)
                             .toList();
 

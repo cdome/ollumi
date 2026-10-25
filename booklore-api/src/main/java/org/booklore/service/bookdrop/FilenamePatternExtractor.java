@@ -3,8 +3,8 @@ package org.booklore.service.bookdrop;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.request.BookdropPatternExtractRequest;
 import org.booklore.model.dto.response.BookdropPatternExtractResult;
-import org.booklore.model.entity.BookdropFileEntity;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
@@ -29,7 +29,7 @@ import java.util.regex.PatternSyntaxException;
 public class FilenamePatternExtractor {
 
     private static final Pattern PATTERN = Pattern.compile("[,;&]");
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
     private final BookdropMetadataHelper metadataHelper;
     private final ExecutorService regexExecutor = Executors.newCachedThreadPool(runnable -> {
         Thread thread = new Thread(runnable);
@@ -95,11 +95,11 @@ public class FilenamePatternExtractor {
                 ? fileIds.subList(0, PREVIEW_FILE_LIMIT)
                 : fileIds;
         
-        List<BookdropFileEntity> previewFiles = bookdropFileRepository.findAllById(limitedFileIds);
+        List<BookdropFileRow> previewFiles = bookdropFileRepository.findAllById(limitedFileIds);
         List<BookdropPatternExtractResult.FileExtractionResult> results = new ArrayList<>();
         int successCount = 0;
         
-        for (BookdropFileEntity file : previewFiles) {
+        for (BookdropFileRow file : previewFiles) {
             BookdropPatternExtractResult.FileExtractionResult result = extractFromFile(file, pattern);
             results.add(result);
             if (result.isSuccess()) {
@@ -148,10 +148,10 @@ public class FilenamePatternExtractor {
     private BatchExtractionResult processSingleExtractionBatch(List<Long> allFileIds, int batchStart, 
                                                                 int batchEnd, ParsedPattern pattern) {
         List<Long> batchIds = allFileIds.subList(batchStart, batchEnd);
-        List<BookdropFileEntity> batchFiles = bookdropFileRepository.findAllById(batchIds);
+        List<BookdropFileRow> batchFiles = bookdropFileRepository.findAllById(batchIds);
         List<BookdropPatternExtractResult.FileExtractionResult> batchResults = new ArrayList<>();
         
-        for (BookdropFileEntity file : batchFiles) {
+        for (BookdropFileRow file : batchFiles) {
             BookdropPatternExtractResult.FileExtractionResult result = extractFromFile(file, pattern);
             batchResults.add(result);
         }
@@ -230,7 +230,7 @@ public class FilenamePatternExtractor {
     }
 
     private BookdropPatternExtractResult.FileExtractionResult extractFromFile(
-            BookdropFileEntity file, 
+            BookdropFileRow file, 
             ParsedPattern parsedPattern) {
         try {
             BookMetadata extracted = extractFromFilenameWithParsedPattern(file.getFileName(), parsedPattern);
@@ -611,20 +611,20 @@ public class FilenamePatternExtractor {
         }
     }
 
-    private void persistExtractedMetadata(List<BookdropPatternExtractResult.FileExtractionResult> results, List<BookdropFileEntity> files) {
-        Map<Long, BookdropFileEntity> fileMap = new HashMap<>();
-        for (BookdropFileEntity file : files) {
+    private void persistExtractedMetadata(List<BookdropPatternExtractResult.FileExtractionResult> results, List<BookdropFileRow> files) {
+        Map<Long, BookdropFileRow> fileMap = new HashMap<>();
+        for (BookdropFileRow file : files) {
             fileMap.put(file.getId(), file);
         }
 
-        Set<Long> failedFileIds = new HashSet<>();
+        Map<Long, String> updatesById = new LinkedHashMap<>();
 
         for (BookdropPatternExtractResult.FileExtractionResult result : results) {
             if (!result.isSuccess() || result.getExtractedMetadata() == null) {
                 continue;
             }
 
-            BookdropFileEntity file = fileMap.get(result.getFileId());
+            BookdropFileRow file = fileMap.get(result.getFileId());
             if (file == null) {
                 continue;
             }
@@ -633,23 +633,18 @@ public class FilenamePatternExtractor {
                 BookMetadata currentMetadata = metadataHelper.getCurrentMetadata(file);
                 BookMetadata extractedMetadata = result.getExtractedMetadata();
                 metadataHelper.mergeMetadata(currentMetadata, extractedMetadata);
-                metadataHelper.updateFetchedMetadata(file, currentMetadata);
+                updatesById.put(file.getId(), metadataHelper.serializeMetadata(file, currentMetadata));
 
             } catch (RuntimeException e) {
-                log.error("Error persisting extracted metadata for file {} ({}): {}", 
+                log.error("Error persisting extracted metadata for file {} ({}): {}",
                          file.getId(), file.getFileName(), e.getMessage(), e);
-                failedFileIds.add(file.getId());
                 result.setSuccess(false);
                 result.setErrorMessage("Failed to save metadata: " + e.getMessage());
             }
         }
 
-        List<BookdropFileEntity> filesToSave = files.stream()
-                .filter(file -> !failedFileIds.contains(file.getId()))
-                .toList();
-
-        if (!filesToSave.isEmpty()) {
-            bookdropFileRepository.saveAll(filesToSave);
+        if (!updatesById.isEmpty()) {
+            bookdropFileRepository.updateFetchedMetadataForIds(updatesById);
         }
     }
     

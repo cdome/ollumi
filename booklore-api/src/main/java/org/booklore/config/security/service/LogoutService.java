@@ -6,13 +6,13 @@ import org.booklore.config.security.oidc.OidcDiscoveryService;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.response.LogoutResponse;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.OidcSessionEntity;
-import org.booklore.model.entity.RefreshTokenEntity;
+import org.booklore.repository.jooq.dto.RefreshToken;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.OidcSessionRepository;
-import org.booklore.repository.RefreshTokenRepository;
-import org.booklore.repository.UserRepository;
+
+import org.booklore.repository.jooq.JooqRefreshTokenRepository;
+import org.booklore.repository.jooq.JooqOidcSessionRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.springframework.security.core.Authentication;
@@ -26,9 +26,9 @@ import java.time.Instant;
 @AllArgsConstructor
 public class LogoutService {
 
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final OidcSessionRepository oidcSessionRepository;
-    private final UserRepository userRepository;
+    private final JooqRefreshTokenRepository refreshTokenRepository;
+    private final JooqOidcSessionRepository oidcSessionRepository;
+    private final JooqUserRepository userRepository;
     private final AppSettingService appSettingService;
     private final OidcDiscoveryService discoveryService;
     private final AuditService auditService;
@@ -51,36 +51,39 @@ public class LogoutService {
     private BookLoreUserEntity resolveUser(Authentication auth, String refreshToken) {
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             var bookLoreUser = authenticationService.getAuthenticatedUser();
-            return userRepository.findByUsername(bookLoreUser.getUsername())
-                    .orElseThrow(() -> ApiError.GENERIC_UNAUTHORIZED.createException("User not found"));
+            BookLoreUserEntity user = userRepository.findByUsername(bookLoreUser.getUsername());
+            if (user == null) {
+                throw ApiError.GENERIC_UNAUTHORIZED.createException("User not found");
+            }
+            return user;
         }
 
         if (refreshToken != null && !refreshToken.isBlank()) {
-            RefreshTokenEntity tokenEntity = refreshTokenRepository.findByToken(refreshToken)
-                    .orElseThrow(() -> ApiError.GENERIC_UNAUTHORIZED.createException("Invalid refresh token"));
-            return tokenEntity.getUser();
+            RefreshToken tokenRecord = refreshTokenRepository.findByToken(refreshToken);
+            if (tokenRecord == null || tokenRecord.getUserId() == null) {
+                throw ApiError.GENERIC_UNAUTHORIZED.createException("Invalid refresh token");
+            }
+            BookLoreUserEntity user = userRepository.findById(tokenRecord.getUserId());
+            if (user == null) {
+                throw ApiError.GENERIC_UNAUTHORIZED.createException("User not found");
+            }
+            return user;
         }
 
         throw ApiError.GENERIC_UNAUTHORIZED.createException("No authentication context or refresh token provided");
     }
 
     private void revokeRefreshToken(BookLoreUserEntity user) {
-        refreshTokenRepository.findAllByUserAndRevokedFalse(user).forEach(token -> {
-            token.setRevoked(true);
-            token.setRevocationDate(Instant.now());
-            refreshTokenRepository.save(token);
-        });
+        refreshTokenRepository.revokeAllActiveByUserId(user.getId(), Instant.now());
     }
 
     private String buildOidcLogoutUrl(BookLoreUserEntity user, String origin) {
         try {
             var providerDetails = appSettingService.getAppSettings().getOidcProviderDetails();
-            var session = oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(user.getId());
+            var oidcSession = oidcSessionRepository.findFirstByUserIdAndRevokedFalseOrderByCreatedAtDesc(user.getId());
 
-            if (session.isPresent()) {
-                OidcSessionEntity oidcSession = session.get();
-                oidcSession.setRevoked(true);
-                oidcSessionRepository.save(oidcSession);
+            if (oidcSession != null) {
+                oidcSessionRepository.revokeById(oidcSession.getId());
 
                 var discovery = discoveryService.discover(providerDetails.getIssuerUri());
                 if (discovery.endSessionEndpoint() != null) {

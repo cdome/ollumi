@@ -10,7 +10,7 @@ import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.service.restriction.ContentRestrictionService;
 import org.springframework.stereotype.Component;
 import java.lang.reflect.Method;
@@ -25,7 +25,7 @@ public class BookAccessAspect {
 
     private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\d+");
     private final AuthenticationService authenticationService;
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final ContentRestrictionService contentRestrictionService;
 
     @Before("@annotation(org.booklore.config.security.annotation.CheckBookAccess)")
@@ -43,7 +43,10 @@ public class BookAccessAspect {
             throw ApiError.GENERIC_BAD_REQUEST.createException("Missing or invalid book ID in method parameters.");
         }
 
-        BookEntity bookEntity = bookRepository.findByIdWithMetadata(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdWithMetadata(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
 
         BookLoreUser user = authenticationService.getAuthenticatedUser();
 

@@ -1,8 +1,6 @@
 package org.booklore.model.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
-import org.booklore.convertor.AudioFileChapterListConverter;
 import org.booklore.model.enums.BookFileType;
 import org.booklore.util.ArchiveUtils;
 
@@ -13,86 +11,57 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 
-@Entity
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "book_file")
 public class BookFileEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "book_id", nullable = false)
     private BookEntity book;
 
-    @Column(name = "file_name", length = 1000, nullable = false)
     private String fileName;
 
-    @Column(name = "file_sub_path", length = 512, nullable = false)
     private String fileSubPath;
 
-    @Column(name = "is_book", nullable = false)
     private boolean isBookFormat;
 
-    @Column(name = "is_folder_based", nullable = false)
     @Builder.Default
     private boolean folderBased = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "book_type", nullable = false)
     private BookFileType bookType;
 
-    @Column(name = "is_fixed_layout", nullable = false)
     @Builder.Default
     private boolean isFixedLayout = false;
 
-    @Column(name = "archive_type")
-    @Enumerated(EnumType.STRING)
     private ArchiveUtils.ArchiveType archiveType;
 
-    @Column(name = "file_size_kb")
     private Long fileSizeKb;
 
-    @Column(name = "initial_hash", length = 128)
     private String initialHash;
 
-    @Column(name = "current_hash", length = 128)
     private String currentHash;
 
-    @Column(name = "alt_format_current_hash", insertable = false, updatable = false)
     private String altFormatCurrentHash;
 
-    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "added_on")
     private Instant addedOn;
 
-    @Column(name = "duration_seconds")
     private Long durationSeconds;
 
-    @Column(name = "bitrate")
     private Integer bitrate;
 
-    @Column(name = "sample_rate")
     private Integer sampleRate;
 
-    @Column(name = "channels")
     private Integer channels;
 
-    @Column(name = "codec", length = 50)
     private String codec;
 
-    @Column(name = "chapter_count")
     private Integer chapterCount;
 
-    @Convert(converter = AudioFileChapterListConverter.class)
-    @Column(name = "chapters_json", columnDefinition = "TEXT")
     private List<AudioFileChapter> chapters;
 
     public boolean isBook() {

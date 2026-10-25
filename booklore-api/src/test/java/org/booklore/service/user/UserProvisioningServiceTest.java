@@ -7,8 +7,9 @@ import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.UserPermissionsEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.ProvisioningMethod;
-import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.audit.AuditService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,10 +35,13 @@ class UserProvisioningServiceTest {
     private AppProperties appProperties;
 
     @Mock
-    private UserRepository userRepository;
+    private JooqUserRepository userRepository;
 
     @Mock
-    private LibraryRepository libraryRepository;
+    private JooqLibraryRepository libraryRepository;
+
+    @Mock
+    private JooqUserLibraryRepository jooqUserLibraryRepository;
 
     @Mock
     private UserDefaultsService userDefaultsService;
@@ -165,22 +170,13 @@ class UserProvisioningServiceTest {
     void provisionOidcUser_assignsLibrariesFromDefaultLibraryIds() {
         provisionDetails.setDefaultLibraryIds(List.of(10L, 20L));
 
-        LibraryEntity lib1 = new LibraryEntity();
-        lib1.setId(10L);
-        LibraryEntity lib2 = new LibraryEntity();
-        lib2.setId(20L);
-        when(libraryRepository.findAllById(List.of(10L, 20L))).thenReturn(List.of(lib1, lib2));
-
         userProvisioningService.provisionOidcUser(
                 "jdoe", "jdoe@example.com", "John Doe",
                 "sub-123", "https://issuer.example.com", null,
                 provisionDetails);
 
         verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getLibraries())
-                .hasSize(2)
-                .extracting(LibraryEntity::getId)
-                .containsExactlyInAnyOrder(10L, 20L);
+        verify(jooqUserLibraryRepository).setLibrariesForUser(eq(1L), argThat(ids -> ids.containsAll(Set.of(10L, 20L)) && ids.size() == 2));
     }
 
     @Test
@@ -210,7 +206,7 @@ class UserProvisioningServiceTest {
                 provisionDetails);
 
         verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getLibraries()).isNullOrEmpty();
+        verify(jooqUserLibraryRepository, never()).setLibrariesForUser(anyLong(), any());
         verifyNoInteractions(libraryRepository);
     }
 
@@ -224,7 +220,7 @@ class UserProvisioningServiceTest {
                 provisionDetails);
 
         verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getLibraries()).isNullOrEmpty();
+        verify(jooqUserLibraryRepository, never()).setLibrariesForUser(anyLong(), any());
         verifyNoInteractions(libraryRepository);
     }
 

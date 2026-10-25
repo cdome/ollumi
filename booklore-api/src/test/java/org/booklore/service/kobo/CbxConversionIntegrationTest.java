@@ -33,7 +33,7 @@ class CbxConversionIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        conversionService = new CbxConversionService();
+        conversionService = new CbxConversionService(org.mockito.Mockito.mock(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository.class));
     }
 
     @Test
@@ -105,6 +105,7 @@ class CbxConversionIntegrationTest {
     private BookEntity createTestBookMetadata() {
         BookEntity book = new BookEntity();
         BookMetadataEntity metadata = new BookMetadataEntity();
+        metadata.setBookId(1L);
         
         metadata.setTitle("Amazing Comic Adventures");
         metadata.setLanguage("en");

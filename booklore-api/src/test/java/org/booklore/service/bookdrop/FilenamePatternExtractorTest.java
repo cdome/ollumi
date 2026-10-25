@@ -3,8 +3,9 @@ package org.booklore.service.bookdrop;
 import org.booklore.model.dto.BookMetadata;
 import org.booklore.model.dto.request.BookdropPatternExtractRequest;
 import org.booklore.model.dto.response.BookdropPatternExtractResult;
-import org.booklore.model.entity.BookdropFileEntity;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.model.enums.BookdropFileStatus;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
+import org.booklore.repository.jooq.dto.BookdropFileRow;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,7 +22,7 @@ import static org.mockito.Mockito.*;
 class FilenamePatternExtractorTest {
 
     @Mock
-    private BookdropFileRepository bookdropFileRepository;
+    private JooqBookdropFileRepository bookdropFileRepository;
 
     @Mock
     private BookdropMetadataHelper metadataHelper;
@@ -29,12 +30,9 @@ class FilenamePatternExtractorTest {
     @InjectMocks
     private FilenamePatternExtractor extractor;
 
-    private BookdropFileEntity createFileEntity(Long id, String fileName) {
-        BookdropFileEntity entity = new BookdropFileEntity();
-        entity.setId(id);
-        entity.setFileName(fileName);
-        entity.setFilePath("/bookdrop/" + fileName);
-        return entity;
+    private BookdropFileRow createFileEntity(Long id, String fileName) {
+        return new BookdropFileRow(id, "/bookdrop/" + fileName, fileName, null,
+                BookdropFileStatus.PENDING_REVIEW, null, null, null, null);
     }
 
     @Test
@@ -169,9 +167,9 @@ class FilenamePatternExtractorTest {
 
     @Test
     void bulkExtract_WithPreviewMode_ShouldReturnExtractionResults() {
-        BookdropFileEntity file1 = createFileEntity(1L, "Chronicles A - Ch 1.cbz");
-        BookdropFileEntity file2 = createFileEntity(2L, "Chronicles B - Ch 2.cbz");
-        BookdropFileEntity file3 = createFileEntity(3L, "Random Name.cbz");
+        BookdropFileRow file1 = createFileEntity(1L, "Chronicles A - Ch 1.cbz");
+        BookdropFileRow file2 = createFileEntity(2L, "Chronicles B - Ch 2.cbz");
+        BookdropFileRow file3 = createFileEntity(3L, "Random Name.cbz");
 
         BookdropPatternExtractRequest request = new BookdropPatternExtractRequest();
         request.setPattern("{SeriesName} - Ch {SeriesNumber}");
@@ -198,9 +196,9 @@ class FilenamePatternExtractorTest {
 
     @Test
     void bulkExtract_WithFullExtraction_ShouldProcessAndPersistAll() {
-        BookdropFileEntity file1 = createFileEntity(1L, "Chronicles A - Ch 1.cbz");
-        BookdropFileEntity file2 = createFileEntity(2L, "Chronicles B - Ch 2.cbz");
-        BookdropFileEntity file3 = createFileEntity(3L, "Random Name.cbz");
+        BookdropFileRow file1 = createFileEntity(1L, "Chronicles A - Ch 1.cbz");
+        BookdropFileRow file2 = createFileEntity(2L, "Chronicles B - Ch 2.cbz");
+        BookdropFileRow file3 = createFileEntity(3L, "Random Name.cbz");
 
         BookdropPatternExtractRequest request = new BookdropPatternExtractRequest();
         request.setPattern("{SeriesName} - Ch {SeriesNumber}");
@@ -212,6 +210,7 @@ class FilenamePatternExtractorTest {
                 .thenReturn(List.of(1L, 2L, 3L));
         when(bookdropFileRepository.findAllById(anyList())).thenReturn(List.of(file1, file2, file3));
         when(metadataHelper.getCurrentMetadata(any())).thenReturn(new BookMetadata());
+        when(metadataHelper.serializeMetadata(any(), any())).thenReturn("{}");
 
         BookdropPatternExtractResult result = extractor.bulkExtract(request);
 
@@ -220,10 +219,10 @@ class FilenamePatternExtractorTest {
         assertEquals(2, result.getSuccessfullyExtracted());
         assertEquals(1, result.getFailed());
 
-        // Verify metadata was updated for successful extractions (2 files matched pattern)
-        verify(metadataHelper, times(2)).updateFetchedMetadata(any(), any());
-        // Verify all files were saved (even the one that failed extraction keeps original metadata)
-        verify(bookdropFileRepository, times(1)).saveAll(anyList());
+        // Verify metadata was serialized for successful extractions (2 files matched pattern)
+        verify(metadataHelper, times(2)).serializeMetadata(any(), any());
+        // Verify persistence for the matched files (2 of 3) in a single batch update
+        verify(bookdropFileRepository, times(1)).updateFetchedMetadataForIds(anyMap());
     }
 
     @Test

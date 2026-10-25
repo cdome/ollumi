@@ -1,6 +1,5 @@
 package org.booklore.service.file;
 
-import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.AppProperties;
@@ -13,9 +12,11 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
 import org.booklore.service.monitoring.MonitoringRegistrationService;
@@ -37,15 +38,15 @@ public class FileMoveService {
     private static final long EVENT_DRAIN_TIMEOUT_MS = 300;
 
     private final AppProperties appProperties;
-    private final BookRepository bookRepository;
-    private final BookAdditionalFileRepository bookFileRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final FileMoveHelper fileMoveHelper;
     private final MonitoringRegistrationService monitoringRegistrationService;
     private final LibraryMapper libraryMapper;
     private final BookMapper bookMapper;
     private final NotificationService notificationService;
-    private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
     private final SidecarMetadataWriter sidecarMetadataWriter;
 
@@ -70,8 +71,10 @@ public class FileMoveService {
             sleep(EVENT_DRAIN_TIMEOUT_MS);
         } finally {
             for (Long libraryId : allAffectedLibraryIds) {
-                libraryRepository.findById(libraryId)
-                        .ifPresent(library -> monitoringRegistrationService.registerLibrary(libraryMapper.toLibrary(library)));
+                LibraryEntity library = libraryRepository.findById(libraryId);
+                if (library != null) {
+                    monitoringRegistrationService.registerLibrary(libraryMapper.toLibrary(library));
+                }
             }
         }
     }
@@ -81,8 +84,10 @@ public class FileMoveService {
         
         for (FileMoveRequest.Move move : moves) {
             libraryIds.add(move.getTargetLibraryId());
-            bookRepository.findByIdWithBookFiles(move.getBookId())
-                    .ifPresent(book -> libraryIds.add(book.getLibrary().getId()));
+            BookEntity moveBook = jooqBookEntityRepository.findByIdFull(move.getBookId());
+            if (moveBook != null) {
+                libraryIds.add(moveBook.getLibrary().getId());
+            }
         }
         
         return libraryIds;
@@ -99,20 +104,19 @@ public class FileMoveService {
         Set<Path> sourceParentsToCleanup = new HashSet<>();
 
         try {
-            Optional<BookEntity> optionalBook = bookRepository.findByIdWithBookFiles(bookId);
-            Optional<LibraryEntity> optionalLibrary = libraryRepository.findById(targetLibraryId);
-            if (optionalBook.isEmpty()) {
+            BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+            LibraryEntity targetLibrary = libraryRepository.findById(targetLibraryId);
+            if (bookEntity == null) {
                 log.warn("Book not found for move operation: bookId={}", bookId);
                 return;
             }
-            if (optionalLibrary.isEmpty()) {
+            if (targetLibrary == null) {
                 log.warn("Target library not found for move operation: libraryId={}", targetLibraryId);
                 return;
             }
-            BookEntity bookEntity = optionalBook.get();
-            LibraryEntity targetLibrary = optionalLibrary.get();
+            List<LibraryPathEntity> targetLibraryPaths = jooqLibraryPathRepository.findByLibraryId(targetLibrary.getId());
 
-            Optional<LibraryPathEntity> optionalLibraryPathEntity = targetLibrary.getLibraryPaths().stream()
+            Optional<LibraryPathEntity> optionalLibraryPathEntity = targetLibraryPaths.stream()
                     .filter(libraryPath -> Objects.equals(libraryPath.getId(), targetLibraryPathId))
                     .findFirst();
             if (optionalLibraryPathEntity.isEmpty()) {
@@ -196,10 +200,10 @@ public class FileMoveService {
                         } else {
                             newFileName = bookFile.getFileName();
                         }
-                        bookFileRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
+                        jooqBookRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
                     }
 
-                    bookRepository.updateLibrary(bookEntity.getId(), targetLibrary.getId(), libraryPathEntity);
+                    jooqBookRepository.updateLibrary(bookEntity.getId(), targetLibrary.getId(), libraryPathEntity.getId());
                 });
             } catch (Exception e) {
                 log.error("Database update failed after files were moved. Attempting to rollback file moves for book ID {}", bookId, e);
@@ -213,13 +217,13 @@ public class FileMoveService {
                 throw e;
             }
 
-            Set<Path> libraryRoots = targetLibrary.getLibraryPaths().stream()
+            Set<Path> libraryRoots = targetLibraryPaths.stream()
                     .map(LibraryPathEntity::getPath)
                     .map(Paths::get)
                     .map(Path::toAbsolutePath)
                     .map(Path::normalize)
                     .collect(Collectors.toSet());
-            
+
             for (Path sourceParent : sourceParentsToCleanup) {
                 fileMoveHelper.deleteEmptyParentDirsUpToLibraryFolders(sourceParent, libraryRoots);
             }
@@ -230,9 +234,10 @@ public class FileMoveService {
                 log.warn("Failed to move sidecar files for book ID {}: {}", bookId, e.getMessage());
             }
 
-            entityManager.clear();
-
-            BookEntity fresh = bookRepository.findByIdWithBookFiles(bookId).orElseThrow();
+            BookEntity fresh = jooqBookEntityRepository.findByIdFull(bookId);
+            if (fresh == null) {
+                throw new NoSuchElementException();
+            }
 
             notificationService.sendMessage(Topic.BOOK_UPDATE, bookMapper.toBookWithDescription(fresh, false));
 
@@ -263,12 +268,12 @@ public class FileMoveService {
             // Ensure bookFiles are loaded
             BookEntity bookWithFiles = bookEntity;
             if (bookEntity.getBookFiles() == null || bookEntity.getBookFiles().isEmpty()) {
-                Optional<BookEntity> optionalBook = bookRepository.findByIdWithBookFiles(bookEntity.getId());
-                if (optionalBook.isEmpty()) {
+                BookEntity refreshedBook = jooqBookEntityRepository.findByIdFull(bookEntity.getId());
+                if (refreshedBook == null) {
                     log.warn("Book not found for move operation: bookId={}", bookEntity.getId());
                     return FileMoveResult.builder().moved(false).build();
                 }
-                bookWithFiles = optionalBook.get();
+                bookWithFiles = refreshedBook;
             }
 
             if (bookWithFiles.getBookFiles() == null || bookWithFiles.getBookFiles().isEmpty()) {
@@ -356,7 +361,7 @@ public class FileMoveService {
                         } else {
                             newFileName = bookFile.getFileName();
                         }
-                        bookFileRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
+                        jooqBookRepository.updateFileNameAndSubPath(bookFile.getId(), newFileName, newFileSubPath);
                     }
                 });
             } catch (Exception e) {
@@ -372,8 +377,8 @@ public class FileMoveService {
             }
 
             // Clean up empty parent directories
-            Set<Path> libraryRoots = bookWithFiles.getLibraryPath().getLibrary().getLibraryPaths().stream()
-                    .map(LibraryPathEntity::getPath)
+            Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(libraryId).stream()
+                    .map(LibraryPathRow::getPath)
                     .map(Paths::get)
                     .map(Path::toAbsolutePath)
                     .map(Path::normalize)

@@ -7,8 +7,6 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.BookRepository;
 import org.booklore.service.book.BookCreatorService;
 import org.booklore.service.metadata.MetadataMatchService;
 import org.booklore.service.metadata.extractor.Fb2MetadataExtractor;
@@ -33,15 +31,13 @@ public class Fb2Processor extends AbstractFileProcessor implements BookFileProce
 
     private final Fb2MetadataExtractor fb2MetadataExtractor;
 
-    public Fb2Processor(BookRepository bookRepository,
-                        BookAdditionalFileRepository bookAdditionalFileRepository,
-                        BookCreatorService bookCreatorService,
+    public Fb2Processor(BookCreatorService bookCreatorService,
                         BookMapper bookMapper,
                         FileService fileService,
                         MetadataMatchService metadataMatchService,
                         SidecarMetadataWriter sidecarMetadataWriter,
                         Fb2MetadataExtractor fb2MetadataExtractor) {
-        super(bookRepository, bookAdditionalFileRepository, bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
+        super(bookCreatorService, bookMapper, fileService, metadataMatchService, sidecarMetadataWriter);
         this.fb2MetadataExtractor = fb2MetadataExtractor;
     }
 

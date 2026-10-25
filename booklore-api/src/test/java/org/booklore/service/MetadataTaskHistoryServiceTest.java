@@ -7,12 +7,11 @@ import org.booklore.model.dto.FetchedProposal;
 import org.booklore.model.dto.MetadataBatchProgressNotification;
 import org.booklore.model.dto.MetadataFetchTask;
 import org.booklore.model.dto.response.MetadataTaskDetailsResponse;
-import org.booklore.model.entity.MetadataFetchJobEntity;
-import org.booklore.model.entity.MetadataFetchProposalEntity;
 import org.booklore.model.enums.FetchedMetadataProposalStatus;
 import org.booklore.model.enums.MetadataFetchTaskStatus;
-import org.booklore.repository.MetadataFetchJobRepository;
-import org.booklore.repository.MetadataFetchProposalRepository;
+import org.booklore.repository.jooq.JooqMetadataFetchJobRepository;
+import org.booklore.repository.jooq.dto.MetadataFetchJobRow;
+import org.booklore.repository.jooq.dto.MetadataFetchProposalRow;
 import org.booklore.service.metadata.MetadataTaskService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,10 +29,7 @@ class MetadataTaskHistoryServiceTest {
     private static final Instant FIXED_INSTANT = Instant.parse("2025-01-01T12:00:00Z");
 
     @Mock
-    private MetadataFetchJobRepository jobRepository;
-
-    @Mock
-    private MetadataFetchProposalRepository proposalRepository;
+    private JooqMetadataFetchJobRepository metadataFetchTaskRepository;
 
     @Mock
     private FetchedProposalMapper fetchedProposalMapper;
@@ -49,36 +45,31 @@ class MetadataTaskHistoryServiceTest {
         MockitoAnnotations.openMocks(this);
     }
 
+    private MetadataFetchProposalRow proposalRow(Long proposalId, String taskId, FetchedMetadataProposalStatus status) {
+        return new MetadataFetchProposalRow(proposalId, taskId, 1L, FIXED_INSTANT, null, null, status, "{}");
+    }
+
     @Test
     void getTaskWithProposals_shouldReturnEmptyWhenNoTaskFound() {
-        when(jobRepository.findById("task1")).thenReturn(Optional.empty());
+        when(metadataFetchTaskRepository.findById("task1")).thenReturn(Optional.empty());
 
         Optional<MetadataTaskDetailsResponse> result = service.getTaskWithProposals("task1");
 
         assertThat(result).isEmpty();
-        verify(jobRepository).findById("task1");
-        verifyNoMoreInteractions(proposalRepository, fetchedProposalMapper);
+        verify(metadataFetchTaskRepository).findById("task1");
+        verifyNoInteractions(fetchedProposalMapper);
     }
 
     @Test
     void getTaskWithProposals_shouldReturnTaskWithFilteredProposals() {
-        MetadataFetchJobEntity jobEntity = mock(MetadataFetchJobEntity.class);
-        MetadataFetchProposalEntity p1 = mock(MetadataFetchProposalEntity.class);
-        MetadataFetchProposalEntity p2 = mock(MetadataFetchProposalEntity.class);
+        MetadataFetchProposalRow p1 = proposalRow(1L, "task1", FetchedMetadataProposalStatus.FETCHED);
+        MetadataFetchProposalRow p2 = proposalRow(2L, "task1", FetchedMetadataProposalStatus.ACCEPTED);
 
-        when(jobEntity.getTaskId()).thenReturn("task1");
-        when(jobEntity.getStatus()).thenReturn(MetadataFetchTaskStatus.IN_PROGRESS);
-        when(jobEntity.getCompletedBooks()).thenReturn(2);
-        when(jobEntity.getTotalBooksCount()).thenReturn(3);
-        when(jobEntity.getStartedAt()).thenReturn(FIXED_INSTANT.minusSeconds(60));
-        when(jobEntity.getCompletedAt()).thenReturn(null);
-        when(jobEntity.getUserId()).thenReturn(99L);
+        MetadataFetchJobRow jobRow = new MetadataFetchJobRow(
+                "task1", 99L, MetadataFetchTaskStatus.IN_PROGRESS, null,
+                FIXED_INSTANT.minusSeconds(60), null, 3, 2, List.of(p1, p2));
 
-        when(p1.getStatus()).thenReturn(FetchedMetadataProposalStatus.FETCHED);
-        when(p2.getStatus()).thenReturn(FetchedMetadataProposalStatus.ACCEPTED);
-
-        when(jobEntity.getProposals()).thenReturn(List.of(p1, p2));
-        when(jobRepository.findById("task1")).thenReturn(Optional.of(jobEntity));
+        when(metadataFetchTaskRepository.findById("task1")).thenReturn(Optional.of(jobRow));
 
         FetchedProposal dto1 = mock(FetchedProposal.class);
         when(fetchedProposalMapper.toDto(p1)).thenReturn(dto1);
@@ -98,32 +89,28 @@ class MetadataTaskHistoryServiceTest {
         assertThat(taskDto.getInitiatedBy()).isEqualTo(99L);
         assertThat(taskDto.getProposals()).containsExactly(dto1);
 
-        verify(jobRepository).findById("task1");
+        verify(metadataFetchTaskRepository).findById("task1");
         verify(fetchedProposalMapper).toDto(p1);
-        verifyNoMoreInteractions(proposalRepository);
     }
 
     @Test
     void deleteTaskAndProposals_shouldDeleteWhenTaskExists() {
-        MetadataFetchJobEntity jobEntity = mock(MetadataFetchJobEntity.class);
-        when(jobRepository.findById("task1")).thenReturn(Optional.of(jobEntity));
+        when(metadataFetchTaskRepository.deleteById("task1")).thenReturn(true);
 
         boolean result = service.deleteTaskAndProposals("task1");
 
         assertThat(result).isTrue();
-        verify(jobRepository).findById("task1");
-        verify(jobRepository).delete(jobEntity);
+        verify(metadataFetchTaskRepository).deleteById("task1");
     }
 
     @Test
     void deleteTaskAndProposals_shouldReturnFalseWhenTaskMissing() {
-        when(jobRepository.findById("missing")).thenReturn(Optional.empty());
+        when(metadataFetchTaskRepository.deleteById("missing")).thenReturn(false);
 
         boolean result = service.deleteTaskAndProposals("missing");
 
         assertThat(result).isFalse();
-        verify(jobRepository).findById("missing");
-        verifyNoMoreInteractions(jobRepository);
+        verify(metadataFetchTaskRepository).deleteById("missing");
     }
 
     @Test
@@ -133,7 +120,7 @@ class MetadataTaskHistoryServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(mockedUser);
         boolean result = service.updateProposalStatus("task1", 1L, "INVALID_STATUS");
         assertThat(result).isFalse();
-        verifyNoInteractions(proposalRepository);
+        verifyNoInteractions(metadataFetchTaskRepository);
     }
 
 
@@ -143,14 +130,13 @@ class MetadataTaskHistoryServiceTest {
         when(mockedUser.getId()).thenReturn(123L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(mockedUser);
 
-        when(proposalRepository.findById(1L)).thenReturn(Optional.empty());
+        when(metadataFetchTaskRepository.findProposalById(1L)).thenReturn(Optional.empty());
 
         boolean result = service.updateProposalStatus("task1", 1L, "ACCEPTED");
         assertThat(result).isFalse();
 
-        MetadataFetchProposalEntity proposal = mock(MetadataFetchProposalEntity.class);
-        when(proposal.getJob()).thenReturn(null);
-        when(proposalRepository.findById(2L)).thenReturn(Optional.of(proposal));
+        MetadataFetchProposalRow proposal = proposalRow(2L, "otherTask", FetchedMetadataProposalStatus.FETCHED);
+        when(metadataFetchTaskRepository.findProposalById(2L)).thenReturn(Optional.of(proposal));
 
         boolean result2 = service.updateProposalStatus("task1", 2L, "REJECTED");
         assertThat(result2).isFalse();
@@ -158,46 +144,35 @@ class MetadataTaskHistoryServiceTest {
 
     @Test
     void updateProposalStatus_shouldUpdateProposalWhenValid() {
-        MetadataFetchProposalEntity proposal = mock(MetadataFetchProposalEntity.class);
-        MetadataFetchJobEntity job = mock(MetadataFetchJobEntity.class);
-        when(proposal.getJob()).thenReturn(job);
-        when(job.getTaskId()).thenReturn("task1");
+        MetadataFetchProposalRow proposal = proposalRow(10L, "task1", FetchedMetadataProposalStatus.FETCHED);
 
         BookLoreUser mockedUser = mock(BookLoreUser.class);
         when(mockedUser.getId()).thenReturn(42L);
         when(authenticationService.getAuthenticatedUser()).thenReturn(mockedUser);
 
-        when(proposalRepository.findById(10L)).thenReturn(Optional.of(proposal));
+        when(metadataFetchTaskRepository.findProposalById(10L)).thenReturn(Optional.of(proposal));
 
         boolean result = service.updateProposalStatus("task1", 10L, "ACCEPTED");
 
         assertThat(result).isTrue();
-        verify(proposal).setStatus(FetchedMetadataProposalStatus.ACCEPTED);
-        verify(proposal).setReviewedAt(any(Instant.class));
-        verify(proposal).setReviewerUserId(42L);
-        verify(proposalRepository).save(proposal);
+        verify(metadataFetchTaskRepository).updateProposalReview(
+                eq(10L), eq(FetchedMetadataProposalStatus.ACCEPTED), any(Instant.class), eq(42L));
     }
 
     @Test
     void getActiveTasks_shouldReturnOnlyTasksWithRemainingProposals() {
-        MetadataFetchJobEntity job1 = mock(MetadataFetchJobEntity.class);
-        MetadataFetchProposalEntity p1 = mock(MetadataFetchProposalEntity.class);
-        MetadataFetchProposalEntity p2 = mock(MetadataFetchProposalEntity.class);
+        MetadataFetchProposalRow p1 = proposalRow(1L, "task1", FetchedMetadataProposalStatus.ACCEPTED);
+        MetadataFetchProposalRow p2 = proposalRow(2L, "task1", FetchedMetadataProposalStatus.REJECTED);
+        MetadataFetchJobRow job1 = new MetadataFetchJobRow(
+                "task1", 1L, MetadataFetchTaskStatus.COMPLETED, null,
+                FIXED_INSTANT, null, 2, 2, List.of(p1, p2));
 
-        when(job1.getTaskId()).thenReturn("task1");
-        when(job1.getStatus()).thenReturn(MetadataFetchTaskStatus.COMPLETED);
-        when(job1.getProposals()).thenReturn(List.of(p1, p2));
-        when(p1.getStatus()).thenReturn(FetchedMetadataProposalStatus.ACCEPTED);
-        when(p2.getStatus()).thenReturn(FetchedMetadataProposalStatus.REJECTED);
+        MetadataFetchProposalRow p3 = proposalRow(3L, "task2", FetchedMetadataProposalStatus.FETCHED);
+        MetadataFetchJobRow job2 = new MetadataFetchJobRow(
+                "task2", 1L, MetadataFetchTaskStatus.COMPLETED, null,
+                FIXED_INSTANT, null, 1, 1, List.of(p3));
 
-        MetadataFetchJobEntity job2 = mock(MetadataFetchJobEntity.class);
-        MetadataFetchProposalEntity p3 = mock(MetadataFetchProposalEntity.class);
-        when(job2.getTaskId()).thenReturn("task2");
-        when(job2.getStatus()).thenReturn(MetadataFetchTaskStatus.COMPLETED);
-        when(job2.getProposals()).thenReturn(List.of(p3));
-        when(p3.getStatus()).thenReturn(FetchedMetadataProposalStatus.FETCHED);
-
-        when(jobRepository.findAllWithProposals()).thenReturn(List.of(job1, job2));
+        when(metadataFetchTaskRepository.findAllWithProposals()).thenReturn(List.of(job1, job2));
 
         List<MetadataBatchProgressNotification> notifications = service.getActiveTasks();
 
@@ -217,23 +192,21 @@ class MetadataTaskHistoryServiceTest {
         assertThat(n2.getCompleted()).isEqualTo(0);
         assertThat(n2.getMessage()).contains("Metadata fetch completed! 1 books need review.");
 
-        verify(jobRepository).findAllWithProposals();
+        verify(metadataFetchTaskRepository).findAllWithProposals();
     }
 
     @Test
     void getActiveTasks_shouldFilterOutTasksWithNoRemainingProposals() {
-        MetadataFetchJobEntity job = mock(MetadataFetchJobEntity.class);
-        MetadataFetchProposalEntity p1 = mock(MetadataFetchProposalEntity.class);
-        when(job.getTaskId()).thenReturn("task1");
-        when(job.getStatus()).thenReturn(MetadataFetchTaskStatus.COMPLETED);
-        when(job.getProposals()).thenReturn(List.of(p1));
-        when(p1.getStatus()).thenReturn(FetchedMetadataProposalStatus.REJECTED);
+        MetadataFetchProposalRow p1 = proposalRow(1L, "task1", FetchedMetadataProposalStatus.REJECTED);
+        MetadataFetchJobRow job = new MetadataFetchJobRow(
+                "task1", 1L, MetadataFetchTaskStatus.COMPLETED, null,
+                FIXED_INSTANT, null, 1, 1, List.of(p1));
 
-        when(jobRepository.findAllWithProposals()).thenReturn(List.of(job));
+        when(metadataFetchTaskRepository.findAllWithProposals()).thenReturn(List.of(job));
 
         List<MetadataBatchProgressNotification> notifications = service.getActiveTasks();
 
         assertThat(notifications).isEmpty();
-        verify(jobRepository).findAllWithProposals();
+        verify(metadataFetchTaskRepository).findAllWithProposals();
     }
 }

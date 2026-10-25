@@ -1,7 +1,5 @@
 package org.booklore.app.service;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.APIException;
 import org.booklore.app.dto.AppAuthorDetail;
@@ -9,8 +7,10 @@ import org.booklore.app.dto.AppAuthorSummary;
 import org.booklore.app.dto.AppPageResponse;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.Library;
-import org.booklore.model.entity.AuthorEntity;
-import org.booklore.repository.AuthorRepository;
+import org.booklore.repository.jooq.JooqAppAuthorRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
+import org.booklore.repository.jooq.dto.AuthorSummaryRow;
 import org.booklore.util.FileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -31,9 +31,9 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AppAuthorServiceTest {
 
-    @Mock private EntityManager entityManager;
+    @Mock private JooqAppAuthorRepository jooqAppAuthorRepository;
     @Mock private AuthenticationService authenticationService;
-    @Mock private AuthorRepository authorRepository;
+    @Mock private JooqAuthorRepository jooqAuthorRepository;
     @Mock private FileService fileService;
 
     private AppAuthorService service;
@@ -42,7 +42,7 @@ class AppAuthorServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AppAuthorService(authorRepository, authenticationService, fileService, entityManager);
+        service = new AppAuthorService(jooqAuthorRepository, jooqAppAuthorRepository, authenticationService, fileService);
     }
 
     // ---- getAuthors tests ----
@@ -53,11 +53,8 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_admin_noFilters_returnsPage() {
             mockAdminUser();
-            mockCountQuery(2L);
-            mockDataQuery(List.<Object[]>of(
-                    new Object[]{buildAuthor(1L, "Author A"), 5L},
-                    new Object[]{buildAuthor(2L, "Author B"), 3L}
-            ));
+            mockCount(2L);
+            mockRows(List.of(row(1L, "Author A", 5L), row(2L, "Author B", 3L)));
             mockAuthorThumbnailExists(1L, true);
             mockAuthorThumbnailExists(2L, false);
 
@@ -77,7 +74,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_admin_emptyResult_returnsEmptyPage() {
             mockAdminUser();
-            mockCountQuery(0L);
+            mockCount(0L);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, null, null, null, null, null);
 
@@ -89,10 +86,8 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_nonAdmin_withAccessibleLibrary_succeeds() {
             mockNonAdminUser(Set.of(5L, 10L));
-            mockCountQuery(1L);
-            mockDataQuery(List.<Object[]>of(
-                    new Object[]{buildAuthor(3L, "Author C"), 2L}
-            ));
+            mockCount(1L);
+            mockRows(List.of(row(3L, "Author C", 2L)));
             mockAuthorThumbnailExists(3L, false);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, null, null, 5L, null, null);
@@ -105,10 +100,8 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_nonAdmin_noLibraryFilter_usesAccessibleLibraries() {
             mockNonAdminUser(Set.of(5L));
-            mockCountQuery(1L);
-            mockDataQuery(List.<Object[]>of(
-                    new Object[]{buildAuthor(4L, "Author D"), 1L}
-            ));
+            mockCount(1L);
+            mockRows(List.of(row(4L, "Author D", 1L)));
             mockAuthorThumbnailExists(4L, true);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, null, null, null, null, null);
@@ -120,10 +113,8 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_withSearch_filtersResultsByName() {
             mockAdminUser();
-            mockCountQuery(1L);
-            mockDataQuery(List.<Object[]>of(
-                    new Object[]{buildAuthor(5L, "Brandon Sanderson"), 12L}
-            ));
+            mockCount(1L);
+            mockRows(List.of(row(5L, "Brandon Sanderson", 12L)));
             mockAuthorThumbnailExists(5L, true);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, null, null, null, "brandon", null);
@@ -136,15 +127,12 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_withHasPhotoTrue_filtersToAuthorsWithPhotos() {
             mockAdminUser();
-            mockCountQuery(2L);
-            mockDataQuery(List.<Object[]>of(
-                    new Object[]{buildAuthor(6L, "Author E"), 4L},
-                    new Object[]{buildAuthor(7L, "Author F"), 2L}
-            ));
+            mockCount(2L);
+            mockRows(List.of(row(6L, "Author E", 4L), row(7L, "Author F", 2L)));
             mockAuthorThumbnailExists(6L, true);
             mockAuthorThumbnailExists(7L, false);
-            // Mock the hasPhoto count query
-            mockAuthorEntityQuery(List.of(buildAuthor(6L, "Author E"), buildAuthor(7L, "Author F")));
+            when(jooqAppAuthorRepository.findMatchingAuthorIds(any(), any(), any()))
+                    .thenReturn(List.of(6L, 7L));
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, null, null, null, null, true);
 
@@ -157,14 +145,12 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_withHasPhotoFalse_filtersToAuthorsWithoutPhotos() {
             mockAdminUser();
-            mockCountQuery(2L);
-            mockDataQuery(List.<Object[]>of(
-                    new Object[]{buildAuthor(8L, "Author G"), 3L},
-                    new Object[]{buildAuthor(9L, "Author H"), 1L}
-            ));
+            mockCount(2L);
+            mockRows(List.of(row(8L, "Author G", 3L), row(9L, "Author H", 1L)));
             mockAuthorThumbnailExists(8L, true);
             mockAuthorThumbnailExists(9L, false);
-            mockAuthorEntityQuery(List.of(buildAuthor(8L, "Author G"), buildAuthor(9L, "Author H")));
+            when(jooqAppAuthorRepository.findMatchingAuthorIds(any(), any(), any()))
+                    .thenReturn(List.of(8L, 9L));
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, null, null, null, null, false);
 
@@ -177,7 +163,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_paginationDefaults_appliedCorrectly() {
             mockAdminUser();
-            mockCountQuery(0L);
+            mockCount(0L);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(null, null, null, null, null, null, null);
 
@@ -188,7 +174,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_pageSizeCapped_atMax() {
             mockAdminUser();
-            mockCountQuery(0L);
+            mockCount(0L);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 100, null, null, null, null, null);
 
@@ -198,7 +184,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_sortByName_asc() {
             mockAdminUser();
-            mockCountQuery(0L);
+            mockCount(0L);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, "name", "asc", null, null, null);
 
@@ -208,7 +194,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_sortByBookCount_desc() {
             mockAdminUser();
-            mockCountQuery(0L);
+            mockCount(0L);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, "bookCount", "desc", null, null, null);
 
@@ -218,7 +204,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthors_sortByRecent_desc() {
             mockAdminUser();
-            mockCountQuery(0L);
+            mockCount(0L);
 
             AppPageResponse<AppAuthorSummary> result = service.getAuthors(0, 30, "recent", "desc", null, null, null);
 
@@ -234,12 +220,12 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_admin_returnsDetail() {
             mockAdminUser();
-            AuthorEntity author = buildAuthor(1L, "J.R.R. Tolkien");
+            AuthorRow author = buildAuthor(1L, "J.R.R. Tolkien");
             author.setDescription("English writer and philologist.");
             author.setAsin("B000AP9MCS");
-            when(authorRepository.findById(1L)).thenReturn(Optional.of(author));
+            when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
             mockAuthorThumbnailExists(1L, true);
-            mockBookCountQuery(3);
+            when(jooqAppAuthorRepository.countAccessibleBooks(eq(1L), any())).thenReturn(3);
 
             AppAuthorDetail result = service.getAuthorDetail(1L);
 
@@ -255,11 +241,11 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonAdmin_withAccess_returnsDetail() {
             mockNonAdminUser(Set.of(5L));
-            AuthorEntity author = buildAuthor(2L, "Frank Herbert");
-            when(authorRepository.findById(2L)).thenReturn(Optional.of(author));
-            when(authorRepository.existsByIdAndLibraryIds(eq(2L), anySet())).thenReturn(true);
+            AuthorRow author = buildAuthor(2L, "Frank Herbert");
+            when(jooqAuthorRepository.findById(2L)).thenReturn(Optional.of(author));
+            when(jooqAuthorRepository.existsByIdAndLibraryIds(eq(2L), anySet())).thenReturn(true);
             mockAuthorThumbnailExists(2L, false);
-            mockBookCountQuery(6);
+            when(jooqAppAuthorRepository.countAccessibleBooks(eq(2L), any())).thenReturn(6);
 
             AppAuthorDetail result = service.getAuthorDetail(2L);
 
@@ -272,9 +258,9 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonAdmin_noAccess_throwsNotFound() {
             mockNonAdminUser(Set.of(5L));
-            AuthorEntity author = buildAuthor(3L, "Secret Author");
-            when(authorRepository.findById(3L)).thenReturn(Optional.of(author));
-            when(authorRepository.existsByIdAndLibraryIds(eq(3L), anySet())).thenReturn(false);
+            AuthorRow author = buildAuthor(3L, "Secret Author");
+            when(jooqAuthorRepository.findById(3L)).thenReturn(Optional.of(author));
+            when(jooqAuthorRepository.existsByIdAndLibraryIds(eq(3L), anySet())).thenReturn(false);
 
             assertThrows(APIException.class, () -> service.getAuthorDetail(3L));
         }
@@ -282,7 +268,7 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonExistentAuthor_throwsNotFound() {
             mockAdminUser();
-            when(authorRepository.findById(999L)).thenReturn(Optional.empty());
+            when(jooqAuthorRepository.findById(999L)).thenReturn(Optional.empty());
 
             assertThrows(APIException.class, () -> service.getAuthorDetail(999L));
         }
@@ -290,8 +276,8 @@ class AppAuthorServiceTest {
         @Test
         void getAuthorDetail_nonAdmin_emptyLibraries_throwsNotFound() {
             mockNonAdminUser(Collections.emptySet());
-            AuthorEntity author = buildAuthor(4L, "Author X");
-            when(authorRepository.findById(4L)).thenReturn(Optional.of(author));
+            AuthorRow author = buildAuthor(4L, "Author X");
+            when(jooqAuthorRepository.findById(4L)).thenReturn(Optional.of(author));
 
             assertThrows(APIException.class, () -> service.getAuthorDetail(4L));
         }
@@ -323,38 +309,17 @@ class AppAuthorServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
     }
 
-    @SuppressWarnings("unchecked")
-    private void mockCountQuery(long count) {
-        TypedQuery<Long> countQ = mock(TypedQuery.class);
-        when(countQ.setParameter(anyString(), any())).thenReturn(countQ);
-        when(countQ.getSingleResult()).thenReturn(count);
-        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(countQ);
+    private void mockCount(long count) {
+        when(jooqAppAuthorRepository.countAuthors(any(), any(), any())).thenReturn(count);
     }
 
-    @SuppressWarnings("unchecked")
-    private void mockDataQuery(List<Object[]> results) {
-        TypedQuery<Object[]> dataQ = mock(TypedQuery.class);
-        when(dataQ.setParameter(anyString(), any())).thenReturn(dataQ);
-        when(dataQ.setFirstResult(anyInt())).thenReturn(dataQ);
-        when(dataQ.setMaxResults(anyInt())).thenReturn(dataQ);
-        when(dataQ.getResultList()).thenReturn(results);
-        when(entityManager.createQuery(anyString(), eq(Object[].class))).thenReturn(dataQ);
+    private void mockRows(List<AuthorSummaryRow> rows) {
+        when(jooqAppAuthorRepository.findAuthorSummaries(any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(rows);
     }
 
-    @SuppressWarnings("unchecked")
-    private void mockAuthorEntityQuery(List<AuthorEntity> authors) {
-        TypedQuery<AuthorEntity> authorQ = mock(TypedQuery.class);
-        when(authorQ.setParameter(anyString(), any())).thenReturn(authorQ);
-        when(authorQ.getResultList()).thenReturn(authors);
-        when(entityManager.createQuery(anyString(), eq(AuthorEntity.class))).thenReturn(authorQ);
-    }
-
-    @SuppressWarnings("unchecked")
-    private void mockBookCountQuery(int count) {
-        TypedQuery<Long> countQ = mock(TypedQuery.class);
-        when(countQ.setParameter(anyString(), any())).thenReturn(countQ);
-        when(countQ.getSingleResult()).thenReturn((long) count);
-        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(countQ);
+    private AuthorSummaryRow row(long id, String name, long bookCount) {
+        return new AuthorSummaryRow(id, name, null, bookCount);
     }
 
     private void mockAuthorThumbnailExists(Long authorId, boolean exists) {
@@ -368,10 +333,7 @@ class AppAuthorServiceTest {
         }
     }
 
-    private AuthorEntity buildAuthor(Long id, String name) {
-        return AuthorEntity.builder()
-                .id(id)
-                .name(name)
-                .build();
+    private AuthorRow buildAuthor(Long id, String name) {
+        return new AuthorRow(id, name, null, null, false, false, false, false);
     }
 }

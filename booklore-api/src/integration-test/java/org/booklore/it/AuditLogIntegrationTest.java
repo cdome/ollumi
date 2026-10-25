@@ -1,10 +1,9 @@
 package org.booklore.it;
 
 import org.booklore.it.util.AuthTestHelper;
-import org.booklore.model.entity.AuditLogEntity;
 import org.booklore.model.entity.BookLoreUserEntity;
 import org.booklore.model.enums.AuditAction;
-import org.booklore.repository.AuditLogRepository;
+import org.booklore.repository.jooq.JooqAuditLogRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -20,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class AuditLogIntegrationTest extends RestApiIntegrationTest {
 
     @Autowired
-    private AuditLogRepository auditLogRepository;
+    private JooqAuditLogRepository auditLogRepository;
 
     @Test
     void adminCanListAuditLogs() {
@@ -58,11 +57,8 @@ public class AuditLogIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanFilterAuditLogsByUsername() {
         auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        auditLogRepository.save(AuditLogEntity.builder()
-                .username("audit-filter-user")
-                .action(AuditAction.USER_CREATED)
-                .description("audit log for filter test")
-                .build());
+        auditLogRepository.insert(null, "audit-filter-user", AuditAction.USER_CREATED,
+                null, null, "audit log for filter test", null, null);
 
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
 
@@ -82,11 +78,8 @@ public class AuditLogIntegrationTest extends RestApiIntegrationTest {
     @Test
     void adminCanGetDistinctUsernames() {
         auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
-        auditLogRepository.save(AuditLogEntity.builder()
-                .username("distinct-user")
-                .action(AuditAction.LOGOUT)
-                .description("distinct user audit log")
-                .build());
+        auditLogRepository.insert(null, "distinct-user", AuditAction.LOGOUT,
+                null, null, "distinct user audit log", null, null);
 
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), ADMIN_USERNAME, ADMIN_PASSWORD);
 

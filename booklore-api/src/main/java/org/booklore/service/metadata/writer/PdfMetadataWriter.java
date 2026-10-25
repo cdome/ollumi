@@ -44,6 +44,7 @@ import java.util.*;
 public class PdfMetadataWriter implements MetadataWriter {
 
     private final AppSettingService appSettingService;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     @Override
     public void saveMetadataToFile(File file, BookMetadataEntity metadataEntity, String thumbnailUrl, MetadataClearFlags clear) {
@@ -132,11 +133,13 @@ public class PdfMetadataWriter implements MetadataWriter {
     private void applyMetadataToDocument(PDDocument pdf, BookMetadataEntity entity, MetadataClearFlags clear) {
         PDDocumentInformation info = pdf.getDocumentInformation();
         MetadataCopyHelper helper = new MetadataCopyHelper(entity);
+        java.util.Set<String> currentCategoryNames = relationsRepository.findCategoryNamesByBookId(entity.getBookId());
+        java.util.List<String> currentAuthorNames = relationsRepository.findAuthorNamesByBookId(entity.getBookId());
 
         // Build categories-only keywords for PDF legacy compatibility (Info Dictionary)
         // Moods and tags are stored separately in XMP booklore namespace, so they should NOT be in Info Dict keywords
         StringBuilder keywordsBuilder = new StringBuilder();
-        helper.copyCategories(clear != null && clear.isCategories(), cats -> {
+        helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, cats -> {
             if (cats != null && !cats.isEmpty()) {
                 keywordsBuilder.append(String.join("; ", cats));
             }
@@ -144,7 +147,7 @@ public class PdfMetadataWriter implements MetadataWriter {
 
         helper.copyTitle(clear != null && clear.isTitle(), title -> info.setTitle(title != null ? title : ""));
         helper.copyPublisher(clear != null && clear.isPublisher(), pub -> info.setProducer(pub != null ? pub : ""));
-        helper.copyAuthors(clear != null && clear.isAuthors(), authors -> info.setAuthor(authors != null ? String.join(", ", authors) : ""));
+        helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, authors -> info.setAuthor(authors != null ? String.join(", ", authors) : ""));
         helper.copyPublishedDate(clear != null && clear.isPublishedDate(), date -> {
             Calendar cal = Calendar.getInstance();
             cal.setTimeInMillis((date != null ? date : ZonedDateTime.now().toLocalDate())
@@ -188,7 +191,7 @@ public class PdfMetadataWriter implements MetadataWriter {
             });
 
             // Clean author names (normalize whitespace)
-            helper.copyAuthors(clear != null && clear.isAuthors(), authors -> {
+            helper.copyAuthors(clear != null && clear.isAuthors(), currentAuthorNames, authors -> {
                 if (authors != null && !authors.isEmpty()) {
                     authors.stream()
                         .map(name -> name.replaceAll("\\s+", " ").trim())
@@ -198,7 +201,7 @@ public class PdfMetadataWriter implements MetadataWriter {
             });
 
             // Add categories as dc:subject
-            helper.copyCategories(clear != null && clear.isCategories(), cats -> {
+            helper.copyCategories(clear != null && clear.isCategories(), currentCategoryNames, cats -> {
                 if (cats != null && !cats.isEmpty()) {
                     cats.forEach(dc::addSubject);
                 }
@@ -372,14 +375,16 @@ public class PdfMetadataWriter implements MetadataWriter {
         helper.copyRanobedbRating(clear != null && clear.isRanobedbRating(), rating -> appendBookloreRating(doc, bookloreDescription, "ranobedbRating", rating));
 
         // Tags (as RDF Bag)
-        helper.copyTags(clear != null && clear.isTags(), tags -> {
+        Set<String> currentTagNames = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+        helper.copyTags(clear != null && clear.isTags(), currentTagNames, tags -> {
             if (tags != null && !tags.isEmpty()) {
                 appendBookloreBag(doc, bookloreDescription, "tags", tags);
             }
         });
 
         // Moods (as RDF Bag)
-        helper.copyMoods(clear != null && clear.isMoods(), moods -> {
+        Set<String> currentMoodNames = relationsRepository.findMoodNamesByBookId(metadata.getBookId());
+        helper.copyMoods(clear != null && clear.isMoods(), currentMoodNames, moods -> {
             if (moods != null && !moods.isEmpty()) {
                 appendBookloreBag(doc, bookloreDescription, "moods", moods);
             }

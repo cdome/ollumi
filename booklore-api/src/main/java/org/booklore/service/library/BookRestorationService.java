@@ -5,7 +5,8 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BookRestorationService {
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
     private final BookMapper bookMapper;
     private final NotificationService notificationService;
 
@@ -37,25 +39,25 @@ public class BookRestorationService {
                 .map(LibraryFile::getFullPath)
                 .collect(Collectors.toSet());
 
-        List<BookEntity> toRestore = libraryEntity.getBookEntities().stream()
-                .filter(book -> Boolean.TRUE.equals(book.getDeleted()))
+        List<BookEntity> toRestore = jooqBookEntityRepository.findDeletedByLibraryId(libraryEntity.getId()).stream()
                 .filter(book -> book.getBookFiles() != null && !book.getBookFiles().isEmpty())
                 .filter(book -> currentPaths.contains(book.getFullFilePath()))
                 .collect(Collectors.toList());
 
         if (toRestore.isEmpty()) return;
 
+        Instant now = Instant.now();
         toRestore.forEach(book -> {
             book.setDeleted(false);
             book.setDeletedAt(null);
-            book.setAddedOn(Instant.now());
+            book.setAddedOn(now);
             notificationService.sendMessage(Topic.BOOK_ADD, bookMapper.toBookWithDescription(book, false));
         });
-        bookRepository.saveAll(toRestore);
 
         List<Long> restoredIds = toRestore.stream()
                 .map(BookEntity::getId)
                 .toList();
+        jooqBookRepository.restoreDeleted(restoredIds, now);
 
         log.info("Restored {} books in library: {}", restoredIds.size(), libraryEntity.getName());
     }

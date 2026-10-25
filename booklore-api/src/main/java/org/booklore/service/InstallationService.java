@@ -2,8 +2,8 @@ package org.booklore.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.model.dto.Installation;
-import org.booklore.model.entity.AppSettingEntity;
-import org.booklore.repository.AppSettingsRepository;
+import org.booklore.repository.jooq.JooqAppSettingsRepository;
+import org.booklore.repository.jooq.dto.AppSetting;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -20,10 +20,10 @@ public class InstallationService {
 
     private static final String INSTALLATION_ID_KEY = "installation_id";
 
-    private final AppSettingsRepository appSettingsRepository;
+    private final JooqAppSettingsRepository appSettingsRepository;
     private final ObjectMapper objectMapper;
 
-    public InstallationService(AppSettingsRepository appSettingsRepository, ObjectMapper objectMapper) {
+    public InstallationService(JooqAppSettingsRepository appSettingsRepository, ObjectMapper objectMapper) {
         this.appSettingsRepository = appSettingsRepository;
         this.objectMapper = JsonMapper.builder()
                 .findAndAddModules()
@@ -31,14 +31,14 @@ public class InstallationService {
     }
 
     public Installation getOrCreateInstallation() {
-        AppSettingEntity setting = appSettingsRepository.findByName(INSTALLATION_ID_KEY);
+        AppSetting setting = appSettingsRepository.findByName(INSTALLATION_ID_KEY);
 
         if (setting == null) {
             return createNewInstallation();
         }
 
         try {
-            return objectMapper.readValue(setting.getVal(), Installation.class);
+            return objectMapper.readValue(setting.getValue(), Installation.class);
         } catch (Exception e) {
             log.warn("Failed to parse installation ID, creating new one", e);
             return createNewInstallation();
@@ -62,15 +62,7 @@ public class InstallationService {
     private void saveInstallation(Installation installation) {
         try {
             String json = objectMapper.writeValueAsString(installation);
-            AppSettingEntity setting = appSettingsRepository.findByName(INSTALLATION_ID_KEY);
-
-            if (setting == null) {
-                setting = new AppSettingEntity();
-                setting.setName(INSTALLATION_ID_KEY);
-            }
-
-            setting.setVal(json);
-            appSettingsRepository.save(setting);
+            appSettingsRepository.upsertByName(INSTALLATION_ID_KEY, json);
         } catch (Exception e) {
             throw new RuntimeException("Failed to save installation ID", e);
         }

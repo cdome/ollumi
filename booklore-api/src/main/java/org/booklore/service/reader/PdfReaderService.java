@@ -16,7 +16,7 @@ import org.booklore.model.dto.response.PdfOutlineItem;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.booklore.util.FileUtils;
 import org.springframework.stereotype.Service;
 
@@ -43,7 +43,7 @@ public class PdfReaderService {
     private static final int MAX_CACHE_ENTRIES = 50;
     private static final float DEFAULT_DPI = 200f;
 
-    private final BookRepository bookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
     private final Map<String, CachedPdfMetadata> metadataCache = new ConcurrentHashMap<>();
 
     private static class CachedPdfMetadata {
@@ -103,8 +103,10 @@ public class PdfReaderService {
     }
 
     private Path getBookPath(Long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
             BookFileEntity bookFile = bookEntity.getBookFiles().stream()

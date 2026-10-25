@@ -6,7 +6,18 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.config.security.service.AuthenticationService;
 import org.booklore.exception.ApiError;
-import org.booklore.mapper.BookMapper;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookReadRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqCbxViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqNewPdfViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqEbookViewerPreferenceRepository;
+import org.booklore.repository.jooq.JooqUserBookProgressRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
+import org.booklore.repository.jooq.dto.UserBookFileProgressRow;
+import org.booklore.repository.jooq.dto.UserBookProgressRow;
 import org.booklore.model.dto.*;
 import org.booklore.model.dto.request.ReadProgressRequest;
 import org.booklore.model.dto.response.BookDeletionResponse;
@@ -14,7 +25,6 @@ import org.booklore.model.dto.response.BookStatusUpdateResponse;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.*;
 import org.booklore.service.FileStreamingService;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.sidecar.SidecarMetadataWriter;
@@ -51,21 +61,22 @@ import java.util.stream.Collectors;
 @Service
 public class BookService {
 
-    private final BookRepository bookRepository;
-    private final BookFileRepository bookFileRepository;
-    private final PdfViewerPreferencesRepository pdfViewerPreferencesRepository;
-    private final CbxViewerPreferencesRepository cbxViewerPreferencesRepository;
-    private final NewPdfViewerPreferencesRepository newPdfViewerPreferencesRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqPdfViewerPreferenceRepository pdfViewerPreferencesRepository;
+    private final JooqCbxViewerPreferenceRepository cbxViewerPreferencesRepository;
+    private final JooqNewPdfViewerPreferenceRepository newPdfViewerPreferencesRepository;
     private final FileService fileService;
-    private final BookMapper bookMapper;
-    private final UserBookProgressRepository userBookProgressRepository;
+    private final JooqBookReadRepository jooqBookReadRepository;
+    private final JooqUserBookProgressRepository userBookProgressRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final AuthenticationService authenticationService;
     private final BookQueryService bookQueryService;
     private final ReadingProgressService readingProgressService;
     private final BookDownloadService bookDownloadService;
     private final MonitoringRegistrationService monitoringRegistrationService;
     private final BookUpdateService bookUpdateService;
-    private final EbookViewerPreferenceRepository ebookViewerPreferencesRepository;
+    private final JooqEbookViewerPreferenceRepository ebookViewerPreferencesRepository;
     private final SidecarMetadataWriter sidecarMetadataWriter;
     private final FileStreamingService fileStreamingService;
     private final AuditService auditService;
@@ -85,9 +96,9 @@ public class BookService {
         );
 
         Set<Long> bookIds = books.stream().map(Book::getId).collect(Collectors.toSet());
-        Map<Long, UserBookProgressEntity> progressMap =
+        Map<Long, UserBookProgressRow> progressMap =
                 readingProgressService.fetchUserProgress(user.getId(), bookIds);
-        Map<Long, UserBookFileProgressEntity> fileProgressMap =
+        Map<Long, UserBookFileProgressRow> fileProgressMap =
                 readingProgressService.fetchUserFileProgress(user.getId(), bookIds);
 
         books.forEach(book -> {
@@ -113,29 +124,28 @@ public class BookService {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
         boolean isAdmin = user.getPermissions().isAdmin();
 
-        List<BookEntity> bookEntities = bookQueryService.findAllWithMetadataByIds(bookIds);
+        List<Book> books = jooqBookReadRepository.findByIds(bookIds);
 
         if (!isAdmin) {
             Set<Long> userLibraryIds = getUserLibraryIds(user);
-            bookEntities = bookEntities.stream()
-                    .filter(book -> userLibraryIds.contains(book.getLibrary().getId()))
+            books = books.stream()
+                    .filter(book -> userLibraryIds.contains(book.getLibraryId()))
                     .toList();
         }
 
-        Set<Long> entityIds = bookEntities.stream().map(BookEntity::getId).collect(Collectors.toSet());
+        Set<Long> entityIds = books.stream().map(Book::getId).collect(Collectors.toSet());
 
-        Map<Long, UserBookProgressEntity> progressMap =
+        Map<Long, UserBookProgressRow> progressMap =
                 readingProgressService.fetchUserProgress(user.getId(), entityIds);
-        Map<Long, UserBookFileProgressEntity> fileProgressMap =
+        Map<Long, UserBookFileProgressRow> fileProgressMap =
                 readingProgressService.fetchUserFileProgress(user.getId(), entityIds);
 
-        return bookEntities.stream().map(bookEntity -> {
-            Book book = bookMapper.toBook(bookEntity);
+        return books.stream().map(book -> {
             if (!withDescription) book.getMetadata().setDescription(null);
             readingProgressService.enrichBookWithProgress(
                     book,
-                    progressMap.get(bookEntity.getId()),
-                    fileProgressMap.get(bookEntity.getId())
+                    progressMap.get(book.getId()),
+                    fileProgressMap.get(book.getId())
             );
             return book;
         }).collect(Collectors.toList());
@@ -144,17 +154,17 @@ public class BookService {
     @Transactional(readOnly = true)
     public Book getBook(long bookId, boolean withDescription) {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        Book book = jooqBookReadRepository.findByIds(List.of(bookId)).stream().findFirst()
+                .orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
 
-        UserBookProgressEntity userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
-                .orElse(new UserBookProgressEntity());
+        UserBookProgressRow userProgress = userBookProgressRepository.findByUserIdAndBookId(user.getId(), bookId)
+                .orElse(new UserBookProgressRow());
 
         // Fetch file-level progress for the book (most recent across all files)
-        UserBookFileProgressEntity fileProgress = readingProgressService
+        UserBookFileProgressRow fileProgress = readingProgressService
                 .fetchUserFileProgress(user.getId(), Set.of(bookId))
                 .get(bookId);
 
-        Book book = bookMapper.toBook(bookEntity);
         book.setShelves(filterShelvesByUserId(book.getShelves(), user.getId()));
         readingProgressService.enrichBookWithProgress(book, userProgress, fileProgress);
 
@@ -168,7 +178,10 @@ public class BookService {
 
     @Transactional(readOnly = true)
     public BookViewerSettings getBookViewerSetting(long bookId, long bookFileId) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         BookLoreUser user = authenticationService.getAuthenticatedUser();
 
         BookViewerSettings.BookViewerSettingsBuilder settingsBuilder = BookViewerSettings.builder();
@@ -181,49 +194,16 @@ public class BookService {
         if (bookType == BookFileType.EPUB || bookType == BookFileType.FB2
                 || bookType == BookFileType.MOBI
                 || bookType == BookFileType.AZW3) {
-            ebookViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(epubPref -> settingsBuilder.ebookSettings(EbookViewerPreferences.builder()
-                            .bookId(bookId)
-                            .userId(user.getId())
-                            .fontFamily(epubPref.getFontFamily())
-                            .fontSize(epubPref.getFontSize())
-                            .gap(epubPref.getGap())
-                            .hyphenate(epubPref.getHyphenate())
-                            .isDark(epubPref.getIsDark())
-                            .justify(epubPref.getJustify())
-                            .lineHeight(epubPref.getLineHeight())
-                            .maxBlockSize(epubPref.getMaxBlockSize())
-                            .maxColumnCount(epubPref.getMaxColumnCount())
-                            .maxInlineSize(epubPref.getMaxInlineSize())
-                            .theme(epubPref.getTheme())
-                            .flow(epubPref.getFlow())
-                            .build()));
+            Optional.ofNullable(ebookViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::ebookSettings);
         } else if (bookType == BookFileType.PDF) {
-            pdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(pdfPref -> settingsBuilder.pdfSettings(PdfViewerPreferences.builder()
-                            .bookId(bookId)
-                            .zoom(pdfPref.getZoom())
-                            .spread(pdfPref.getSpread())
-                            .build()));
-            newPdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(pdfPref -> settingsBuilder.newPdfSettings(NewPdfViewerPreferences.builder()
-                            .bookId(bookId)
-                            .pageViewMode(pdfPref.getPageViewMode())
-                            .pageSpread(pdfPref.getPageSpread())
-                            .fitMode(pdfPref.getFitMode())
-                            .scrollMode(pdfPref.getScrollMode())
-                            .backgroundColor(pdfPref.getBackgroundColor())
-                            .build()));
+            Optional.ofNullable(pdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::pdfSettings);
+            Optional.ofNullable(newPdfViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::newPdfSettings);
         } else if (bookType == BookFileType.CBX) {
-            cbxViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId())
-                    .ifPresent(cbxPref -> settingsBuilder.cbxSettings(CbxViewerPreferences.builder()
-                            .bookId(bookId)
-                            .pageViewMode(cbxPref.getPageViewMode())
-                            .pageSpread(cbxPref.getPageSpread())
-                            .fitMode(cbxPref.getFitMode())
-                            .scrollMode(cbxPref.getScrollMode())
-                            .backgroundColor(cbxPref.getBackgroundColor())
-                            .build()));
+            Optional.ofNullable(cbxViewerPreferencesRepository.findByBookIdAndUserId(bookId, user.getId()))
+                    .ifPresent(settingsBuilder::cbxSettings);
         } else {
             throw ApiError.UNSUPPORTED_BOOK_TYPE.createException();
         }
@@ -276,8 +256,11 @@ public class BookService {
     }
 
     public Resource getBookCover(String coverHash) {
-        BookEntity bookEntity = bookRepository.findByBookCoverHash(coverHash).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(coverHash));
-        return getBookCover(bookEntity.getId());
+        Long bookId = jooqBookRepository.findBookIdByCoverHash(coverHash);
+        if (bookId == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(coverHash);
+        }
+        return getBookCover(bookId);
     }
 
     public Resource getAudiobookThumbnail(long bookId) {
@@ -328,7 +311,10 @@ public class BookService {
     }
 
     public ResponseEntity<Resource> getBookContent(long bookId, String bookType) {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -352,7 +338,10 @@ public class BookService {
     }
 
     public void streamBookContent(long bookId, String bookType, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        BookEntity bookEntity = bookRepository.findByIdWithBookFiles(bookId).orElseThrow(() -> ApiError.BOOK_NOT_FOUND.createException(bookId));
+        BookEntity bookEntity = jooqBookEntityRepository.findByIdFull(bookId);
+        if (bookEntity == null) {
+            throw ApiError.BOOK_NOT_FOUND.createException(bookId);
+        }
         String filePath;
         if (bookType != null) {
             BookFileType requestedType = BookFileType.valueOf(bookType.toUpperCase());
@@ -413,8 +402,8 @@ public class BookService {
                             log.info("Deleted book file: {}", fullFilePath);
                         }
 
-                        Set<Path> libraryRoots = book.getLibrary().getLibraryPaths().stream()
-                                .map(LibraryPathEntity::getPath)
+                        Set<Path> libraryRoots = jooqLibraryPathRepository.findPathsByLibraryId(book.getLibrary().getId()).stream()
+                                .map(LibraryPathRow::getPath)
                                 .map(Paths::get)
                                 .map(Path::normalize)
                                 .collect(Collectors.toSet());
@@ -436,7 +425,7 @@ public class BookService {
             }
         }
 
-        bookRepository.deleteAllInBatch(books);
+        jooqBookRepository.deleteByIds(books.stream().map(BookEntity::getId).toList());
         auditService.log(AuditAction.BOOK_DELETED, "Deleted " + ids.size() + " book(s)");
         BookDeletionResponse response = new BookDeletionResponse(ids, failedFileDeletions);
         return failedFileDeletions.isEmpty()

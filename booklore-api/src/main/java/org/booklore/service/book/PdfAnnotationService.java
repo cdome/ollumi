@@ -1,13 +1,10 @@
 package org.booklore.service.book;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.PdfAnnotationEntity;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.PdfAnnotationRepository;
-import org.booklore.repository.UserRepository;
-import jakarta.persistence.EntityNotFoundException;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqPdfAnnotationRepository;
+import org.booklore.exception.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,37 +17,28 @@ import java.util.Optional;
 @Slf4j
 public class PdfAnnotationService {
 
-    private final PdfAnnotationRepository pdfAnnotationRepository;
-    private final BookRepository bookRepository;
-    private final UserRepository userRepository;
+    private final JooqPdfAnnotationRepository pdfAnnotationRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqUserRepository userRepository;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)
     public Optional<String> getAnnotations(Long bookId) {
         Long userId = getCurrentUserId();
-        return pdfAnnotationRepository.findByBookIdAndUserId(bookId, userId)
-                .map(PdfAnnotationEntity::getData);
+        return Optional.ofNullable(pdfAnnotationRepository.findDataByBookIdAndUserId(bookId, userId));
     }
 
     @Transactional
     public void saveAnnotations(Long bookId, String data) {
         Long userId = getCurrentUserId();
-        Optional<PdfAnnotationEntity> existing = pdfAnnotationRepository.findByBookIdAndUserId(bookId, userId);
-
-        if (existing.isPresent()) {
-            PdfAnnotationEntity entity = existing.get();
-            entity.setData(data);
-            pdfAnnotationRepository.save(entity);
-            log.info("Updated PDF annotations for book {} by user {}", bookId, userId);
-        } else {
-            PdfAnnotationEntity entity = PdfAnnotationEntity.builder()
-                    .book(findBook(bookId))
-                    .user(findUser(userId))
-                    .data(data)
-                    .build();
-            pdfAnnotationRepository.save(entity);
-            log.info("Created PDF annotations for book {} by user {}", bookId, userId);
+        if (!jooqBookEntityRepository.existsById(bookId)) {
+            throw new EntityNotFoundException("Book not found: " + bookId);
         }
+        if (!userRepository.existsById(userId)) {
+            throw new EntityNotFoundException("User not found: " + userId);
+        }
+        pdfAnnotationRepository.upsert(bookId, userId, data);
+        log.info("Saved PDF annotations for book {} by user {}", bookId, userId);
     }
 
     @Transactional
@@ -62,15 +50,5 @@ public class PdfAnnotationService {
 
     private Long getCurrentUserId() {
         return authenticationService.getAuthenticatedUser().getId();
-    }
-
-    private BookEntity findBook(Long bookId) {
-        return bookRepository.findById(bookId)
-                .orElseThrow(() -> new EntityNotFoundException("Book not found: " + bookId));
-    }
-
-    private BookLoreUserEntity findUser(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
     }
 }

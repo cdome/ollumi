@@ -11,12 +11,11 @@ import org.booklore.model.dto.request.UpdateUserSettingRequest;
 import org.booklore.model.dto.request.UserUpdateRequest;
 import org.booklore.model.dto.settings.UserSettingKey;
 import org.booklore.model.entity.BookLoreUserEntity;
-import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.UserSettingEntity;
+import org.booklore.repository.jooq.JooqUserSettingRepository;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.UserPermission;
-import org.booklore.repository.LibraryRepository;
-import org.booklore.repository.UserRepository;
+import org.booklore.repository.jooq.JooqUserRepository;
+import org.booklore.repository.jooq.JooqUserLibraryRepository;
 import org.booklore.service.audit.AuditService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,8 +31,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqUserRepository userRepository;
+    private final JooqUserLibraryRepository jooqUserLibraryRepository;
+    private final JooqUserSettingRepository userSettingRepository;
     private final AuthenticationService authenticationService;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
@@ -50,7 +50,10 @@ public class UserService {
 
     @Transactional
     public BookLoreUser updateUser(Long id, UserUpdateRequest updateRequest) {
-        BookLoreUserEntity user = userRepository.findByIdWithDetails(id).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(id));
+        BookLoreUserEntity user = userRepository.findByIdWithDetails(id);
+        if (user == null) {
+            throw ApiError.USER_NOT_FOUND.createException(id);
+        }
         user.setName(updateRequest.getName());
         user.setEmail(updateRequest.getEmail());
 
@@ -61,8 +64,7 @@ public class UserService {
 
         if (updateRequest.getAssignedLibraries() != null && getMyself().getPermissions().isAdmin()) {
             List<Long> libraryIds = updateRequest.getAssignedLibraries();
-            Set<LibraryEntity> updatedLibraries = new HashSet<>(libraryRepository.findAllById(libraryIds));
-            user.setLibraries(updatedLibraries);
+            jooqUserLibraryRepository.setLibrariesForUser(id, libraryIds);
         }
 
         userRepository.save(user);
@@ -72,7 +74,10 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        BookLoreUserEntity userToDelete = userRepository.findById(id).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(id));
+        BookLoreUserEntity userToDelete = userRepository.findById(id);
+        if (userToDelete == null) {
+            throw ApiError.USER_NOT_FOUND.createException(id);
+        }
         BookLoreUser currentUser = authenticationService.getAuthenticatedUser();
         boolean isAdmin = currentUser.getPermissions().isAdmin();
         if (!isAdmin) {
@@ -87,7 +92,10 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public BookLoreUser getBookLoreUser(Long id) {
-        BookLoreUserEntity user = userRepository.findByIdWithDetails(id).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(id));
+        BookLoreUserEntity user = userRepository.findByIdWithDetails(id);
+        if (user == null) {
+            throw ApiError.USER_NOT_FOUND.createException(id);
+        }
         return bookLoreUserTransformer.toDTO(user);
     }
 
@@ -99,8 +107,10 @@ public class UserService {
     public void changePassword(ChangePasswordRequest changePasswordRequest) {
         BookLoreUser bookLoreUser = authenticationService.getAuthenticatedUser();
 
-        BookLoreUserEntity bookLoreUserEntity = userRepository.findByIdWithPermissions(bookLoreUser.getId())
-                .orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(bookLoreUser.getId()));
+        BookLoreUserEntity bookLoreUserEntity = userRepository.findByIdWithPermissions(bookLoreUser.getId());
+        if (bookLoreUserEntity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(bookLoreUser.getId());
+        }
 
         if (bookLoreUserEntity.getPermissions().isPermissionDemoUser()) {
             throw ApiError.DEMO_USER_PASSWORD_CHANGE_NOT_ALLOWED.createException();
@@ -126,7 +136,10 @@ public class UserService {
 
     @Transactional
     public void changeUserPassword(ChangeUserPasswordRequest request) {
-        BookLoreUserEntity userEntity = userRepository.findByIdWithPermissions(request.getUserId()).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(request.getUserId()));
+        BookLoreUserEntity userEntity = userRepository.findByIdWithPermissions(request.getUserId());
+        if (userEntity == null) {
+            throw ApiError.USER_NOT_FOUND.createException(request.getUserId());
+        }
         if (!meetsMinimumPasswordRequirements(request.getNewPassword())) {
             throw ApiError.PASSWORD_TOO_SHORT.createException();
         }
@@ -137,7 +150,9 @@ public class UserService {
 
     @Transactional
     public void updateUserSetting(Long userId, UpdateUserSettingRequest request) {
-        BookLoreUserEntity user = userRepository.findByIdWithSettings(userId).orElseThrow(() -> ApiError.USER_NOT_FOUND.createException(userId));
+        if (userRepository.findByIdWithSettings(userId) == null) {
+            throw ApiError.USER_NOT_FOUND.createException(userId);
+        }
 
         String key = request.getKey();
         Object value = request.getValue();
@@ -153,30 +168,16 @@ public class UserService {
             throw ApiError.INVALID_INPUT.createException("Unknown setting key: " + key);
         }
 
-        UserSettingEntity setting = user.getSettings().stream()
-                .filter(s -> s.getSettingKey().equals(key))
-                .findFirst()
-                .orElseGet(() -> {
-                    UserSettingEntity newSetting = new UserSettingEntity();
-                    newSetting.setUser(user);
-                    newSetting.setSettingKey(key);
-                    user.getSettings().add(newSetting);
-                    return newSetting;
-                });
-
+        String serializedValue;
         try {
-            String serializedValue;
-            if (settingKey.isJson()) {
-                serializedValue = objectMapper.writeValueAsString(value);
-            } else {
-                serializedValue = value.toString();
-            }
-            setting.setSettingValue(serializedValue);
+            serializedValue = settingKey.isJson()
+                    ? objectMapper.writeValueAsString(value)
+                    : value.toString();
         } catch (Exception e) {
             throw ApiError.INVALID_INPUT.createException("Could not serialize setting value.");
         }
 
-        userRepository.save(user);
+        userSettingRepository.upsertSetting(userId, key, serializedValue);
     }
 
     private boolean meetsMinimumPasswordRequirements(String password) {

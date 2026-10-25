@@ -5,9 +5,8 @@ import org.booklore.exception.APIException;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.dto.request.TaskCronConfigRequest;
 import org.booklore.model.dto.response.CronConfig;
-import org.booklore.model.entity.TaskCronConfigurationEntity;
 import org.booklore.model.enums.TaskType;
-import org.booklore.repository.TaskCronConfigurationRepository;
+import org.booklore.repository.jooq.JooqTaskCronConfigurationRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,15 +17,15 @@ import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class TaskCronServiceTest {
 
     @Mock
-    private TaskCronConfigurationRepository repository;
+    private JooqTaskCronConfigurationRepository repository;
 
     @Mock
     private AuthenticationService authService;
@@ -50,13 +49,12 @@ class TaskCronServiceTest {
         }
     }
 
-    private TaskCronConfigurationEntity buildEntity(TaskType type, String cron, boolean enabled) {
-        return TaskCronConfigurationEntity.builder()
+    private CronConfig buildConfig(TaskType type, String cron, boolean enabled) {
+        return CronConfig.builder()
                 .id(1L)
                 .taskType(type)
                 .cronExpression(cron)
                 .enabled(enabled)
-                .createdBy(10L)
                 .createdAt(FIXED_TIME)
                 .updatedAt(FIXED_TIME)
                 .build();
@@ -64,12 +62,12 @@ class TaskCronServiceTest {
 
     @Test
     void testGetAllEnabledCronConfigs_returnsList() {
-        List<TaskCronConfigurationEntity> configs = List.of(
-                buildEntity(TaskType.CLEANUP_DELETED_BOOKS, "0 0 1 * * *", true)
+        List<CronConfig> configs = List.of(
+                buildConfig(TaskType.CLEANUP_DELETED_BOOKS, "0 0 1 * * *", true)
         );
-        when(repository.findByEnabledTrue()).thenReturn(configs);
+        when(repository.findAllEnabled()).thenReturn(configs);
 
-        List<TaskCronConfigurationEntity> result = service.getAllEnabledCronConfigs();
+        List<CronConfig> result = service.getAllEnabledCronConfigs();
         assertEquals(1, result.size());
         assertEquals(TaskType.CLEANUP_DELETED_BOOKS, result.getFirst().getTaskType());
     }
@@ -77,8 +75,7 @@ class TaskCronServiceTest {
     @Test
     void testGetCronConfigOrDefault_existingConfig() {
         TaskType type = TaskType.CLEANUP_DELETED_BOOKS;
-        TaskCronConfigurationEntity entity = buildEntity(type, "0 0 1 * * *", true);
-        when(repository.findByTaskType(type)).thenReturn(Optional.of(entity));
+        when(repository.findByTaskType(type)).thenReturn(buildConfig(type, "0 0 1 * * *", true));
 
         CronConfig config = service.getCronConfigOrDefault(type);
         assertEquals(type, config.getTaskType());
@@ -89,7 +86,7 @@ class TaskCronServiceTest {
     @Test
     void testGetCronConfigOrDefault_noConfig_returnsDefault() {
         TaskType type = TaskType.CLEANUP_DELETED_BOOKS;
-        when(repository.findByTaskType(type)).thenReturn(Optional.empty());
+        when(repository.findByTaskType(type)).thenReturn(null);
 
         CronConfig config = service.getCronConfigOrDefault(type);
         assertEquals(type, config.getTaskType());
@@ -118,11 +115,11 @@ class TaskCronServiceTest {
     void testPatchCronConfig_updateExisting() {
         TaskType type = TaskType.CLEANUP_DELETED_BOOKS;
         BookLoreUser user = BookLoreUser.builder().id(10L).isDefaultPassword(false).build();
-        TaskCronConfigurationEntity entity = buildEntity(type, "0 0 1 * * *", false);
 
         when(authService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByTaskType(type)).thenReturn(Optional.of(entity));
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.findByTaskType(type)).thenReturn(buildConfig(type, "0 0 1 * * *", false));
+        when(repository.save(any(), any(), anyBoolean(), anyLong())).thenAnswer(inv ->
+                CronConfig.builder().taskType(inv.getArgument(0)).cronExpression(inv.getArgument(1)).enabled(inv.getArgument(2)).build());
 
         TaskCronConfigRequest req = new TaskCronConfigRequest();
         req.setCronExpression("0 0 2 * * *");
@@ -139,8 +136,9 @@ class TaskCronServiceTest {
         BookLoreUser user = BookLoreUser.builder().id(10L).isDefaultPassword(false).build();
 
         when(authService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByTaskType(type)).thenReturn(Optional.empty());
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.findByTaskType(type)).thenReturn(null);
+        when(repository.save(any(), any(), anyBoolean(), anyLong())).thenAnswer(inv ->
+                CronConfig.builder().taskType(inv.getArgument(0)).cronExpression(inv.getArgument(1)).enabled(inv.getArgument(2)).build());
 
         TaskCronConfigRequest req = new TaskCronConfigRequest();
         req.setCronExpression("0 0 3 * * *");
@@ -158,7 +156,7 @@ class TaskCronServiceTest {
         BookLoreUser user = BookLoreUser.builder().id(10L).isDefaultPassword(false).build();
 
         when(authService.getAuthenticatedUser()).thenReturn(user);
-        when(repository.findByTaskType(type)).thenReturn(Optional.empty());
+        when(repository.findByTaskType(type)).thenReturn(null);
 
         TaskCronConfigRequest req = new TaskCronConfigRequest();
         req.setCronExpression("invalid cron");

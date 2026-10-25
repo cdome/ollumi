@@ -2,7 +2,7 @@ package org.booklore.service.bookdrop;
 
 import org.booklore.config.AppProperties;
 import org.booklore.model.enums.BookFileExtension;
-import org.booklore.repository.BookdropFileRepository;
+import org.booklore.repository.jooq.JooqBookdropFileRepository;
 import org.booklore.util.FileUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -24,7 +24,7 @@ public class BookdropMonitoringService {
 
     private final AppProperties appProperties;
     private final BookdropEventHandlerService eventHandler;
-    private final BookdropFileRepository bookdropFileRepository;
+    private final JooqBookdropFileRepository bookdropFileRepository;
 
     private Path bookdrop;
     private WatchService watchService;
@@ -38,7 +38,7 @@ public class BookdropMonitoringService {
     public BookdropMonitoringService(
             AppProperties appProperties,
             BookdropEventHandlerService eventHandler,
-            BookdropFileRepository bookdropFileRepository
+            JooqBookdropFileRepository bookdropFileRepository
     ) {
         this.appProperties = appProperties;
         this.eventHandler = eventHandler;

@@ -1,6 +1,5 @@
 package org.booklore;
 
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
@@ -8,10 +7,7 @@ import org.booklore.util.PathPatternResolver;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -34,18 +30,7 @@ class PathPatternResolverTest {
         when(metadata.getTitle()).thenReturn(title);
         when(metadata.getSubtitle()).thenReturn(subtitle);
 
-        if (authors == null) {
-            when(metadata.getAuthors()).thenReturn(null);
-        } else {
-            AtomicLong idCounter = new AtomicLong(1);
-            ArrayList<AuthorEntity> authorEntities = authors.stream().map(name -> {
-                AuthorEntity a = new AuthorEntity();
-                a.setId(idCounter.getAndIncrement());
-                a.setName(name);
-                return a;
-            }).collect(Collectors.toCollection(ArrayList::new));
-            when(metadata.getAuthors()).thenReturn(authorEntities);
-        }
+        when(metadata.getAuthorNames()).thenReturn(authors);
 
         when(metadata.getPublishedDate()).thenReturn(date);
         when(metadata.getSeriesName()).thenReturn(series);

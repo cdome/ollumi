@@ -9,8 +9,9 @@ import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.entity.LibraryEntity;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.MagicShelfService;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.reader.CbxReaderService;
@@ -36,8 +37,9 @@ import java.util.stream.Collectors;
 public class KomgaService {
 
     private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9]+");
-    private final BookRepository bookRepository;
-    private final LibraryRepository libraryRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqLibraryRepository libraryRepository;
     private final KomgaMapper komgaMapper;
     private final MagicShelfService magicShelfService;
     private final CbxReaderService cbxReaderService;
@@ -51,8 +53,10 @@ public class KomgaService {
     }
 
     public KomgaLibraryDto getLibraryById(Long libraryId) {
-        LibraryEntity library = libraryRepository.findById(libraryId)
-                .orElseThrow(() -> new RuntimeException("Library not found"));
+        LibraryEntity library = libraryRepository.findById(libraryId);
+        if (library == null) {
+            throw new RuntimeException("Library not found");
+        }
         return komgaMapper.toKomgaLibraryDto(library);
     }
 
@@ -66,20 +70,11 @@ public class KomgaService {
         List<String> sortedSeriesNames;
         if (groupUnknown) {
             // Use optimized query that groups books without series as "Unknown Series"
-            if (libraryId != null) {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesGroupedByLibraryId(
-                    libraryId, komgaMapper.getUnknownSeriesName());
-            } else {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesGrouped(
-                    komgaMapper.getUnknownSeriesName());
-            }
+            sortedSeriesNames = jooqBookRepository.findDistinctSeriesNamesGrouped(
+                komgaMapper.getUnknownSeriesName(), libraryId);
         } else {
             // Use query that gives each book without series its own entry
-            if (libraryId != null) {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesUngroupedByLibraryId(libraryId);
-            } else {
-                sortedSeriesNames = bookRepository.findDistinctSeriesNamesUngrouped();
-            }
+            sortedSeriesNames = jooqBookRepository.findDistinctSeriesNamesUngrouped(libraryId);
         }
         
         log.debug("Found {} distinct series names from database (optimized)", sortedSeriesNames.size());
@@ -113,16 +108,13 @@ public class KomgaService {
                 // Load only the books for this specific series
                 List<BookEntity> seriesBooks;
                 if (libraryId != null) {
-                    if (groupUnknown) {
-                        seriesBooks = bookRepository.findBooksBySeriesNameGroupedByLibraryId(
-                            seriesName, libraryId, komgaMapper.getUnknownSeriesName());
-                    } else {
-                        seriesBooks = bookRepository.findBooksBySeriesNameUngroupedByLibraryId(
-                            seriesName, libraryId);
-                    }
+                    List<Long> seriesBookIds = groupUnknown
+                            ? jooqBookRepository.findBookIdsBySeriesNameGrouped(seriesName, libraryId)
+                            : jooqBookRepository.findBookIdsBySeriesNameUngrouped(seriesName, libraryId);
+                    seriesBooks = loadBooksPreservingOrder(seriesBookIds);
                 } else {
                     // For all libraries, need to load all books and filter (less common case)
-                    List<BookEntity> allBooks = bookRepository.findAllWithMetadata();
+                    List<BookEntity> allBooks = jooqBookEntityRepository.findAllWithMetadata();
                     seriesBooks = allBooks.stream()
                             .filter(book -> komgaMapper.getBookSeriesName(book).equals(seriesName))
                             .collect(Collectors.toList());
@@ -166,7 +158,7 @@ public class KomgaService {
         String seriesSlug = parts[1];
         
         // Get books matching the series - optimized to query by series name
-        List<BookEntity> allSeriesBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> allSeriesBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         
         // Find the series name that matches this slug
         List<BookEntity> seriesBooks = allSeriesBooks.stream()
@@ -197,7 +189,7 @@ public class KomgaService {
         String seriesSlug = parts[1];
         
         // Get all books for the library once
-        List<BookEntity> allBooks = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+        List<BookEntity> allBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         
         // Filter and sort books for this series
         List<BookEntity> seriesBooks = allBooks.stream()
@@ -259,9 +251,9 @@ public class KomgaService {
         List<BookEntity> books;
         
         if (libraryId != null) {
-            books = bookRepository.findAllWithMetadataByLibraryId(libraryId);
+            books = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
         } else {
-            books = bookRepository.findAllWithMetadata();
+            books = jooqBookEntityRepository.findAllWithMetadata();
         }
         
         // Manual pagination
@@ -291,15 +283,19 @@ public class KomgaService {
     }
 
     public KomgaBookDto getBookById(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found");
+        }
         return komgaMapper.toKomgaBookDto(book);
     }
 
     public List<KomgaPageDto> getBookPages(Long bookId) {
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found"));
-        
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found");
+        }
+
         BookMetadataEntity metadata = book.getMetadata();
         Integer pageCount = metadata != null && metadata.getPageCount() != null ? metadata.getPageCount() : 0;
         
@@ -315,6 +311,18 @@ public class KomgaService {
         }
         
         return pages;
+    }
+
+    private List<BookEntity> loadBooksPreservingOrder(List<Long> bookIds) {
+        if (bookIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, BookEntity> booksById = jooqBookEntityRepository.findAllWithMetadataByIds(new HashSet<>(bookIds)).stream()
+                .collect(Collectors.toMap(BookEntity::getId, book -> book));
+        return bookIds.stream()
+                .map(booksById::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private Map<String, List<BookEntity>> groupBooksBySeries(List<BookEntity> books) {
@@ -382,8 +390,10 @@ public class KomgaService {
     public Resource getBookPageImage(Long bookId, Integer pageNumber, boolean convertToPng) throws IOException {
         log.debug("Getting page {} from book {} (convert to PNG: {})", pageNumber, bookId, convertToPng);
         
-        BookEntity book = bookRepository.findByIdWithBookFiles(bookId)
-                .orElseThrow(() -> new RuntimeException("Book not found: " + bookId));
+        BookEntity book = jooqBookEntityRepository.findByIdFull(bookId);
+        if (book == null) {
+            throw new RuntimeException("Book not found: " + bookId);
+        }
 
         boolean isPDF = book.getPrimaryBookFile().getBookType() == BookFileType.PDF;
      

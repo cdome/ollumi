@@ -6,7 +6,7 @@ import org.booklore.model.dto.request.DuplicateDetectionRequest;
 import org.booklore.model.dto.response.DuplicateGroup;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.BookFileType;
-import org.booklore.repository.BookRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
 
 import java.util.*;
 
@@ -26,10 +28,13 @@ import static org.mockito.Mockito.when;
 class DuplicateDetectionServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
+    private JooqBookEntityRepository jooqBookEntityRepository;
 
     @Mock
     private BookMapper bookMapper;
+
+    @Mock
+    private JooqBookMetadataRelationsRepository relationsRepository;
 
     @InjectMocks
     private DuplicateDetectionService service;
@@ -61,15 +66,15 @@ class DuplicateDetectionServiceTest {
                 .bookType(fileType)
                 .build();
 
-        List<AuthorEntity> authors = new ArrayList<>();
+        List<String> authorNames = new ArrayList<>();
         if (authorName != null) {
-            authors.add(AuthorEntity.builder().id(id * 10).name(authorName).build());
+            authorNames.add(authorName);
         }
 
         BookMetadataEntity metadata = BookMetadataEntity.builder()
                 .bookId(id)
                 .title(title)
-                .authors(authors)
+                .authorNames(authorNames)
                 .build();
 
         BookEntity book = BookEntity.builder()
@@ -116,7 +121,24 @@ class DuplicateDetectionServiceTest {
     }
 
     private void stubBooks(BookEntity... books) {
-        when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of(books));
+        when(jooqBookEntityRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of(books));
+        // Author names now come from the jOOQ relations reader; derive them from the fixtures' entity authors.
+        Map<Long, List<String>> authorsByBook = new HashMap<>();
+        for (BookEntity b : books) {
+            if (b.getMetadata() == null || b.getMetadata().getAuthorNames() == null) continue;
+            List<String> names = b.getMetadata().getAuthorNames().stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (!names.isEmpty()) authorsByBook.put(b.getId(), names);
+        }
+        lenient().when(relationsRepository.findAuthorNamesByBookIds(any())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            Map<Long, List<String>> out = new HashMap<>();
+            for (Long id : ids) {
+                if (authorsByBook.containsKey(id)) out.put(id, authorsByBook.get(id));
+            }
+            return out;
+        });
     }
 
     // ── General tests ───────────────────────────────────────────
@@ -136,7 +158,7 @@ class DuplicateDetectionServiceTest {
 
         @Test
         void returnsEmptyWhenNoBooksInLibrary() {
-            when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of());
+            when(jooqBookEntityRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(List.of());
 
             List<DuplicateGroup> result = service.findDuplicates(allSignals());
 
@@ -388,9 +410,9 @@ class DuplicateDetectionServiceTest {
         @Test
         void skipsBooksWithNoAuthors() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Orphan Book", null);
-            book1.getMetadata().setAuthors(new ArrayList<>());
+            book1.getMetadata().setAuthorNames(new ArrayList<>());
             BookEntity book2 = createBook(BookFileType.MOBI, "Orphan Book", null);
-            book2.getMetadata().setAuthors(new ArrayList<>());
+            book2.getMetadata().setAuthorNames(new ArrayList<>());
             stubBooks(book1, book2);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyTitleAuthor());
@@ -423,10 +445,10 @@ class DuplicateDetectionServiceTest {
         @Test
         void groupsByOverlappingAuthors() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Collab Work", "Author A");
-            book1.getMetadata().getAuthors().add(AuthorEntity.builder().id(90L).name("Author B").build());
+            book1.getMetadata().getAuthorNames().add("Author B");
 
             BookEntity book2 = createBook(BookFileType.MOBI, "Collab Work", "Author B");
-            book2.getMetadata().getAuthors().add(AuthorEntity.builder().id(91L).name("Author C").build());
+            book2.getMetadata().getAuthorNames().add("Author C");
             stubBooks(book1, book2);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyTitleAuthor());
@@ -438,7 +460,7 @@ class DuplicateDetectionServiceTest {
         void requiresAtLeastTwoBooksWithAuthorsInTitleGroup() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Solo Title", "Author A");
             BookEntity book2 = createBook(BookFileType.MOBI, "Solo Title", null);
-            book2.getMetadata().setAuthors(new ArrayList<>());
+            book2.getMetadata().setAuthorNames(new ArrayList<>());
             stubBooks(book1, book2);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyTitleAuthor());
@@ -892,7 +914,7 @@ class DuplicateDetectionServiceTest {
                         "9781234567890", null);
                 books.add(book);
             }
-            when(bookRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(books);
+            when(jooqBookEntityRepository.findAllForDuplicateDetection(LIBRARY_ID)).thenReturn(books);
 
             List<DuplicateGroup> result = service.findDuplicates(onlyIsbn());
 
@@ -931,10 +953,10 @@ class DuplicateDetectionServiceTest {
         @Test
         void threeBooksInTitleAuthorGroupWithPartialAuthorOverlap() {
             BookEntity book1 = createBook(BookFileType.EPUB, "Shared Title", "Author A");
-            book1.getMetadata().getAuthors().add(AuthorEntity.builder().id(80L).name("Author B").build());
+            book1.getMetadata().getAuthorNames().add("Author B");
 
             BookEntity book2 = createBook(BookFileType.MOBI, "Shared Title", "Author B");
-            book2.getMetadata().getAuthors().add(AuthorEntity.builder().id(81L).name("Author C").build());
+            book2.getMetadata().getAuthorNames().add("Author C");
 
             BookEntity book3 = createBook(BookFileType.PDF, "Shared Title", "Author C");
             stubBooks(book1, book2, book3);

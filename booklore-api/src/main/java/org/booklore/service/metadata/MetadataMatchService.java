@@ -4,6 +4,7 @@ import org.booklore.model.dto.settings.AppSettings;
 import org.booklore.model.dto.settings.MetadataMatchWeights;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookMetadataEntity;
+import org.booklore.repository.jooq.JooqBookRepository;
 import org.booklore.service.appsettings.AppSettingService;
 import org.booklore.service.book.BookQueryService;
 import lombok.RequiredArgsConstructor;
@@ -17,14 +18,16 @@ public class MetadataMatchService {
 
     private final AppSettingService appSettingsService;
     private final BookQueryService bookQueryService;
+    private final JooqBookRepository jooqBookRepository;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
     public void recalculateAllMatchScores() {
         List<BookEntity> allBooks = bookQueryService.getAllFullBookEntities();
         for (BookEntity book : allBooks) {
             Float score = calculateMatchScore(book);
             book.setMetadataMatchScore(score);
+            jooqBookRepository.updateMetadataMatchScore(book.getId(), score);
         }
-        bookQueryService.saveAll(allBooks);
     }
 
     public Float calculateMatchScore(BookEntity book) {
@@ -46,7 +49,7 @@ public class MetadataMatchService {
         if (isPresent(metadata.getTitle(), metadata.getTitleLocked())) score += weights.getTitle();
         if (isPresent(metadata.getSubtitle(), metadata.getSubtitleLocked())) score += weights.getSubtitle();
         if (isPresent(metadata.getDescription(), metadata.getDescriptionLocked())) score += weights.getDescription();
-        if (hasContent(metadata.getAuthors(), metadata.getAuthorsLocked())) score += weights.getAuthors();
+        if (hasContent(relationsRepository.findAuthorNamesByBookId(metadata.getBookId()), metadata.getAuthorsLocked())) score += weights.getAuthors();
         if (isPresent(metadata.getPublisher(), metadata.getPublisherLocked())) score += weights.getPublisher();
         if (metadata.getPublishedDate() != null || Boolean.TRUE.equals(metadata.getPublishedDateLocked())) score += weights.getPublishedDate();
         if (isPresent(metadata.getSeriesName(), metadata.getSeriesNameLocked())) score += weights.getSeriesName();
@@ -56,7 +59,7 @@ public class MetadataMatchService {
         if (isPresent(metadata.getIsbn10(), metadata.getIsbn10Locked())) score += weights.getIsbn10();
         if (isPresent(metadata.getLanguage(), metadata.getLanguageLocked())) score += weights.getLanguage();
         if ((metadata.getPageCount() != null && metadata.getPageCount() > 0) || Boolean.TRUE.equals(metadata.getPageCountLocked())) score += weights.getPageCount();
-        if (hasContent(metadata.getCategories(), metadata.getCategoriesLocked())) score += weights.getCategories();
+        if (hasContent(relationsRepository.findCategoryNamesByBookId(metadata.getBookId()), metadata.getCategoriesLocked())) score += weights.getCategories();
         if (isPositive(metadata.getAmazonRating(), metadata.getAmazonRatingLocked())) score += weights.getAmazonRating();
         if (isPositive(metadata.getAmazonReviewCount(), metadata.getAmazonReviewCountLocked())) score += weights.getAmazonReviewCount();
         if (isPositive(metadata.getGoodreadsRating(), metadata.getGoodreadsRatingLocked())) score += weights.getGoodreadsRating();

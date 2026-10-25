@@ -1,20 +1,23 @@
 package org.booklore.service.kobo;
 
 import org.booklore.config.security.service.AuthenticationService;
-import org.booklore.mapper.BookEntityToKoboSnapshotBookMapper;
 import org.booklore.model.dto.BookLoreUser;
 import org.booklore.model.entity.*;
 import org.booklore.model.enums.ShelfType;
-import org.booklore.repository.KoboDeletedBookProgressRepository;
-import org.booklore.repository.KoboLibrarySnapshotRepository;
-import org.booklore.repository.KoboSnapshotBookRepository;
-import org.booklore.repository.ShelfRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqKoboDeletedBookProgressRepository;
+import org.booklore.repository.jooq.JooqKoboLibrarySnapshotRepository;
+import org.booklore.repository.jooq.JooqKoboSnapshotBookRepository;
+import org.booklore.repository.jooq.JooqShelfRepository;
+import org.booklore.repository.jooq.dto.KoboLibrarySnapshot;
+import org.booklore.repository.jooq.dto.KoboSnapshotBook;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,37 +25,32 @@ import java.util.stream.Collectors;
 @Service
 public class KoboLibrarySnapshotService {
 
-    private final KoboLibrarySnapshotRepository koboLibrarySnapshotRepository;
-    private final KoboSnapshotBookRepository koboSnapshotBookRepository;
-    private final ShelfRepository shelfRepository;
-    private final BookEntityToKoboSnapshotBookMapper mapper;
-    private final KoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
+    private final JooqKoboLibrarySnapshotRepository koboLibrarySnapshotRepository;
+    private final JooqKoboSnapshotBookRepository koboSnapshotBookRepository;
+    private final JooqShelfRepository jooqShelfRepository;
+    private final org.booklore.repository.jooq.JooqUserLibraryRepository jooqUserLibraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqKoboDeletedBookProgressRepository koboDeletedBookProgressRepository;
     private final KoboCompatibilityService koboCompatibilityService;
     private final AuthenticationService authenticationService;
 
     @Transactional(readOnly = true)
-    public Optional<KoboLibrarySnapshotEntity> findByIdAndUserId(String id, Long userId) {
-        return koboLibrarySnapshotRepository.findByIdAndUserId(id, userId);
+    public Optional<KoboLibrarySnapshot> findByIdAndUserId(String id, Long userId) {
+        return Optional.ofNullable(koboLibrarySnapshotRepository.findByIdAndUserId(id, userId));
     }
 
     @Transactional
-    public KoboLibrarySnapshotEntity create(Long userId) {
-        KoboLibrarySnapshotEntity snapshot = KoboLibrarySnapshotEntity.builder()
-                .id(UUID.randomUUID().toString())
-                .userId(userId)
-                .build();
-
-        List<KoboSnapshotBookEntity> books = mapBooksToKoboSnapshotBook(getKoboShelf(userId), snapshot);
-        snapshot.setBooks(books);
-
-        return koboLibrarySnapshotRepository.save(snapshot);
+    public KoboLibrarySnapshot create(Long userId) {
+        String snapshotId = UUID.randomUUID().toString();
+        List<KoboSnapshotBook> books = mapBooksToKoboSnapshotBook(getKoboShelf(userId).getId(), userId);
+        return koboLibrarySnapshotRepository.insert(snapshotId, userId, LocalDateTime.now(), books);
     }
 
     @Transactional
-    public Page<KoboSnapshotBookEntity> getUnsyncedBooks(String snapshotId, Pageable pageable) {
-        Page<KoboSnapshotBookEntity> page = koboSnapshotBookRepository.findBySnapshot_IdAndSyncedFalse(snapshotId, pageable);
+    public Page<KoboSnapshotBook> getUnsyncedBooks(String snapshotId, Pageable pageable) {
+        Page<KoboSnapshotBook> page = koboSnapshotBookRepository.findBySnapshotIdAndSyncedFalse(snapshotId, pageable);
         List<Long> bookIds = page.getContent().stream()
-                .map(KoboSnapshotBookEntity::getBookId)
+                .map(KoboSnapshotBook::getBookId)
                 .toList();
         if (!bookIds.isEmpty()) {
             koboSnapshotBookRepository.markBooksSynced(snapshotId, bookIds);
@@ -62,9 +60,9 @@ public class KoboLibrarySnapshotService {
 
     @Transactional
     public void updateSyncedStatusForExistingBooks(String previousSnapshotId, String currentSnapshotId) {
-        List<KoboSnapshotBookEntity> list = koboSnapshotBookRepository.findUnchangedBooksBetweenSnapshots(previousSnapshotId, currentSnapshotId);
+        List<KoboSnapshotBook> list = koboSnapshotBookRepository.findUnchangedBooksBetweenSnapshots(previousSnapshotId, currentSnapshotId);
         List<Long> unchangedBooks = list.stream()
-                .map(KoboSnapshotBookEntity::getBookId)
+                .map(KoboSnapshotBook::getBookId)
                 .toList();
 
         if (!unchangedBooks.isEmpty()) {
@@ -73,10 +71,10 @@ public class KoboLibrarySnapshotService {
     }
 
     @Transactional
-    public Page<KoboSnapshotBookEntity> getNewlyAddedBooks(String previousSnapshotId, String currentSnapshotId, Pageable pageable, Long userId) {
-        Page<KoboSnapshotBookEntity> page = koboSnapshotBookRepository.findNewlyAddedBooks(previousSnapshotId, currentSnapshotId, true, pageable);
+    public Page<KoboSnapshotBook> getNewlyAddedBooks(String previousSnapshotId, String currentSnapshotId, Pageable pageable, Long userId) {
+        Page<KoboSnapshotBook> page = koboSnapshotBookRepository.findNewlyAddedBooks(previousSnapshotId, currentSnapshotId, true, pageable);
         List<Long> newlyAddedBookIds = page.getContent().stream()
-                .map(KoboSnapshotBookEntity::getBookId)
+                .map(KoboSnapshotBook::getBookId)
                 .toList();
 
         if (!newlyAddedBookIds.isEmpty()) {
@@ -87,32 +85,22 @@ public class KoboLibrarySnapshotService {
     }
 
     @Transactional
-    public Page<KoboSnapshotBookEntity> getRemovedBooks(String previousSnapshotId, String currentSnapshotId, Long userId, Pageable pageable) {
-        Page<KoboSnapshotBookEntity> page = koboSnapshotBookRepository.findRemovedBooks(previousSnapshotId, currentSnapshotId, pageable);
+    public Page<KoboSnapshotBook> getRemovedBooks(String previousSnapshotId, String currentSnapshotId, Long userId, Pageable pageable) {
+        Page<KoboSnapshotBook> page = koboSnapshotBookRepository.findRemovedBooks(previousSnapshotId, currentSnapshotId, pageable);
 
         List<Long> bookIds = page.getContent().stream()
-                .map(KoboSnapshotBookEntity::getBookId)
+                .map(KoboSnapshotBook::getBookId)
                 .toList();
 
-        if (!bookIds.isEmpty()) {
-            List<KoboDeletedBookProgressEntity> progressEntities = bookIds.stream()
-                    .map(bookId -> KoboDeletedBookProgressEntity.builder()
-                            .bookIdSynced(bookId)
-                            .snapshotId(currentSnapshotId)
-                            .userId(userId)
-                            .build())
-                    .toList();
-
-            koboDeletedBookProgressRepository.saveAll(progressEntities);
-        }
+        koboDeletedBookProgressRepository.insertAll(currentSnapshotId, userId, bookIds);
         return page;
     }
 
     @Transactional
-    public Page<KoboSnapshotBookEntity> getChangedBooks(String previousSnapshotId, String currentSnapshotId, Pageable pageable) {
-        Page<KoboSnapshotBookEntity> page = koboSnapshotBookRepository.findChangedBooks(previousSnapshotId, currentSnapshotId, pageable);
+    public Page<KoboSnapshotBook> getChangedBooks(String previousSnapshotId, String currentSnapshotId, Pageable pageable) {
+        Page<KoboSnapshotBook> page = koboSnapshotBookRepository.findChangedBooks(previousSnapshotId, currentSnapshotId, pageable);
         List<Long> changedBookIds = page.getContent().stream()
-                .map(KoboSnapshotBookEntity::getBookId)
+                .map(KoboSnapshotBook::getBookId)
                 .toList();
 
         if (!changedBookIds.isEmpty()) {
@@ -123,26 +111,29 @@ public class KoboLibrarySnapshotService {
     }
 
     private ShelfEntity getKoboShelf(Long userId) {
-        return shelfRepository
-                .findByUserIdAndName(userId, ShelfType.KOBO.getName())
-                .orElseThrow(() -> new NoSuchElementException(
-                        String.format("Shelf '%s' not found for user %d", ShelfType.KOBO.getName(), userId)
-                ));
+        ShelfEntity shelf = jooqShelfRepository.findByUserIdAndName(userId, ShelfType.KOBO.getName());
+        if (shelf == null) {
+            throw new NoSuchElementException(
+                    String.format("Shelf '%s' not found for user %d", ShelfType.KOBO.getName(), userId));
+        }
+        return shelf;
     }
 
-    private List<KoboSnapshotBookEntity> mapBooksToKoboSnapshotBook(ShelfEntity shelf, KoboLibrarySnapshotEntity snapshot) {
-        Long userId = snapshot.getUserId();
-
-        return shelf.getBookEntities().stream()
+    private List<KoboSnapshotBook> mapBooksToKoboSnapshotBook(Long shelfId, Long userId) {
+        Set<Long> bookIds = jooqShelfRepository.findBookIdsByShelfId(shelfId);
+        if (bookIds.isEmpty()) {
+            return List.of();
+        }
+        return jooqBookEntityRepository.findAllByIdsIncludingDeleted(bookIds).stream()
                 .filter(book -> isBookOwnedByUser(book, userId))
                 .filter(koboCompatibilityService::isBookSupportedForKobo)
-                .map(book -> {
-                    KoboSnapshotBookEntity snapshotBook = mapper.toKoboSnapshotBook(book);
-                    snapshotBook.setSnapshot(snapshot);
-                    snapshotBook.setFileHash(book.getPrimaryBookFile().getCurrentHash());
-                    snapshotBook.setMetadataUpdatedAt(book.getMetadataUpdatedAt());
-                    return snapshotBook;
-                })
+                .map(book -> new KoboSnapshotBook(
+                        0L,
+                        "",
+                        book.getId(),
+                        book.getPrimaryBookFile().getCurrentHash(),
+                        book.getMetadataUpdatedAt(),
+                        false))
                 .collect(Collectors.toList());
     }
 
@@ -151,10 +142,8 @@ public class KoboLibrarySnapshotService {
         if (user.getPermissions().isAdmin()) {
             return true;
         }
-        return book.getLibrary()
-                .getUsers()
+        return jooqUserLibraryRepository.findUserIdsByLibraryId(book.getLibrary().getId())
                 .stream()
-                .map(BookLoreUserEntity::getId)
                 .anyMatch(id -> Objects.equals(id, userId));
     }
 

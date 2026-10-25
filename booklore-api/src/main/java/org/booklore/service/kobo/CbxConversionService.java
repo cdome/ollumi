@@ -1,9 +1,6 @@
 package org.booklore.service.kobo;
 
-import org.booklore.model.entity.AuthorEntity;
 import org.booklore.model.entity.BookEntity;
-import org.booklore.model.entity.CategoryEntity;
-import org.booklore.model.entity.TagEntity;
 import org.booklore.util.ArchiveUtils;
 import org.booklore.util.FileService;
 import org.booklore.util.UnrarHelper;
@@ -75,8 +72,10 @@ public class CbxConversionService {
     private static final String EXTRACTED_IMAGES_SUBDIR = "cbx_extracted_images";
 
     private final Configuration freemarkerConfig;
+    private final org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository;
 
-    public CbxConversionService() {
+    public CbxConversionService(org.booklore.repository.jooq.JooqBookMetadataRelationsRepository relationsRepository) {
+        this.relationsRepository = relationsRepository;
         this.freemarkerConfig = initializeFreemarkerConfiguration();
     }
 
@@ -625,22 +624,19 @@ public class CbxConversionService {
                 model.put("goodreadsId", metadata.getGoodreadsId());
             }
 
-            if (metadata.getAuthors() != null && !metadata.getAuthors().isEmpty()) {
-                model.put("authors", metadata.getAuthors().stream()
-                        .map(AuthorEntity::getName)
-                        .toList());
+            java.util.List<String> authorNames = relationsRepository.findAuthorNamesByBookId(metadata.getBookId());
+            if (!authorNames.isEmpty()) {
+                model.put("authors", authorNames);
             }
 
-            if (metadata.getCategories() != null && !metadata.getCategories().isEmpty()) {
-                model.put("categories", metadata.getCategories().stream()
-                        .map(CategoryEntity::getName)
-                        .toList());
+            java.util.Set<String> categoryNames = relationsRepository.findCategoryNamesByBookId(metadata.getBookId());
+            if (!categoryNames.isEmpty()) {
+                model.put("categories", categoryNames.stream().toList());
             }
 
-            if (metadata.getTags() != null && !metadata.getTags().isEmpty()) {
-                model.put("tags", metadata.getTags().stream()
-                        .map(TagEntity::getName)
-                        .toList());
+            java.util.Set<String> tagNames = relationsRepository.findTagNamesByBookId(metadata.getBookId());
+            if (!tagNames.isEmpty()) {
+                model.put("tags", tagNames.stream().toList());
             }
 
             model.put("identifier", "urn:uuid:" + UUID.randomUUID());

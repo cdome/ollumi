@@ -12,11 +12,12 @@ import org.booklore.model.dto.CoverImage;
 import org.booklore.model.dto.Library;
 import org.booklore.model.dto.request.AuthorMatchRequest;
 import org.booklore.model.dto.request.AuthorUpdateRequest;
-import org.booklore.model.entity.AuthorEntity;
-import org.booklore.model.entity.BookMetadataEntity;
 import org.booklore.model.enums.AuditAction;
 import org.booklore.model.enums.AuthorMetadataSource;
-import org.booklore.repository.AuthorRepository;
+import org.booklore.repository.jooq.JooqAuthorRepository;
+import org.booklore.repository.jooq.JooqBookMetadataRelationsRepository;
+import org.booklore.repository.jooq.dto.AuthorRow;
+import org.booklore.repository.jooq.dto.AuthorSummaryRow;
 import org.booklore.service.audit.AuditService;
 import org.booklore.service.metadata.DuckDuckGoCoverService;
 import org.booklore.service.metadata.parser.AuthorParser;
@@ -28,6 +29,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.MalformedURLException;
 import java.nio.file.Files;
@@ -44,7 +46,8 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class AuthorMetadataService {
 
-    private final AuthorRepository authorRepository;
+    private final JooqAuthorRepository jooqAuthorRepository;
+    private final JooqBookMetadataRelationsRepository relationsRepository;
     private final Map<AuthorMetadataSource, AuthorParser> authorParserMap;
     private final AuditService auditService;
     private final FileService fileService;
@@ -53,25 +56,23 @@ public class AuthorMetadataService {
 
     public List<AuthorSummary> getAllAuthors() {
         BookLoreUser user = authenticationService.getAuthenticatedUser();
-        List<Object[]> results;
+        List<AuthorSummaryRow> results;
         if (user.getPermissions().isAdmin()) {
-            results = authorRepository.findAllWithBookCount();
+            results = jooqAuthorRepository.findAllWithBookCount();
         } else {
             Set<Long> libraryIds = user.getAssignedLibraries().stream()
                     .map(Library::getId)
                     .collect(Collectors.toSet());
-            results = authorRepository.findAllWithBookCountByLibraryIds(libraryIds);
+            results = jooqAuthorRepository.findAllWithBookCountByLibraryIds(libraryIds);
         }
         List<AuthorSummary> summaries = new ArrayList<>();
-        for (Object[] row : results) {
-            AuthorEntity author = (AuthorEntity) row[0];
-            long bookCount = (Long) row[1];
+        for (AuthorSummaryRow row : results) {
             summaries.add(AuthorSummary.builder()
-                    .id(author.getId())
-                    .name(author.getName())
-                    .asin(author.getAsin())
-                    .bookCount((int) bookCount)
-                    .hasPhoto(Files.exists(Paths.get(fileService.getAuthorThumbnailFile(author.getId()))))
+                    .id(row.getId())
+                    .name(row.getName())
+                    .asin(row.getAsin())
+                    .bookCount((int) row.getBookCount())
+                    .hasPhoto(Files.exists(Paths.get(fileService.getAuthorThumbnailFile(row.getId()))))
                     .build());
         }
         return summaries;
@@ -94,7 +95,7 @@ public class AuthorMetadataService {
     }
 
     public AuthorDetails matchAuthor(Long authorId, AuthorMatchRequest request) {
-        AuthorEntity author = authorRepository.findById(authorId)
+        AuthorRow author = jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
 
         AuthorParser provider = request.getSource() != null ? authorParserMap.get(request.getSource()) : null;
@@ -108,9 +109,9 @@ public class AuthorMetadataService {
         }
 
         applyMetadataResult(author, result);
-        authorRepository.save(author);
+        jooqAuthorRepository.save(author);
 
-        if (!author.isPhotoLocked() && result.getImageUrl() != null && !result.getImageUrl().isBlank()) {
+        if (!author.getPhotoLocked() && result.getImageUrl() != null && !result.getImageUrl().isBlank()) {
             fileService.createAuthorThumbnailFromUrl(author.getId(), result.getImageUrl());
         }
 
@@ -121,16 +122,16 @@ public class AuthorMetadataService {
     }
 
     public AuthorDetails quickMatchAuthor(Long authorId, String region) {
-        AuthorEntity author = authorRepository.findById(authorId)
+        AuthorRow author = jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
 
         for (AuthorParser provider : authorParserMap.values()) {
             AuthorSearchResult result = provider.quickSearch(author.getName(), region);
             if (result != null) {
                 applyMetadataResult(author, result);
-                authorRepository.save(author);
+                jooqAuthorRepository.save(author);
 
-                if (!author.isPhotoLocked() && result.getImageUrl() != null && !result.getImageUrl().isBlank()) {
+                if (!author.getPhotoLocked() && result.getImageUrl() != null && !result.getImageUrl().isBlank()) {
                     fileService.createAuthorThumbnailFromUrl(author.getId(), result.getImageUrl());
                 }
 
@@ -148,7 +149,7 @@ public class AuthorMetadataService {
         return Flux.fromIterable(authorIds)
                 .concatMap(authorId ->
                         Mono.fromCallable(() -> {
-                            AuthorEntity author = authorRepository.findById(authorId).orElse(null);
+                            AuthorRow author = jooqAuthorRepository.findById(authorId).orElse(null);
                             if (author == null) return null;
                             AuthorDetails details = quickMatchAuthor(authorId, "us");
                             return AuthorSummary.builder()
@@ -171,12 +172,12 @@ public class AuthorMetadataService {
 
     public void unmatchAuthors(List<Long> authorIds) {
         for (Long authorId : authorIds) {
-            AuthorEntity author = authorRepository.findById(authorId).orElse(null);
+            AuthorRow author = jooqAuthorRepository.findById(authorId).orElse(null);
             if (author == null) continue;
 
             author.setDescription(null);
             author.setAsin(null);
-            authorRepository.save(author);
+            jooqAuthorRepository.save(author);
             fileService.deleteAuthorImages(authorId);
 
             auditService.log(AuditAction.AUTHOR_METADATA_UPDATED, "Author", authorId,
@@ -184,21 +185,23 @@ public class AuthorMetadataService {
         }
     }
 
+    @Transactional
     public void deleteAuthors(List<Long> authorIds) {
         for (Long authorId : authorIds) {
-            AuthorEntity author = authorRepository.findById(authorId).orElse(null);
+            AuthorRow author = jooqAuthorRepository.findById(authorId).orElse(null);
             if (author == null) continue;
 
             String authorName = author.getName();
 
-            if (author.getBookMetadataEntityList() != null) {
-                for (BookMetadataEntity metadata : author.getBookMetadataEntityList()) {
-                    metadata.getAuthors().remove(author);
-                }
+            List<Long> affectedBookIds = relationsRepository.findBookIdsByAuthorId(authorId);
+            for (Long bookId : affectedBookIds) {
+                List<String> remainingAuthors = new ArrayList<>(relationsRepository.findAuthorNamesByBookId(bookId));
+                remainingAuthors.remove(authorName);
+                relationsRepository.setAuthorsForBook(bookId, remainingAuthors);
             }
 
             fileService.deleteAuthorImages(authorId);
-            authorRepository.delete(author);
+            jooqAuthorRepository.deleteById(authorId);
 
             auditService.log(AuditAction.AUTHOR_DELETED, "Author", authorId,
                     "Deleted author '" + authorName + "'");
@@ -206,7 +209,7 @@ public class AuthorMetadataService {
     }
 
     public void uploadAuthorPhoto(Long authorId, MultipartFile file) {
-        AuthorEntity author = authorRepository.findById(authorId)
+        jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
 
         try {
@@ -222,7 +225,7 @@ public class AuthorMetadataService {
     }
 
     public AuthorDetails updateAuthor(Long authorId, AuthorUpdateRequest request) {
-        AuthorEntity author = authorRepository.findById(authorId)
+        AuthorRow author = jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
 
         if (request.getName() != null) {
@@ -247,7 +250,7 @@ public class AuthorMetadataService {
             author.setPhotoLocked(request.getPhotoLocked());
         }
 
-        authorRepository.save(author);
+        jooqAuthorRepository.save(author);
 
         auditService.log(AuditAction.AUTHOR_METADATA_UPDATED, "Author", authorId,
                 "Updated author '" + author.getName() + "'");
@@ -265,21 +268,21 @@ public class AuthorMetadataService {
     }
 
     public void uploadAuthorPhotoFromUrl(Long authorId, String imageUrl) {
-        AuthorEntity author = authorRepository.findById(authorId)
+        jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
 
         fileService.createAuthorThumbnailFromUrl(authorId, imageUrl);
     }
 
     public AuthorDetails getAuthorByName(String name) {
-        AuthorEntity author = authorRepository.findByNameIgnoreCase(name)
+        AuthorRow author = jooqAuthorRepository.findByNameIgnoreCase(name)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(name));
         verifyAuthorAccess(author.getId());
         return toAuthorDetails(author);
     }
 
     public AuthorDetails getAuthorDetails(Long authorId) {
-        AuthorEntity author = authorRepository.findById(authorId)
+        AuthorRow author = jooqAuthorRepository.findById(authorId)
                 .orElseThrow(() -> ApiError.AUTHOR_NOT_FOUND.createException(authorId));
         verifyAuthorAccess(authorId);
         return toAuthorDetails(author);
@@ -317,30 +320,30 @@ public class AuthorMetadataService {
         Set<Long> libraryIds = user.getAssignedLibraries().stream()
                 .map(Library::getId)
                 .collect(Collectors.toSet());
-        if (libraryIds.isEmpty() || !authorRepository.existsByIdAndLibraryIds(authorId, libraryIds)) {
+        if (libraryIds.isEmpty() || !jooqAuthorRepository.existsByIdAndLibraryIds(authorId, libraryIds)) {
             throw ApiError.AUTHOR_NOT_FOUND.createException(authorId);
         }
     }
 
-    private void applyMetadataResult(AuthorEntity author, AuthorSearchResult result) {
-        if (!author.isDescriptionLocked()) {
+    private void applyMetadataResult(AuthorRow author, AuthorSearchResult result) {
+        if (!author.getDescriptionLocked()) {
             author.setDescription(result.getDescription());
         }
-        if (!author.isAsinLocked()) {
+        if (!author.getAsinLocked()) {
             author.setAsin(result.getAsin());
         }
     }
 
-    private AuthorDetails toAuthorDetails(AuthorEntity author) {
+    private AuthorDetails toAuthorDetails(AuthorRow author) {
         return AuthorDetails.builder()
                 .id(author.getId())
                 .name(author.getName())
                 .description(author.getDescription())
                 .asin(author.getAsin())
-                .nameLocked(author.isNameLocked())
-                .descriptionLocked(author.isDescriptionLocked())
-                .asinLocked(author.isAsinLocked())
-                .photoLocked(author.isPhotoLocked())
+                .nameLocked(author.getNameLocked())
+                .descriptionLocked(author.getDescriptionLocked())
+                .asinLocked(author.getAsinLocked())
+                .photoLocked(author.getPhotoLocked())
                 .build();
     }
 }

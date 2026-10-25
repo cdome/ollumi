@@ -1,7 +1,5 @@
 package org.booklore.service.library;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.booklore.exception.ApiError;
@@ -9,11 +7,13 @@ import org.booklore.model.dto.settings.LibraryFile;
 import org.booklore.model.entity.BookEntity;
 import org.booklore.model.entity.BookFileEntity;
 import org.booklore.model.entity.LibraryEntity;
-import org.booklore.model.entity.LibraryPathEntity;
 import org.booklore.model.websocket.LogNotification;
 import org.booklore.model.websocket.Topic;
-import org.booklore.repository.BookAdditionalFileRepository;
-import org.booklore.repository.LibraryRepository;
+import org.booklore.repository.jooq.JooqLibraryRepository;
+import org.booklore.repository.jooq.JooqBookEntityRepository;
+import org.booklore.repository.jooq.JooqBookRepository;
+import org.booklore.repository.jooq.JooqLibraryPathRepository;
+import org.booklore.repository.jooq.dto.LibraryPathRow;
 import org.booklore.service.NotificationService;
 import org.booklore.service.file.FileFingerprint;
 import org.booklore.task.options.RescanLibraryContext;
@@ -36,24 +36,28 @@ import java.util.stream.Collectors;
 @Slf4j
 public class LibraryProcessingService {
 
-    private final LibraryRepository libraryRepository;
+    private final JooqLibraryRepository libraryRepository;
+    private final JooqBookEntityRepository jooqBookEntityRepository;
+    private final JooqBookRepository jooqBookRepository;
+    private final JooqLibraryPathRepository jooqLibraryPathRepository;
     private final NotificationService notificationService;
-    private final BookAdditionalFileRepository bookAdditionalFileRepository;
     private final FileAsBookProcessor fileAsBookProcessor;
     private final BookRestorationService bookRestorationService;
     private final BookDeletionService bookDeletionService;
     private final LibraryFileHelper libraryFileHelper;
     private final BookGroupingService bookGroupingService;
-    @PersistenceContext
-    private final EntityManager entityManager;
 
     @Transactional
     public void processLibrary(long libraryId) {
-        LibraryEntity libraryEntity = libraryRepository.findById(libraryId).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(libraryId));
+        LibraryEntity libraryEntity = libraryRepository.findById(libraryId);
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(libraryId);
+        }
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started processing library: " + libraryEntity.getName()));
         try {
             List<LibraryFile> libraryFiles = libraryFileHelper.getLibraryFiles(libraryEntity);
-            List<LibraryFile> newFiles = detectNewBookPaths(libraryFiles, libraryEntity);
+            List<BookEntity> existingBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryId);
+            List<LibraryFile> newFiles = detectNewBookPaths(libraryFiles, existingBooks, libraryId);
 
             // Use BookGroupingService for consistent grouping based on organization mode
             Map<String, List<LibraryFile>> groups = bookGroupingService.groupForInitialScan(newFiles, libraryEntity);
@@ -69,7 +73,10 @@ public class LibraryProcessingService {
 
     @Transactional
     public void rescanLibrary(RescanLibraryContext context) throws IOException {
-        LibraryEntity libraryEntity = libraryRepository.findByIdWithBooks(context.getLibraryId()).orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        LibraryEntity libraryEntity = libraryRepository.findById(context.getLibraryId());
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId());
+        }
         notificationService.sendMessage(Topic.LOG, LogNotification.info("Started refreshing library: " + libraryEntity.getName()));
 
         validateLibraryPathsAccessible(libraryEntity);
@@ -78,34 +85,38 @@ public class LibraryProcessingService {
         List<LibraryFile> filteredFiles = libraryFileHelper.filterByAllowedFormats(
                 allLibraryFiles, libraryEntity.getAllowedFormats());
 
-        int existingBookCount = libraryEntity.getBookEntities().size();
+        long existingBookCount = jooqBookRepository.countByLibraryId(libraryEntity.getId());
         if (existingBookCount > 0 && allLibraryFiles.isEmpty()) {
-            String paths = libraryEntity.getLibraryPaths().stream()
-                    .map(LibraryPathEntity::getPath)
+            String paths = jooqLibraryPathRepository.findPathsByLibraryId(libraryEntity.getId()).stream()
+                    .map(LibraryPathRow::getPath)
                     .collect(Collectors.joining(", "));
             log.error("Library '{}' has {} existing books but scan found 0 files. Paths may be offline: {}",
                     libraryEntity.getName(), existingBookCount, paths);
             throw ApiError.LIBRARY_PATH_NOT_ACCESSIBLE.createException(paths);
         }
 
+        List<BookEntity> existingBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
+
         List<Long> additionalFileIds = detectDeletedAdditionalFiles(allLibraryFiles, libraryEntity);
         if (!additionalFileIds.isEmpty()) {
             log.info("Detected {} removed additional files in library: {}", additionalFileIds.size(), libraryEntity.getName());
             bookDeletionService.deleteRemovedAdditionalFiles(additionalFileIds);
         }
-        List<Long> bookIds = detectDeletedBookIds(allLibraryFiles, libraryEntity);
+        List<Long> bookIds = detectDeletedBookIds(allLibraryFiles, existingBooks);
         if (!bookIds.isEmpty()) {
             log.info("Detected {} removed books in library: {}", bookIds.size(), libraryEntity.getName());
             bookDeletionService.processDeletedLibraryFiles(bookIds, allLibraryFiles);
         }
         bookRestorationService.restoreDeletedBooks(allLibraryFiles);
         bookDeletionService.purgeDisallowedFormats(libraryEntity);
-        entityManager.clear();
-        // Re-fetch library entity with books to get fresh state after entity manager was cleared
-        libraryEntity = libraryRepository.findByIdWithBooks(context.getLibraryId())
-                .orElseThrow(() -> ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId()));
+        // Re-fetch library entity to get fresh state
+        libraryEntity = libraryRepository.findById(context.getLibraryId());
+        if (libraryEntity == null) {
+            throw ApiError.LIBRARY_NOT_FOUND.createException(context.getLibraryId());
+        }
+        List<BookEntity> refreshedBooks = jooqBookEntityRepository.findAllWithMetadataByLibraryId(libraryEntity.getId());
 
-        List<LibraryFile> newFiles = detectNewBookPaths(filteredFiles, libraryEntity);
+        List<LibraryFile> newFiles = detectNewBookPaths(filteredFiles, refreshedBooks, libraryEntity.getId());
 
         // Use BookGroupingService to determine what to attach vs create new
         BookGroupingService.GroupingResult groupingResult = bookGroupingService.groupForRescan(newFiles, libraryEntity);
@@ -128,8 +139,8 @@ public class LibraryProcessingService {
     }
 
     private void validateLibraryPathsAccessible(LibraryEntity libraryEntity) {
-        for (var pathEntity : libraryEntity.getLibraryPaths()) {
-            Path path = Path.of(pathEntity.getPath());
+        for (LibraryPathRow pathRow : jooqLibraryPathRepository.findPathsByLibraryId(libraryEntity.getId())) {
+            Path path = Path.of(pathRow.getPath());
             if (!Files.exists(path) || !Files.isDirectory(path) || !Files.isReadable(path)) {
                 log.error("Library path not accessible: {}", path);
                 throw ApiError.LIBRARY_PATH_NOT_ACCESSIBLE.createException(path.toString());
@@ -137,12 +148,12 @@ public class LibraryProcessingService {
         }
     }
 
-    protected static List<Long> detectDeletedBookIds(List<LibraryFile> libraryFiles, LibraryEntity libraryEntity) {
+    protected static List<Long> detectDeletedBookIds(List<LibraryFile> libraryFiles, List<BookEntity> existingBooks) {
         Set<Path> currentFullPaths = libraryFiles.stream()
                 .map(LibraryFile::getFullPath)
                 .collect(Collectors.toSet());
 
-        return libraryEntity.getBookEntities().stream()
+        return existingBooks.stream()
                 .filter(book -> (book.getDeleted() == null || !book.getDeleted()))
                 .filter(book -> {
                     // Don't mark fileless books as deleted - they're intentionally without files
@@ -155,13 +166,13 @@ public class LibraryProcessingService {
                 .collect(Collectors.toList());
     }
 
-    protected List<LibraryFile> detectNewBookPaths(List<LibraryFile> libraryFiles, LibraryEntity libraryEntity) {
-        Set<String> existingKeys = libraryEntity.getBookEntities().stream()
+    protected List<LibraryFile> detectNewBookPaths(List<LibraryFile> libraryFiles, List<BookEntity> existingBooks, Long libraryId) {
+        Set<String> existingKeys = existingBooks.stream()
                 .filter(book -> book.getBookFiles() != null && !book.getBookFiles().isEmpty())
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
-        Set<String> additionalFileKeys = bookAdditionalFileRepository.findByLibraryId(libraryEntity.getId()).stream()
+        Set<String> additionalFileKeys = jooqBookEntityRepository.findBookFilesByLibraryId(libraryId).stream()
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
@@ -172,11 +183,11 @@ public class LibraryProcessingService {
                 .collect(Collectors.toList());
     }
 
-    private void autoAttachFile(BookEntity book, LibraryFile file) {
+    void autoAttachFile(BookEntity book, LibraryFile file) {
         // Check if file already exists to prevent duplicates during concurrent rescans
-        var existing = bookAdditionalFileRepository.findByLibraryPath_IdAndFileSubPathAndFileName(
+        var existing = jooqBookEntityRepository.findBookFileByLibraryPathIdAndFileSubPathAndFileName(
                 file.getLibraryPathEntity().getId(), file.getFileSubPath(), file.getFileName());
-        if (existing.isPresent()) {
+        if (existing != null) {
             log.debug("Additional file already exists, skipping: {}", file.getFileName());
             return;
         }
@@ -184,6 +195,7 @@ public class LibraryProcessingService {
         // Set libraryPath if not set (fileless books like physical books don't have one)
         if (book.getLibraryPath() == null) {
             book.setLibraryPath(file.getLibraryPathEntity());
+            jooqBookRepository.updateLibrary(book.getId(), book.getLibrary().getId(), file.getLibraryPathEntity().getId());
         } else if (!book.getLibraryPath().getId().equals(file.getLibraryPathEntity().getId())) {
             // Book already has a different libraryPath - cannot attach files from different paths
             log.warn("Cannot attach file '{}' to book id={}: file is in libraryPath {} but book is in libraryPath {}",
@@ -197,21 +209,20 @@ public class LibraryProcessingService {
         Long fileSizeKb = file.isFolderBased()
                 ? FileUtils.getFolderSizeInKb(file.getFullPath())
                 : FileUtils.getFileSizeInKb(file.getFullPath());
-        BookFileEntity additionalFile = BookFileEntity.builder()
-                .book(book)
-                .fileName(file.getFileName())
-                .fileSubPath(file.getFileSubPath())
-                .isBookFormat(true)
-                .bookType(file.getBookFileType())
-                .folderBased(file.isFolderBased())
-                .fileSizeKb(fileSizeKb)
-                .initialHash(hash)
-                .currentHash(hash)
-                .addedOn(Instant.now())
-                .build();
 
         try {
-            bookAdditionalFileRepository.save(additionalFile);
+            jooqBookRepository.insertBookFile(
+                    book.getId(),
+                    file.getFileName(),
+                    file.getFileSubPath(),
+                    true,
+                    file.isFolderBased(),
+                    file.getBookFileType(),
+                    fileSizeKb,
+                    hash,
+                    hash,
+                    null,
+                    Instant.now());
             String primaryFileName = book.hasFiles() ? book.getPrimaryBookFile().getFileName() : "book#" + book.getId();
             log.info("Auto-attached new format {} to existing book: {}", file.getFileName(), primaryFileName);
             fileAsBookProcessor.generateCoverFromAdditionalFile(book, file);
@@ -247,7 +258,7 @@ public class LibraryProcessingService {
                 .map(this::generateUniqueKey)
                 .collect(Collectors.toSet());
 
-        List<BookFileEntity> allAdditionalFiles = bookAdditionalFileRepository.findByLibraryId(libraryEntity.getId());
+        List<BookFileEntity> allAdditionalFiles = jooqBookEntityRepository.findBookFilesByLibraryId(libraryEntity.getId());
 
         return allAdditionalFiles.stream()
                 .filter(BookFileEntity::isBookFormat)
