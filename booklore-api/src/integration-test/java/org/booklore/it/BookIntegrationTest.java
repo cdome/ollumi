@@ -339,10 +339,11 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         BookEntity book = createPhantomBook(library, "Shelf Book " + UUID.randomUUID());
         Integer shelfId = createShelf(tokens.accessToken(), "Assign Shelf " + UUID.randomUUID());
 
-        ShelvesAssignmentRequest assignRequest = new ShelvesAssignmentRequest();
-        assignRequest.setBookIds(Set.of(book.getId()));
-        assignRequest.setShelvesToAssign(Set.of(shelfId.longValue()));
-        assignRequest.setShelvesToUnassign(Set.of());
+        ShelvesAssignmentRequest assignRequest = new ShelvesAssignmentRequest(
+                Set.of(book.getId()),
+                Set.of(shelfId.longValue()),
+                Set.of()
+        );
 
         ResponseEntity<List<Map<String, Object>>> assignResponse = rest.exchange(
                 baseUrl() + "/api/v1/books/shelves",
@@ -362,10 +363,11 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         List<Map<String, Object>> shelves = (List<Map<String, Object>>) getResponse.getBody().get("shelves");
         assertThat(shelves).extracting("id").contains(shelfId);
 
-        ShelvesAssignmentRequest unassignRequest = new ShelvesAssignmentRequest();
-        unassignRequest.setBookIds(Set.of(book.getId()));
-        unassignRequest.setShelvesToAssign(Set.of());
-        unassignRequest.setShelvesToUnassign(Set.of(shelfId.longValue()));
+        ShelvesAssignmentRequest unassignRequest = new ShelvesAssignmentRequest(
+                Set.of(book.getId()),
+                Set.of(),
+                Set.of(shelfId.longValue())
+        );
 
         ResponseEntity<List<Map<String, Object>>> unassignResponse = rest.exchange(
                 baseUrl() + "/api/v1/books/shelves",
@@ -383,9 +385,15 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         BookEntity book = createPhantomBook(library, "Progress Book " + UUID.randomUUID());
         Long bookFileId = book.getBookFiles().get(0).getId();
 
-        ReadProgressRequest progressRequest = new ReadProgressRequest();
-        progressRequest.setBookId(book.getId());
-        progressRequest.setFileProgress(new BookFileProgress(bookFileId, null, null, 75.0f, null));
+        ReadProgressRequest progressRequest = new ReadProgressRequest(
+                book.getId(),
+                new BookFileProgress(bookFileId, null, null, 75.0f, null),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
 
         ResponseEntity<Void> progressResponse = rest.exchange(
                 baseUrl() + "/api/v1/books/progress",
@@ -395,9 +403,7 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         );
         assertThat(progressResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-        ReadStatusUpdateRequest statusRequest = new ReadStatusUpdateRequest();
-        statusRequest.setBookIds(List.of(book.getId()));
-        statusRequest.setStatus("READING");
+        ReadStatusUpdateRequest statusRequest = new ReadStatusUpdateRequest(List.of(book.getId()), "READING");
 
         ResponseEntity<List<Map<String, Object>>> statusResponse = rest.exchange(
                 baseUrl() + "/api/v1/books/status",
@@ -416,9 +422,7 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Reset Book " + UUID.randomUUID());
 
-        ReadStatusUpdateRequest statusRequest = new ReadStatusUpdateRequest();
-        statusRequest.setBookIds(List.of(book.getId()));
-        statusRequest.setStatus("READ");
+        ReadStatusUpdateRequest statusRequest = new ReadStatusUpdateRequest(List.of(book.getId()), "READ");
         rest.exchange(
                 baseUrl() + "/api/v1/books/status",
                 HttpMethod.POST,
@@ -542,9 +546,7 @@ public class BookIntegrationTest extends RestApiIntegrationTest {
         BookEntity source1 = createPhantomBook(library, "Attach Source One " + UUID.randomUUID());
         BookEntity source2 = createPhantomBook(library, "Attach Source Two " + UUID.randomUUID());
 
-        AttachBookFileRequest request = new AttachBookFileRequest();
-        request.setSourceBookIds(List.of(source1.getId(), source2.getId()));
-        request.setMoveFiles(false);
+        AttachBookFileRequest request = new AttachBookFileRequest(List.of(source1.getId(), source2.getId()), false);
 
         ResponseEntity<Map> response = rest.exchange(
                 baseUrl() + "/api/v1/books/" + target.getId() + "/attach-file",

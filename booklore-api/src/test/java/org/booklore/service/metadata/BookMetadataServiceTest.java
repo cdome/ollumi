@@ -399,9 +399,7 @@ class BookMetadataServiceTest {
             BookMetadata dto = BookMetadata.builder().build();
             when(bookMetadataMapper.toBookMetadata(metadata, false)).thenReturn(dto);
 
-            ToggleAllLockRequest request = new ToggleAllLockRequest();
-            request.setBookIds(Set.of(1L));
-            request.setLock(Lock.LOCK);
+            ToggleAllLockRequest request = new ToggleAllLockRequest(Set.of(1L), Lock.LOCK);
 
             List<BookMetadata> result = service.toggleAllLock(request);
 
@@ -419,9 +417,7 @@ class BookMetadataServiceTest {
             BookMetadata dto = BookMetadata.builder().build();
             when(bookMetadataMapper.toBookMetadata(metadata, false)).thenReturn(dto);
 
-            ToggleAllLockRequest request = new ToggleAllLockRequest();
-            request.setBookIds(Set.of(1L));
-            request.setLock(Lock.UNLOCK);
+            ToggleAllLockRequest request = new ToggleAllLockRequest(Set.of(1L), Lock.UNLOCK);
 
             List<BookMetadata> result = service.toggleAllLock(request);
 
@@ -439,9 +435,7 @@ class BookMetadataServiceTest {
             when(bookQueryService.findAllWithMetadataByIds(Set.of(1L))).thenReturn(List.of(bookEntity));
             when(bookMetadataMapper.toBookMetadata(metadata, false)).thenReturn(BookMetadata.builder().build());
 
-            ToggleAllLockRequest request = new ToggleAllLockRequest();
-            request.setBookIds(Set.of(1L));
-            request.setLock(Lock.LOCK);
+            ToggleAllLockRequest request = new ToggleAllLockRequest(Set.of(1L), Lock.LOCK);
 
             service.toggleAllLock(request);
 

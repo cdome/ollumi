@@ -58,14 +58,8 @@ public class FileMoveIntegrationTest extends RestApiIntegrationTest {
         Long sourcePathId = book.getLibraryPath().getId();
         Long targetPathId = path2.getId();
 
-        FileMoveRequest.Move move = new FileMoveRequest.Move();
-        move.setBookId(book.getId());
-        move.setTargetLibraryId(library.getId());
-        move.setTargetLibraryPathId(targetPathId);
-
-        FileMoveRequest request = new FileMoveRequest();
-        request.setBookIds(Set.of(book.getId()));
-        request.setMoves(List.of(move));
+        FileMoveRequest.Move move = new FileMoveRequest.Move(book.getId(), library.getId(), targetPathId);
+        FileMoveRequest request = new FileMoveRequest(Set.of(book.getId()), List.of(move));
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/v1/files/move",

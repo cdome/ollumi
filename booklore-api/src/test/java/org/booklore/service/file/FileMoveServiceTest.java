@@ -811,12 +811,8 @@ class FileMoveServiceTest {
 
             mockBulkMoveSetup(book, target);
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -836,12 +832,8 @@ class FileMoveServiceTest {
 
             mockBulkMoveSetup(book, target);
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -859,12 +851,8 @@ class FileMoveServiceTest {
 
             mockBulkMoveSetup(book, target);
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -881,12 +869,8 @@ class FileMoveServiceTest {
 
             mockBulkMoveSetup(book, target);
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -909,12 +893,8 @@ class FileMoveServiceTest {
         void skipsWhenBookNotFound() throws IOException {
             when(jooqBookEntityRepository.findByIdFull(100L)).thenReturn(null);
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -932,12 +912,8 @@ class FileMoveServiceTest {
             when(libraryRepository.findById(2L)).thenReturn(null);
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library")));
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -962,12 +938,8 @@ class FileMoveServiceTest {
             when(jooqLibraryPathRepository.findByLibraryId(2L)).thenReturn(List.of(differentPath));
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library")));
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L); // Doesn't exist in target library
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L); // Doesn't exist in target library
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -992,12 +964,8 @@ class FileMoveServiceTest {
             when(libraryRepository.findById(2L)).thenReturn(targetLibrary);
             when(monitoringRegistrationService.getPathsForLibraries(anySet())).thenReturn(Set.of(Paths.get("/library")));
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -1038,12 +1006,8 @@ class FileMoveServiceTest {
             when(fileMoveHelper.moveFileWithBackup(any())).thenAnswer(inv -> ((Path) inv.getArgument(0)).resolveSibling("temp"));
             doNothing().when(fileMoveHelper).commitMove(any(), any());
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -1079,12 +1043,8 @@ class FileMoveServiceTest {
             when(fileMoveHelper.moveFileWithBackup(any())).thenAnswer(inv -> ((Path) inv.getArgument(0)).resolveSibling("temp"));
             doNothing().when(fileMoveHelper).commitMove(any(), any());
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             service.bulkMoveFiles(request);
 
@@ -1103,12 +1063,8 @@ class FileMoveServiceTest {
             when(appProperties.isLocalStorage()).thenReturn(false);
             when(appProperties.getDiskType()).thenReturn("NETWORK");
 
-            FileMoveRequest request = new FileMoveRequest();
-            FileMoveRequest.Move move = new FileMoveRequest.Move();
-            move.setBookId(100L);
-            move.setTargetLibraryId(2L);
-            move.setTargetLibraryPathId(20L);
-            request.setMoves(List.of(move));
+            FileMoveRequest.Move move = new FileMoveRequest.Move(100L, 2L, 20L);
+            FileMoveRequest request = new FileMoveRequest(null, List.of(move));
 
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.bulkMoveFiles(request))
                     .isInstanceOf(IllegalStateException.class)

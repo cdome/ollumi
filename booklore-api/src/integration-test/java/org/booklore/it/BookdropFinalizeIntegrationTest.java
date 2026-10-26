@@ -44,9 +44,7 @@ public class BookdropFinalizeIntegrationTest extends RestApiIntegrationTest {
 
         when(bookDropService.finalizeImport(any(BookdropFinalizeRequest.class))).thenReturn(expected);
 
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setExcludedIds(List.of());
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, List.of(), null, null, null);
 
         HttpEntity<BookdropFinalizeRequest> entity = auth.bearerEntity(request, tokens.accessToken());
         ResponseEntity<BookdropFinalizeResult> response = rest.exchange(
