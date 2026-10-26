@@ -50,14 +50,7 @@ class TaskCronServiceTest {
     }
 
     private CronConfig buildConfig(TaskType type, String cron, boolean enabled) {
-        return CronConfig.builder()
-                .id(1L)
-                .taskType(type)
-                .cronExpression(cron)
-                .enabled(enabled)
-                .createdAt(FIXED_TIME)
-                .updatedAt(FIXED_TIME)
-                .build();
+        return new CronConfig(1L, type, cron, enabled, FIXED_TIME, FIXED_TIME);
     }
 
     @Test
@@ -119,7 +112,7 @@ class TaskCronServiceTest {
         when(authService.getAuthenticatedUser()).thenReturn(user);
         when(repository.findByTaskType(type)).thenReturn(buildConfig(type, "0 0 1 * * *", false));
         when(repository.save(any(), any(), anyBoolean(), anyLong())).thenAnswer(inv ->
-                CronConfig.builder().taskType(inv.getArgument(0)).cronExpression(inv.getArgument(1)).enabled(inv.getArgument(2)).build());
+                new CronConfig(null, inv.getArgument(0), inv.getArgument(1), inv.getArgument(2), null, null));
 
         TaskCronConfigRequest req = new TaskCronConfigRequest();
         req.setCronExpression("0 0 2 * * *");
@@ -138,7 +131,7 @@ class TaskCronServiceTest {
         when(authService.getAuthenticatedUser()).thenReturn(user);
         when(repository.findByTaskType(type)).thenReturn(null);
         when(repository.save(any(), any(), anyBoolean(), anyLong())).thenAnswer(inv ->
-                CronConfig.builder().taskType(inv.getArgument(0)).cronExpression(inv.getArgument(1)).enabled(inv.getArgument(2)).build());
+                new CronConfig(null, inv.getArgument(0), inv.getArgument(1), inv.getArgument(2), null, null));
 
         TaskCronConfigRequest req = new TaskCronConfigRequest();
         req.setCronExpression("0 0 3 * * *");

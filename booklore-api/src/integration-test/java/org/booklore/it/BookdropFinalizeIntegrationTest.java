@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,12 +36,7 @@ public class BookdropFinalizeIntegrationTest extends RestApiIntegrationTest {
         auth.createUser("dropper", "password", p -> p.setPermissionAccessBookdrop(true));
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), "dropper", "password");
 
-        BookdropFinalizeResult expected = BookdropFinalizeResult.builder()
-                .totalFiles(2)
-                .successfullyImported(2)
-                .failed(0)
-                .processedAt(Instant.now())
-                .build();
+        BookdropFinalizeResult expected = new BookdropFinalizeResult(2, 2, 0, Instant.now(), new ArrayList<>());
 
         when(bookDropService.finalizeImport(any(BookdropFinalizeRequest.class))).thenReturn(expected);
 

@@ -78,10 +78,7 @@ class TaskServiceTest {
     @Test
     @Disabled
     void testGetAvailableTasksReturnsNonNull() {
-        CronConfig cronConfig = CronConfig.builder()
-                .taskType(TaskType.CLEANUP_TEMP_METADATA)
-                .enabled(false)
-                .build();
+        CronConfig cronConfig = new CronConfig(null, TaskType.CLEANUP_TEMP_METADATA, null, false, null, null);
         when(taskCronService.getCronConfigOrDefault(any())).thenReturn(cronConfig);
         List<TaskInfo> tasks = taskService.getAvailableTasks();
         assertNotNull(tasks);
@@ -268,11 +265,7 @@ class TaskServiceTest {
 
     @Test
     void testRescheduleTaskDoesNotThrowWhenEnabled() {
-        CronConfig cronConfig = CronConfig.builder()
-                .taskType(TaskType.CLEANUP_TEMP_METADATA)
-                .enabled(true)
-                .cronExpression("0 0 0 1 1 0")
-                .build();
+        CronConfig cronConfig = new CronConfig(null, TaskType.CLEANUP_TEMP_METADATA, "0 0 0 1 1 0", true, null, null);
         when(taskCronService.getCronConfigOrDefault(TaskType.CLEANUP_TEMP_METADATA)).thenReturn(cronConfig);
         assertDoesNotThrow(() -> taskService.rescheduleTask(TaskType.CLEANUP_TEMP_METADATA));
     }

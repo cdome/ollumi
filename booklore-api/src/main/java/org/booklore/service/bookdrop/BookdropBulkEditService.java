@@ -50,11 +50,7 @@ public class BookdropBulkEditService {
                     batchStart, batchEnd, totalFiles, batchResult.successCount(), batchResult.failureCount());
         }
 
-        return BookdropBulkEditResult.builder()
-                .totalFiles(totalFiles)
-                .successfullyUpdated(totalSuccessCount)
-                .failed(totalFailedCount)
-                .build();
+        return new BookdropBulkEditResult(totalFiles, totalSuccessCount, totalFailedCount);
     }
 
     private BatchEditResult processSingleBatch(List<Long> allFileIds, int batchStart, int batchEnd, 

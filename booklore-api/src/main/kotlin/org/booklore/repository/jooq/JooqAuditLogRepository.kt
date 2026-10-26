@@ -83,16 +83,16 @@ class JooqAuditLogRepository(private val dsl: DSLContext) {
     }
 
     private fun toDto(record: Record): AuditLogDto =
-        AuditLogDto.builder()
-            .id(record.get(AUDIT_LOG.ID))
-            .userId(record.get(AUDIT_LOG.USER_ID))
-            .username(record.get(AUDIT_LOG.USERNAME))
-            .action(AuditAction.valueOf(record.get(AUDIT_LOG.ACTION)))
-            .entityType(record.get(AUDIT_LOG.ENTITY_TYPE))
-            .entityId(record.get(AUDIT_LOG.ENTITY_ID))
-            .description(record.get(AUDIT_LOG.DESCRIPTION))
-            .ipAddress(record.get(AUDIT_LOG.IP_ADDRESS))
-            .countryCode(record.get(AUDIT_LOG.COUNTRY_CODE))
-            .createdAt(record.get(AUDIT_LOG.CREATED_AT))
-            .build()
+        AuditLogDto(
+            id = record.get(AUDIT_LOG.ID),
+            userId = record.get(AUDIT_LOG.USER_ID),
+            username = record.get(AUDIT_LOG.USERNAME),
+            action = AuditAction.valueOf(record.get(AUDIT_LOG.ACTION)),
+            entityType = record.get(AUDIT_LOG.ENTITY_TYPE),
+            entityId = record.get(AUDIT_LOG.ENTITY_ID),
+            description = record.get(AUDIT_LOG.DESCRIPTION),
+            ipAddress = record.get(AUDIT_LOG.IP_ADDRESS),
+            countryCode = record.get(AUDIT_LOG.COUNTRY_CODE),
+            createdAt = record.get(AUDIT_LOG.CREATED_AT)
+        )
 }

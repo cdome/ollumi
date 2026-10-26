@@ -115,22 +115,11 @@ public class TaskHistoryService {
             }
         }
 
-        return TasksHistoryResponse.builder()
-                .taskHistories(allTasks)
-                .build();
+        return new TasksHistoryResponse(allTasks);
     }
 
     private TasksHistoryResponse.TaskHistory mapToTaskInfo(TaskHistory task) {
-        return TasksHistoryResponse.TaskHistory.builder()
-                .id(task.getId())
-                .type(task.getType())
-                .status(task.getStatus())
-                .progressPercentage(task.getProgressPercentage())
-                .message(task.getMessage())
-                .createdAt(toUtcInstant(task.getCreatedAt()))
-                .updatedAt(toUtcInstant(task.getUpdatedAt()))
-                .completedAt(toUtcInstant(task.getCompletedAt()))
-                .build();
+        return new TasksHistoryResponse.TaskHistory(task.getId(), task.getType(), task.getStatus(), task.getProgressPercentage(), task.getMessage(), toUtcInstant(task.getCreatedAt()), toUtcInstant(task.getUpdatedAt()), toUtcInstant(task.getCompletedAt()));
     }
 
     private Instant toUtcInstant(LocalDateTime localDateTime) {
@@ -138,15 +127,6 @@ public class TaskHistoryService {
     }
 
     private TasksHistoryResponse.TaskHistory createMetadataOnlyTaskInfo(TaskType taskType) {
-        return TasksHistoryResponse.TaskHistory.builder()
-                .id(null)
-                .type(taskType)
-                .status(null)
-                .progressPercentage(null)
-                .message(null)
-                .createdAt(null)
-                .updatedAt(null)
-                .completedAt(null)
-                .build();
+        return new TasksHistoryResponse.TaskHistory(null, taskType, null, null, null, null, null, null);
     }
 }

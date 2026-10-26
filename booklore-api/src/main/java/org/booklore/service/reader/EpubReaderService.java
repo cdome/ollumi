@@ -320,15 +320,7 @@ public class EpubReaderService {
 
             String coverPath = findCoverPath(opfDoc, manifest, manifestById);
 
-            return EpubBookInfo.builder()
-                    .containerPath(opfPath)
-                    .rootPath(rootPath)
-                    .spine(spine)
-                    .manifest(manifest)
-                    .toc(toc)
-                    .metadata(metadata)
-                    .coverPath(coverPath)
-                    .build();
+            return new EpubBookInfo(opfPath, rootPath, spine, manifest, toc, metadata, coverPath);
         }
     }
 
@@ -384,13 +376,7 @@ public class EpubReaderService {
                 propList = Arrays.asList(WHITESPACE_PATTERN.split(properties));
             }
 
-            manifest.add(EpubManifestItem.builder()
-                    .id(id)
-                    .href(fullHref)
-                    .mediaType(mediaType)
-                    .properties(propList)
-                    .size(size)
-                    .build());
+            manifest.add(new EpubManifestItem(id, fullHref, mediaType, propList, size));
         }
         return manifest;
     }
@@ -409,12 +395,7 @@ public class EpubReaderService {
 
             EpubManifestItem manifestItem = manifestById.get(idref);
             if (manifestItem != null) {
-                spine.add(EpubSpineItem.builder()
-                        .idref(idref)
-                        .href(manifestItem.getHref())
-                        .mediaType(manifestItem.getMediaType())
-                        .linear(!"no".equals(linear))
-                        .build());
+                spine.add(new EpubSpineItem(idref, manifestItem.getHref(), manifestItem.getMediaType(), !"no".equals(linear)));
             }
         }
         return spine;
@@ -491,10 +472,7 @@ public class EpubReaderService {
         String navDir = navPath.contains("/") ? navPath.substring(0, navPath.lastIndexOf('/') + 1) : rootPath;
         List<EpubTocItem> children = parseNavOl((Element) ols.item(0), navDir);
 
-        return EpubTocItem.builder()
-                .label("Table of Contents")
-                .children(children)
-                .build();
+        return new EpubTocItem("Table of Contents", null, children);
     }
 
     private List<EpubTocItem> parseNavOl(Element ol, String basePath) {
@@ -540,11 +518,7 @@ public class EpubReaderService {
             }
         }
 
-        return EpubTocItem.builder()
-                .label(label)
-                .href(href)
-                .children(subItems)
-                .build();
+        return new EpubTocItem(label, href, subItems);
     }
 
     private EpubTocItem parseNcx(ZipFile zipFile, String ncxPath, String rootPath) throws Exception {
@@ -563,10 +537,7 @@ public class EpubReaderService {
         String ncxDir = ncxPath.contains("/") ? ncxPath.substring(0, ncxPath.lastIndexOf('/') + 1) : rootPath;
         List<EpubTocItem> children = parseNcxNavPoints(navMap, ncxDir);
 
-        return EpubTocItem.builder()
-                .label("Table of Contents")
-                .children(children)
-                .build();
+        return new EpubTocItem("Table of Contents", null, children);
     }
 
     private List<EpubTocItem> parseNcxNavPoints(Element parent, String basePath) {
@@ -616,11 +587,7 @@ public class EpubReaderService {
 
         List<EpubTocItem> subItems = parseNcxNavPoints(navPoint, basePath);
 
-        return EpubTocItem.builder()
-                .label(label)
-                .href(href)
-                .children(subItems.isEmpty() ? null : subItems)
-                .build();
+        return new EpubTocItem(label, href, subItems.isEmpty() ? null : subItems);
     }
 
     private String findCoverPath(Document opfDoc, List<EpubManifestItem> manifest, Map<String, EpubManifestItem> manifestById) {

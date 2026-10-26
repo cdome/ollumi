@@ -81,10 +81,7 @@ public class PdfReaderService {
         Path pdfPath = getBookPath(bookId, bookType);
         try {
             CachedPdfMetadata metadata = getCachedMetadata(pdfPath);
-            return PdfBookInfo.builder()
-                    .pageCount(metadata.pageCount)
-                    .outline(metadata.outline)
-                    .build();
+            return new PdfBookInfo(metadata.pageCount, metadata.outline);
         } catch (IOException e) {
             log.error("Failed to read PDF for book {}", bookId, e);
             throw ApiError.FILE_READ_ERROR.createException("Failed to read PDF: " + e.getMessage());
@@ -207,11 +204,7 @@ public class PdfReaderService {
                 child = child.getNextSibling();
             }
 
-            return PdfOutlineItem.builder()
-                    .title(title.trim())
-                    .pageNumber(pageNumber)
-                    .children(children.isEmpty() ? null : children)
-                    .build();
+            return new PdfOutlineItem(title.trim(), pageNumber, children.isEmpty() ? null : children);
         } catch (Exception e) {
             log.debug("Failed to process outline item: {}", e.getMessage());
             return null;

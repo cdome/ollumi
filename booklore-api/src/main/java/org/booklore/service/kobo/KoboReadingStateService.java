@@ -66,18 +66,10 @@ public class KoboReadingStateService {
         List<KoboReadingState> koboReadingStates = saveAll(readingStates);
 
         List<KoboReadingStateResponse.UpdateResult> updateResults = koboReadingStates.stream()
-                .map(state -> KoboReadingStateResponse.UpdateResult.builder()
-                        .entitlementId(state.getEntitlementId())
-                        .currentBookmarkResult(KoboReadingStateResponse.Result.success())
-                        .statisticsResult(KoboReadingStateResponse.Result.success())
-                        .statusInfoResult(KoboReadingStateResponse.Result.success())
-                        .build())
+                .map(state -> new KoboReadingStateResponse.UpdateResult(state.getEntitlementId(), KoboReadingStateResponse.Result.success(), KoboReadingStateResponse.Result.success(), KoboReadingStateResponse.Result.success()))
                 .collect(Collectors.toList());
 
-        return KoboReadingStateResponse.builder()
-                .requestResult("Success")
-                .updateResults(updateResults)
-                .build();
+        return new KoboReadingStateResponse("Success", updateResults);
     }
 
     private List<KoboReadingState> saveAll(List<KoboReadingState> dtos) {

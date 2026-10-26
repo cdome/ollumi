@@ -196,11 +196,7 @@ public class TaskService {
         cancellationManager.cancelTask(taskId);
         taskHistoryService.updateTaskStatus(taskId, TaskStatus.CANCELLED, "Task cancellation requested by user");
         log.info("Task {} cancellation requested by user {}", taskId, user.getUsername());
-        return TaskCancelResponse.builder()
-                .taskId(taskId)
-                .cancelled(true)
-                .message("Task cancellation requested. The task will stop at the next checkpoint.")
-                .build();
+        return new TaskCancelResponse(taskId, true, "Task cancellation requested. The task will stop at the next checkpoint.");
     }
 
     private void executeAsyncTask(String taskId, TaskCreateRequest request, TaskType taskType) {
