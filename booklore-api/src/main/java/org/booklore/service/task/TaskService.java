@@ -177,11 +177,7 @@ public class TaskService {
 
     private TaskCreateResponse runAsync(TaskCreateRequest request, BookLoreUser user, TaskType taskType) {
         String taskId = initializeTask(request, user, taskType);
-        TaskCreateResponse response = TaskCreateResponse.builder()
-                .taskId(taskId)
-                .taskType(taskType)
-                .status(TaskStatus.ACCEPTED)
-                .build();
+        TaskCreateResponse response = new TaskCreateResponse(taskId, taskType, TaskStatus.ACCEPTED);
         SecurityContext securityContext = SecurityContextHolder.getContext();
         taskExecutor.execute(() ->
                 SecurityContextVirtualThread.runWithSecurityContext(securityContext, () ->
@@ -240,7 +236,7 @@ public class TaskService {
             taskHistoryService.updateTaskStatus(taskId, TaskStatus.IN_PROGRESS, "Task execution started");
             request.setTaskId(taskId);
             TaskCreateResponse response = executeTask(request);
-            response.setTaskId(taskId);
+            response = new TaskCreateResponse(taskId, response.getTaskType(), response.getStatus());
             taskHistoryService.updateTaskStatus(taskId, TaskStatus.COMPLETED, "Task completed successfully");
             return response;
         } catch (Exception e) {

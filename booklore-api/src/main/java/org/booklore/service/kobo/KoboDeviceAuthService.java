@@ -27,11 +27,13 @@ public class KoboDeviceAuthService {
 
         log.info("Kobo device authentication request received: {}", requestBody);
 
-        KoboAuthentication auth = new KoboAuthentication();
-        auth.setAccessToken(RandomStringUtils.secure().nextAlphanumeric(24));
-        auth.setRefreshToken(RandomStringUtils.secure().nextAlphanumeric(24));
-        auth.setTrackingId(UUID.randomUUID().toString());
-        auth.setUserKey(requestBody.get("UserKey").asText());
+        KoboAuthentication auth = new KoboAuthentication(
+                RandomStringUtils.secure().nextAlphanumeric(24),
+                RandomStringUtils.secure().nextAlphanumeric(24),
+                "Bearer",
+                UUID.randomUUID().toString(),
+                requestBody.get("UserKey").asText()
+        );
 
         return ResponseEntity.ok()
                 .header("Content-Type", "application/json; charset=utf-8")

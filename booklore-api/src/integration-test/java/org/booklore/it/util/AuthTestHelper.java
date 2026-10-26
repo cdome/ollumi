@@ -34,9 +34,7 @@ public class AuthTestHelper {
         if (existing != null) {
             jdbc.update("DELETE FROM refresh_token WHERE user_id = ?", existing.getId());
         }
-        UserLoginRequest request = new UserLoginRequest();
-        request.setUsername(username);
-        request.setPassword(password);
+        UserLoginRequest request = new UserLoginRequest(username, password);
         ResponseEntity<Map> response = rest.postForEntity(baseUrl + "/api/v1/auth/login", request, Map.class);
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new IllegalStateException("Login failed: " + response.getStatusCode() + " body=" + response.getBody());
@@ -46,9 +44,7 @@ public class AuthTestHelper {
     }
 
     public ResponseEntity<Map> tryLogin(String baseUrl, String username, String password) {
-        UserLoginRequest request = new UserLoginRequest();
-        request.setUsername(username);
-        request.setPassword(password);
+        UserLoginRequest request = new UserLoginRequest(username, password);
         return rest.postForEntity(baseUrl + "/api/v1/auth/login", request, Map.class);
     }
 

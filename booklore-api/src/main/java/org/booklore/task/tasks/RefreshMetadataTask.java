@@ -51,12 +51,7 @@ public class RefreshMetadataTask implements Task {
         long endTime = System.currentTimeMillis();
         log.info("{}: Task completed. Duration: {} ms", getTaskType(), endTime - startTime);
 
-        return TaskCreateResponse
-                .builder()
-                .taskType(TaskType.REFRESH_METADATA_MANUAL)
-                .taskId(taskId)
-                .status(TaskStatus.COMPLETED)
-                .build();
+        return new TaskCreateResponse(taskId, TaskType.REFRESH_METADATA_MANUAL, TaskStatus.COMPLETED);
     }
 
     @Override

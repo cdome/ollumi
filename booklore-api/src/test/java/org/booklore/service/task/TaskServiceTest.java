@@ -94,7 +94,7 @@ class TaskServiceTest {
         user.setId(1L);
         user.setUsername("user1");
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
-        when(mockTask.execute(any())).thenReturn(TaskCreateResponse.builder().taskType(TaskType.CLEANUP_TEMP_METADATA).build());
+        when(mockTask.execute(any())).thenReturn(new TaskCreateResponse(null, TaskType.CLEANUP_TEMP_METADATA, null));
         TaskCreateRequest req = TaskCreateRequest.builder().taskType(TaskType.CLEANUP_TEMP_METADATA).triggeredByCron(false).build();
         TaskCreateResponse resp = taskService.runAsUser(req);
         assertEquals(TaskType.CLEANUP_TEMP_METADATA, resp.getTaskType());
@@ -114,7 +114,7 @@ class TaskServiceTest {
     void testParallelTaskAllowsMultipleRuns() {
         TaskType parallelType = TaskType.CLEANUP_TEMP_METADATA;
         when(mockTask.getTaskType()).thenReturn(parallelType);
-        when(mockTask.execute(any())).thenReturn(TaskCreateResponse.builder().taskType(parallelType).build());
+        when(mockTask.execute(any())).thenReturn(new TaskCreateResponse(null, parallelType, null));
         BookLoreUser user = new BookLoreUser();
         user.setId(2L);
         user.setUsername("parallelUser");
@@ -135,7 +135,7 @@ class TaskServiceTest {
         TaskType nonParallelType = TaskType.REFRESH_LIBRARY_METADATA;
         Task nonParallelTask = mock(Task.class);
         when(nonParallelTask.getTaskType()).thenReturn(nonParallelType);
-        when(nonParallelTask.execute(any())).thenReturn(TaskCreateResponse.builder().taskType(nonParallelType).build());
+        when(nonParallelTask.execute(any())).thenReturn(new TaskCreateResponse(null, nonParallelType, null));
 
         taskService = new TaskService(
                 authenticationService,
@@ -176,7 +176,7 @@ class TaskServiceTest {
         TaskType asyncType = TaskType.UPDATE_BOOK_RECOMMENDATIONS;
         Task asyncTask = mock(Task.class);
         when(asyncTask.getTaskType()).thenReturn(asyncType);
-        when(asyncTask.execute(any())).thenReturn(TaskCreateResponse.builder().taskType(asyncType).build());
+        when(asyncTask.execute(any())).thenReturn(new TaskCreateResponse(null, asyncType, null));
 
         taskService = new TaskService(
                 authenticationService,
@@ -205,7 +205,7 @@ class TaskServiceTest {
     void testNullOptionsHandledGracefully() {
         TaskType type = TaskType.CLEANUP_TEMP_METADATA;
         when(mockTask.getTaskType()).thenReturn(type);
-        when(mockTask.execute(any())).thenReturn(TaskCreateResponse.builder().taskType(type).build());
+        when(mockTask.execute(any())).thenReturn(new TaskCreateResponse(null, type, null));
         BookLoreUser user = new BookLoreUser();
         user.setId(6L);
         user.setUsername("nullOptionsUser");
@@ -255,7 +255,7 @@ class TaskServiceTest {
         when(authenticationService.getAuthenticatedUser()).thenReturn(user);
         when(objectMapper.convertValue(any(), eq(Map.class))).thenThrow(new IllegalArgumentException("Conversion failed"));
         TaskCreateRequest req = TaskCreateRequest.builder().taskType(TaskType.CLEANUP_TEMP_METADATA).options(new Object()).triggeredByCron(false).build();
-        when(mockTask.execute(any())).thenReturn(TaskCreateResponse.builder().taskType(TaskType.CLEANUP_TEMP_METADATA).build());
+        when(mockTask.execute(any())).thenReturn(new TaskCreateResponse(null, TaskType.CLEANUP_TEMP_METADATA, null));
         TaskCreateResponse resp = taskService.runAsUser(req);
         assertEquals(TaskType.CLEANUP_TEMP_METADATA, resp.getTaskType());
     }

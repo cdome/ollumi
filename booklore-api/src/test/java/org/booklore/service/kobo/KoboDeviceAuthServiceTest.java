@@ -101,12 +101,7 @@ class KoboDeviceAuthServiceTest {
     @Test
     @DisplayName("Should serialize KoboAuthentication to JSON bytes")
     void toJsonBytes_validAuth() {
-        KoboAuthentication auth = KoboAuthentication.builder()
-                .accessToken("abc123")
-                .refreshToken("def456")
-                .trackingId("track-1")
-                .userKey("user-key")
-                .build();
+        KoboAuthentication auth = new KoboAuthentication("abc123", "def456", "Bearer", "track-1", "user-key");
 
         byte[] bytes = service.toJsonBytes(auth);
 

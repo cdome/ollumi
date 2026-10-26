@@ -34,9 +34,9 @@ public class TempFetchedMetadataCleanupTask implements Task {
     @Override
     @Transactional
     public TaskCreateResponse execute(TaskCreateRequest request) {
-        TaskCreateResponse.TaskCreateResponseBuilder builder = TaskCreateResponse.builder()
-                .taskId(UUID.randomUUID().toString())
-                .taskType(getTaskType());
+        String taskId = UUID.randomUUID().toString();
+        TaskType taskType = getTaskType();
+        TaskStatus status;
 
         long startTime = System.currentTimeMillis();
         log.info("{}: Task started", getTaskType());
@@ -52,16 +52,16 @@ public class TempFetchedMetadataCleanupTask implements Task {
                 log.info("{}: Removed all {} metadata fetch jobs (on-demand execution)", getTaskType(), deleted);
             }
 
-            builder.status(TaskStatus.COMPLETED);
+            status = TaskStatus.COMPLETED;
         } catch (Exception e) {
             log.error("{}: Error cleaning up temp metadata", getTaskType(), e);
-            builder.status(TaskStatus.FAILED);
+            status = TaskStatus.FAILED;
         }
 
         long endTime = System.currentTimeMillis();
         log.info("{}: Task completed. Duration: {} ms", getTaskType(), endTime - startTime);
 
-        return builder.build();
+        return new TaskCreateResponse(taskId, taskType, status);
     }
 
     @Override
