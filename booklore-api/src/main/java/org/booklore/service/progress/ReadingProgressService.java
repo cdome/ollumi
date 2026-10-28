@@ -502,12 +502,7 @@ public class ReadingProgressService {
 
     private List<BookStatusUpdateResponse> buildResetResponses(List<Long> bookIds, Set<Long> existingBookIds, Instant now) {
         return bookIds.stream()
-                .map(bookId -> BookStatusUpdateResponse.builder()
-                        .bookId(bookId)
-                        .readStatus(null)
-                        .readStatusModifiedTime(existingBookIds.contains(bookId) ? now : null)
-                        .dateFinished(null)
-                        .build())
+                .map(bookId -> new BookStatusUpdateResponse(bookId, null, existingBookIds.contains(bookId) ? now : null, null))
                 .collect(Collectors.toList());
     }
 

@@ -36,10 +36,7 @@ public class TaskCronService {
         validateTaskTypeForCron(taskType);
         CronConfig existing = repository.findByTaskType(taskType);
         return existing != null ? existing
-                : CronConfig.builder()
-                        .taskType(taskType)
-                        .enabled(false)
-                        .build();
+                : new CronConfig(null, taskType, null, false, null, null);
     }
 
     @Transactional

@@ -107,10 +107,7 @@ public class AuthorIntegrationTest extends RestApiIntegrationTest {
                 .build();
         when(authorMetadataService.matchAuthor(eq(author.getId()), any(AuthorMatchRequest.class))).thenReturn(details);
 
-        AuthorMatchRequest request = new AuthorMatchRequest();
-        request.setSource(AuthorMetadataSource.AUDNEXUS);
-        request.setAsin("B123456789");
-        request.setRegion("us");
+        AuthorMatchRequest request = new AuthorMatchRequest(AuthorMetadataSource.AUDNEXUS, "B123456789", "us");
 
         ResponseEntity<Map<String, Object>> response = rest.exchange(
                 baseUrl() + "/api/v1/authors/" + author.getId() + "/match",

@@ -44,14 +44,14 @@ class JooqTaskCronConfigurationRepository(private val dsl: DSLContext) {
     }
 
     private fun toDto(r: TaskCronConfigurationRecord): CronConfig =
-        CronConfig.builder()
-            .id(r.id)
-            .taskType(TaskType.valueOf(r.taskType))
-            .cronExpression(r.cronExpression)
-            .enabled(r.enabled == 1.toByte())
-            .createdAt(r.createdAt)
-            .updatedAt(r.updatedAt)
-            .build()
+        CronConfig(
+            id = r.id,
+            taskType = TaskType.valueOf(r.taskType),
+            cronExpression = r.cronExpression,
+            enabled = r.enabled == 1.toByte(),
+            createdAt = r.createdAt,
+            updatedAt = r.updatedAt
+        )
 
     private fun Boolean.toByteFlag(): Byte = if (this) 1 else 0
 }

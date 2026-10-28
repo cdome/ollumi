@@ -229,9 +229,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
         BookEntity book1 = createPhantomBook(library, "Lock One " + UUID.randomUUID());
         BookEntity book2 = createPhantomBook(library, "Lock Two " + UUID.randomUUID());
 
-        ToggleAllLockRequest request = new ToggleAllLockRequest();
-        request.setBookIds(Set.of(book1.getId(), book2.getId()));
-        request.setLock(Lock.LOCK);
+        ToggleAllLockRequest request = new ToggleAllLockRequest(Set.of(book1.getId(), book2.getId()), Lock.LOCK);
 
         ResponseEntity<List<Map<String, Object>>> response = rest.exchange(
                 baseUrl() + "/api/v1/books/metadata/toggle-all-lock",
@@ -251,9 +249,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
         LibraryEntity library = createLibrary();
         BookEntity book = createPhantomBook(library, "Field Lock Book " + UUID.randomUUID());
 
-        ToggleFieldLocksRequest request = new ToggleFieldLocksRequest();
-        request.setBookIds(List.of(book.getId()));
-        request.setFieldActions(Map.of("titleLocked", "LOCK"));
+        ToggleFieldLocksRequest request = new ToggleFieldLocksRequest(List.of(book.getId()), Map.of("titleLocked", "LOCK"));
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/v1/books/metadata/toggle-field-locks",
@@ -304,10 +300,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
                 Void.class
         );
 
-        MergeMetadataRequest request = new MergeMetadataRequest();
-        request.setMetadataType(MergeMetadataType.categories);
-        request.setTargetValues(List.of(categoryAlpha));
-        request.setValuesToMerge(List.of(categoryBeta));
+        MergeMetadataRequest request = new MergeMetadataRequest(MergeMetadataType.categories, List.of(categoryAlpha), List.of(categoryBeta));
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/v1/books/metadata/manage/consolidate",
@@ -346,9 +339,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
                 Void.class
         );
 
-        DeleteMetadataRequest request = new DeleteMetadataRequest();
-        request.setMetadataType(MergeMetadataType.categories);
-        request.setValuesToDelete(List.of(category));
+        DeleteMetadataRequest request = new DeleteMetadataRequest(MergeMetadataType.categories, List.of(category));
 
         ResponseEntity<Void> response = rest.exchange(
                 baseUrl() + "/api/v1/books/metadata/manage/delete",
@@ -377,10 +368,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
         data.assignLibraryToUser(user, library);
         AuthTestHelper.Tokens tokens = auth.login(baseUrl(), user.getUsername(), "password");
 
-        MergeMetadataRequest consolidate = new MergeMetadataRequest();
-        consolidate.setMetadataType(MergeMetadataType.categories);
-        consolidate.setTargetValues(List.of("A"));
-        consolidate.setValuesToMerge(List.of("B"));
+        MergeMetadataRequest consolidate = new MergeMetadataRequest(MergeMetadataType.categories, List.of("A"), List.of("B"));
 
         ResponseEntity<Void> consolidateResponse = rest.exchange(
                 baseUrl() + "/api/v1/books/metadata/manage/consolidate",
@@ -390,9 +378,7 @@ public class BookMetadataWriteIntegrationTest extends RestApiIntegrationTest {
         );
         assertThat(consolidateResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-        DeleteMetadataRequest delete = new DeleteMetadataRequest();
-        delete.setMetadataType(MergeMetadataType.categories);
-        delete.setValuesToDelete(List.of("A"));
+        DeleteMetadataRequest delete = new DeleteMetadataRequest(MergeMetadataType.categories, List.of("A"));
 
         ResponseEntity<Void> deleteResponse = rest.exchange(
                 baseUrl() + "/api/v1/books/metadata/manage/delete",

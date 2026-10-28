@@ -94,13 +94,7 @@ class AudiobookReaderServiceTest {
 
     @Test
     void getAudiobookInfo_returnsInfoFromMetadataService() throws Exception {
-        AudiobookInfo expectedInfo = AudiobookInfo.builder()
-                .bookId(1L)
-                .bookFileId(10L)
-                .title("Test Audiobook")
-                .author("Test Author")
-                .durationMs(3600000L)
-                .build();
+        AudiobookInfo expectedInfo = new AudiobookInfo(1L, 10L, "Test Audiobook", "Test Author", null, 3600000L, null, null, null, null, null, null, null, null);
 
         when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
         when(audioMetadataService.getMetadata(audiobookFileEntity, audioPath)).thenReturn(expectedInfo);
@@ -122,7 +116,7 @@ class AudiobookReaderServiceTest {
         bookFiles.add(epubFile);
         when(bookEntity.getBookFiles()).thenReturn(bookFiles);
 
-        AudiobookInfo expectedInfo = AudiobookInfo.builder().bookId(1L).build();
+        AudiobookInfo expectedInfo = new AudiobookInfo(1L, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
         when(audioMetadataService.getMetadata(audiobookFileEntity, audioPath)).thenReturn(expectedInfo);
@@ -394,7 +388,7 @@ class AudiobookReaderServiceTest {
         bookFiles.add(audiobookWithoutBookFormat);
         when(bookEntity.getBookFiles()).thenReturn(bookFiles);
 
-        AudiobookInfo expectedInfo = AudiobookInfo.builder().bookId(1L).build();
+        AudiobookInfo expectedInfo = new AudiobookInfo(1L, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
         when(audioMetadataService.getMetadata(eq(audiobookFileEntity), any())).thenReturn(expectedInfo);
@@ -407,7 +401,7 @@ class AudiobookReaderServiceTest {
 
     @Test
     void getAudiobookInfo_bookTypeIsCaseInsensitive() throws Exception {
-        AudiobookInfo expectedInfo = AudiobookInfo.builder().bookId(1L).build();
+        AudiobookInfo expectedInfo = new AudiobookInfo(1L, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(jooqBookEntityRepository.findByIdFull(1L)).thenReturn(bookEntity);
         when(audioMetadataService.getMetadata(any(), any())).thenReturn(expectedInfo);

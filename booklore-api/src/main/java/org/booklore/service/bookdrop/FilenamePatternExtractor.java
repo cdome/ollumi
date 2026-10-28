@@ -109,12 +109,7 @@ public class FilenamePatternExtractor {
         
         int failureCount = previewFiles.size() - successCount;
         
-        return BookdropPatternExtractResult.builder()
-                .totalFiles(fileIds.size())
-                .successfullyExtracted(successCount)
-                .failed(failureCount)
-                .results(results)
-                .build();
+        return new BookdropPatternExtractResult(fileIds.size(), successCount, failureCount, results);
     }
 
     private BookdropPatternExtractResult processFullExtractionInBatches(List<Long> fileIds, ParsedPattern pattern) {
@@ -137,12 +132,7 @@ public class FilenamePatternExtractor {
                     batchStart, batchEnd, totalFiles, batchResult.successCount(), batchResult.failureCount());
         }
         
-        return BookdropPatternExtractResult.builder()
-                .totalFiles(totalFiles)
-                .successfullyExtracted(totalSuccessCount)
-                .failed(totalFailureCount)
-                .results(allResults)
-                .build();
+        return new BookdropPatternExtractResult(totalFiles, totalSuccessCount, totalFailureCount, allResults);
     }
 
     private BatchExtractionResult processSingleExtractionBatch(List<Long> allFileIds, int batchStart, 
@@ -164,12 +154,7 @@ public class FilenamePatternExtractor {
     }
     
     private BookdropPatternExtractResult buildEmptyResult(int totalFiles) {
-        return BookdropPatternExtractResult.builder()
-                .totalFiles(totalFiles)
-                .successfullyExtracted(0)
-                .failed(totalFiles)
-                .results(Collections.emptyList())
-                .build();
+        return new BookdropPatternExtractResult(totalFiles, 0, totalFiles, Collections.emptyList());
     }
 
     public BookMetadata extractFromFilename(String filename, String pattern) {
@@ -238,30 +223,15 @@ public class FilenamePatternExtractor {
             if (extracted == null) {
                 String errorMsg = "Pattern did not match filename structure. Check if the pattern aligns with the filename format.";
                 log.debug("Pattern mismatch for file '{}'", file.getFileName());
-                return BookdropPatternExtractResult.FileExtractionResult.builder()
-                        .fileId(file.getId())
-                        .fileName(file.getFileName())
-                        .success(false)
-                        .errorMessage(errorMsg)
-                        .build();
+                return new BookdropPatternExtractResult.FileExtractionResult(file.getId(), file.getFileName(), false, null, errorMsg);
             }
 
-            return BookdropPatternExtractResult.FileExtractionResult.builder()
-                    .fileId(file.getId())
-                    .fileName(file.getFileName())
-                    .success(true)
-                    .extractedMetadata(extracted)
-                    .build();
+            return new BookdropPatternExtractResult.FileExtractionResult(file.getId(), file.getFileName(), true, extracted, null);
 
         } catch (RuntimeException e) {
             String errorMsg = "Extraction failed: " + e.getMessage();
             log.debug("Pattern extraction failed for file '{}': {}", file.getFileName(), e.getMessage());
-            return BookdropPatternExtractResult.FileExtractionResult.builder()
-                    .fileId(file.getId())
-                    .fileName(file.getFileName())
-                    .success(false)
-                    .errorMessage(errorMsg)
-                    .build();
+            return new BookdropPatternExtractResult.FileExtractionResult(file.getId(), file.getFileName(), false, null, errorMsg);
         }
     }
 
@@ -619,7 +589,8 @@ public class FilenamePatternExtractor {
 
         Map<Long, String> updatesById = new LinkedHashMap<>();
 
-        for (BookdropPatternExtractResult.FileExtractionResult result : results) {
+        for (int i = 0; i < results.size(); i++) {
+            BookdropPatternExtractResult.FileExtractionResult result = results.get(i);
             if (!result.isSuccess() || result.getExtractedMetadata() == null) {
                 continue;
             }
@@ -638,8 +609,12 @@ public class FilenamePatternExtractor {
             } catch (RuntimeException e) {
                 log.error("Error persisting extracted metadata for file {} ({}): {}",
                          file.getId(), file.getFileName(), e.getMessage(), e);
-                result.setSuccess(false);
-                result.setErrorMessage("Failed to save metadata: " + e.getMessage());
+                results.set(i, new BookdropPatternExtractResult.FileExtractionResult(
+                        result.getFileId(),
+                        result.getFileName(),
+                        false,
+                        result.getExtractedMetadata(),
+                        "Failed to save metadata: " + e.getMessage()));
             }
         }
 

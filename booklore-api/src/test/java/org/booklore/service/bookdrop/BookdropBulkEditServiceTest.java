@@ -65,12 +65,14 @@ class BookdropBulkEditServiceTest {
         updates.setLanguage("en");
         updates.setSeriesTotal(100);
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("seriesName", "publisher", "language", "seriesTotal"));
-        request.setMergeArrays(false);
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L, 2L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("seriesName", "publisher", "language", "seriesTotal"),
+                false,
+                false,
+                null,
+                List.of(1L, 2L)
+        );
 
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 
@@ -101,12 +103,14 @@ class BookdropBulkEditServiceTest {
         updates.setAuthors(new ArrayList<>(List.of("Author 2")));
         updates.setCategories(new LinkedHashSet<>(List.of("Category 2")));
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("authors", "categories"));
-        request.setMergeArrays(true);
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("authors", "categories"),
+                true,
+                false,
+                null,
+                List.of(1L)
+        );
 
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 
@@ -141,12 +145,14 @@ class BookdropBulkEditServiceTest {
         BookMetadata updates = new BookMetadata();
         updates.setAuthors(new ArrayList<>(List.of("Author 2")));
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("authors"));
-        request.setMergeArrays(false);
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("authors"),
+                false,
+                false,
+                null,
+                List.of(1L)
+        );
 
         bulkEditService.bulkEdit(request);
 
@@ -178,12 +184,14 @@ class BookdropBulkEditServiceTest {
         updates.setSeriesName("New Series");
         updates.setPublisher("New Publisher");
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("seriesName"));
-        request.setMergeArrays(false);
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("seriesName"),
+                false,
+                false,
+                null,
+                List.of(1L)
+        );
 
         bulkEditService.bulkEdit(request);
 
@@ -209,12 +217,14 @@ class BookdropBulkEditServiceTest {
         BookMetadata updates = new BookMetadata();
         updates.setLanguage("en");
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("language"));
-        request.setMergeArrays(false);
-        request.setSelectAll(true);
-        request.setExcludedIds(List.of(2L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("language"),
+                false,
+                true,
+                List.of(2L),
+                null
+        );
 
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 
@@ -240,12 +250,14 @@ class BookdropBulkEditServiceTest {
         BookMetadata updates = new BookMetadata();
         updates.setLanguage("en");
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("language"));
-        request.setMergeArrays(false);
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L, 2L, 3L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("language"),
+                false,
+                false,
+                null,
+                List.of(1L, 2L, 3L)
+        );
 
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 
@@ -273,12 +285,14 @@ class BookdropBulkEditServiceTest {
         BookMetadata updates = new BookMetadata();
         updates.setSeriesName("New Series");
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Collections.emptySet());
-        request.setMergeArrays(false);
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L));
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Collections.emptySet(),
+                false,
+                false,
+                null,
+                List.of(1L)
+        );
 
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 
@@ -318,12 +332,14 @@ class BookdropBulkEditServiceTest {
         BookMetadata updates = new BookMetadata();
         updates.setLanguage("en");
 
-        BookdropBulkEditRequest request = new BookdropBulkEditRequest();
-        request.setFields(updates);
-        request.setEnabledFields(Set.of("language"));
-        request.setMergeArrays(false);
-        request.setSelectAll(false);
-        request.setSelectedIds(manyIds);
+        BookdropBulkEditRequest request = new BookdropBulkEditRequest(
+                updates,
+                Set.of("language"),
+                false,
+                false,
+                null,
+                manyIds
+        );
 
         BookdropBulkEditResult result = bulkEditService.bulkEdit(request);
 

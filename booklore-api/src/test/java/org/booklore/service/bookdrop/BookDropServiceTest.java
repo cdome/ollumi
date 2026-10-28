@@ -220,9 +220,7 @@ class BookDropServiceTest {
 
     @Test
     void finalizeImport_ShouldPauseAndResumeMonitoring() {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(false);
-        request.setFiles(List.of());
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(false, null, List.of(), null, null);
 
         BookdropFinalizeResult result = bookDropService.finalizeImport(request);
 
@@ -235,11 +233,7 @@ class BookDropServiceTest {
     @Test
     @Disabled
     void finalizeImport_WhenSelectAllTrue_ShouldProcessAllFiles() throws Exception {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setDefaultLibraryId(1L);
-        request.setDefaultPathId(1L);
-        request.setExcludedIds(List.of());
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, List.of(), null, 1L, 1L);
 
         BookMetadata metadata = new BookMetadata();
         metadata.setTitle("Test Book");
@@ -288,10 +282,7 @@ class BookDropServiceTest {
 
     @Test
     void finalizeImport_WhenLibraryNotFound_ShouldFail() throws Exception {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setDefaultLibraryId(999L);
-        request.setDefaultPathId(1L);
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, null, null, 999L, 1L);
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
@@ -389,10 +380,7 @@ class BookDropServiceTest {
 
     @Test
     void finalizeImport_WhenSourceFileDoesNotExist_ShouldDeleteFromDB() throws Exception {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setDefaultLibraryId(1L);
-        request.setDefaultPathId(1L);
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, null, null, 1L, 1L);
 
         BookdropFileRow missingFileEntity = new BookdropFileRow(
                 2L,
@@ -432,10 +420,7 @@ class BookDropServiceTest {
 
     @Test
     void finalizeImport_WhenIOExceptionDuringMove_ShouldHandleGracefully() throws Exception {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setDefaultLibraryId(1L);
-        request.setDefaultPathId(1L);
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, null, null, 1L, 1L);
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
@@ -463,11 +448,7 @@ class BookDropServiceTest {
 
     @Test
     void finalizeImport_WhenProcessingSucceeds_ShouldDeleteSourceFileFromBookdrop() throws Exception {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setDefaultLibraryId(1L);
-        request.setDefaultPathId(1L);
-        request.setExcludedIds(List.of());
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, List.of(), null, 1L, 1L);
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L));
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
@@ -521,15 +502,8 @@ class BookDropServiceTest {
 
     @Test
     void finalizeImport_WhenProcessingFails_ShouldPreserveSourceFileInBookdrop() throws Exception {
-        BookdropFinalizeRequest.BookdropFinalizeFile finalizeFile = new BookdropFinalizeRequest.BookdropFinalizeFile();
-        finalizeFile.setFileId(1L);
-        finalizeFile.setLibraryId(1L);
-        finalizeFile.setPathId(1L);
-        finalizeFile.setMetadata(new BookMetadata());
-
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(false);
-        request.setFiles(List.of(finalizeFile));
+        BookdropFinalizeRequest.BookdropFinalizeFile finalizeFile = new BookdropFinalizeRequest.BookdropFinalizeFile(1L, 1L, 1L, new BookMetadata());
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(false, null, List.of(finalizeFile), null, null);
 
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
         when(libraryRepository.findById(1L)).thenReturn(libraryEntity);
@@ -587,15 +561,8 @@ class BookDropServiceTest {
         Path targetDir = tempDir.resolve("library");
         Files.createDirectories(targetDir);
 
-        BookdropFinalizeRequest.BookdropFinalizeFile finalizeFile = new BookdropFinalizeRequest.BookdropFinalizeFile();
-        finalizeFile.setFileId(1L);
-        finalizeFile.setLibraryId(1L);
-        finalizeFile.setPathId(1L);
-        finalizeFile.setMetadata(new BookMetadata());
-
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(false);
-        request.setFiles(List.of(finalizeFile));
+        BookdropFinalizeRequest.BookdropFinalizeFile finalizeFile = new BookdropFinalizeRequest.BookdropFinalizeFile(1L, 1L, 1L, new BookMetadata());
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(false, null, List.of(finalizeFile), null, null);
 
         when(bookdropFileRepository.findAllById(any())).thenReturn(List.of(bookdropFileEntity));
         when(libraryRepository.findById(1L)).thenReturn(libraryEntity);

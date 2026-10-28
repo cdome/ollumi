@@ -171,11 +171,13 @@ class FilenamePatternExtractorTest {
         BookdropFileRow file2 = createFileEntity(2L, "Chronicles B - Ch 2.cbz");
         BookdropFileRow file3 = createFileEntity(3L, "Random Name.cbz");
 
-        BookdropPatternExtractRequest request = new BookdropPatternExtractRequest();
-        request.setPattern("{SeriesName} - Ch {SeriesNumber}");
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L, 2L, 3L));
-        request.setPreview(true);
+        BookdropPatternExtractRequest request = new BookdropPatternExtractRequest(
+                "{SeriesName} - Ch {SeriesNumber}",
+                false,
+                null,
+                List.of(1L, 2L, 3L),
+                true
+        );
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L, 2L, 3L)))
                 .thenReturn(List.of(1L, 2L, 3L));
@@ -200,11 +202,13 @@ class FilenamePatternExtractorTest {
         BookdropFileRow file2 = createFileEntity(2L, "Chronicles B - Ch 2.cbz");
         BookdropFileRow file3 = createFileEntity(3L, "Random Name.cbz");
 
-        BookdropPatternExtractRequest request = new BookdropPatternExtractRequest();
-        request.setPattern("{SeriesName} - Ch {SeriesNumber}");
-        request.setSelectAll(false);
-        request.setSelectedIds(List.of(1L, 2L, 3L));
-        request.setPreview(false);
+        BookdropPatternExtractRequest request = new BookdropPatternExtractRequest(
+                "{SeriesName} - Ch {SeriesNumber}",
+                false,
+                null,
+                List.of(1L, 2L, 3L),
+                false
+        );
 
         when(metadataHelper.resolveFileIds(false, null, List.of(1L, 2L, 3L)))
                 .thenReturn(List.of(1L, 2L, 3L));

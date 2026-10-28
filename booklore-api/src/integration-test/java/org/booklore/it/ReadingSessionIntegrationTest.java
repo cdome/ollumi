@@ -31,18 +31,19 @@ public class ReadingSessionIntegrationTest extends RestApiIntegrationTest {
         Instant startTime = Instant.parse("2023-06-15T10:00:00Z");
         Instant endTime = startTime.plusSeconds(600);
 
-        ReadingSessionRequest request = new ReadingSessionRequest();
-        request.setBookId(book.getId());
-        request.setBookType(BookFileType.EPUB);
-        request.setStartTime(startTime);
-        request.setEndTime(endTime);
-        request.setDurationSeconds(600);
-        request.setDurationFormatted("10m");
-        request.setStartProgress(0.0f);
-        request.setEndProgress(10.0f);
-        request.setProgressDelta(10.0f);
-        request.setStartLocation("loc-1");
-        request.setEndLocation("loc-2");
+        ReadingSessionRequest request = new ReadingSessionRequest(
+                book.getId(),
+                BookFileType.EPUB,
+                startTime,
+                endTime,
+                600,
+                "10m",
+                0.0f,
+                10.0f,
+                10.0f,
+                "loc-1",
+                "loc-2"
+        );
 
         ResponseEntity<Void> postResponse = rest.exchange(
                 baseUrl() + "/api/v1/reading-sessions",

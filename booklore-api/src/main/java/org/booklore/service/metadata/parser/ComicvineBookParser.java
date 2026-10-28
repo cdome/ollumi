@@ -640,22 +640,31 @@ public class ComicvineBookParser implements BookParser, DetailedMetadataProvider
     }
 
     private BookMetadata convertToBookMetadata(ComicvineIssueResponse.IssueResults issue, int issueId, Comic volumeContext) {
-        Comic comic = new Comic();
-        comic.setId(issueId);
-        comic.setIssueNumber(issue.getIssueNumber());
-        comic.setVolume(issue.getVolume());
-        comic.setName(issue.getName());
-        comic.setPersonCredits(issue.getPersonCredits());
-        comic.setCharacterCredits(issue.getCharacterCredits());
-        comic.setTeamCredits(issue.getTeamCredits());
-        comic.setStoryArcCredits(issue.getStoryArcCredits());
-        comic.setLocationCredits(issue.getLocationCredits());
-        comic.setImage(issue.getImage());
-        comic.setDescription(issue.getDescription());
-        comic.setDeck(issue.getDeck());
-        comic.setStoreDate(issue.getStoreDate());
-        comic.setCoverDate(issue.getCoverDate());
-        comic.setSiteDetailUrl(issue.getSiteDetailUrl());
+        Comic comic = new Comic(
+                issueId,
+                null,
+                issue.getCoverDate(),
+                issue.getStoreDate(),
+                issue.getDescription(),
+                issue.getDeck(),
+                issue.getName(),
+                null,
+                issue.getIssueNumber(),
+                issue.getImage(),
+                issue.getVolume(),
+                null,
+                issue.getPersonCredits(),
+                issue.getCharacterCredits(),
+                issue.getTeamCredits(),
+                issue.getStoryArcCredits(),
+                issue.getLocationCredits(),
+                null,
+                null,
+                issue.getSiteDetailUrl(),
+                null,
+                null,
+                null
+        );
         return convertToBookMetadata(comic, volumeContext);
     }
 

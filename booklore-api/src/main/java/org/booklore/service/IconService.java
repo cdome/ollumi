@@ -115,30 +115,18 @@ public class IconService {
         for (SvgIconCreateRequest request : requests) {
             try {
                 saveSvgIcon(request);
-                results.add(SvgIconBatchResponse.IconSaveResult.builder()
-                        .iconName(request.getSvgName())
-                        .success(true)
-                        .build());
+                results.add(new SvgIconBatchResponse.IconSaveResult(request.getSvgName(), true, null));
                 successCount++;
             } catch (Exception e) {
                 log.warn("Failed to save icon '{}': {}", request.getSvgName(), e.getMessage());
-                results.add(SvgIconBatchResponse.IconSaveResult.builder()
-                        .iconName(request.getSvgName())
-                        .success(false)
-                        .errorMessage(e.getMessage())
-                        .build());
+                results.add(new SvgIconBatchResponse.IconSaveResult(request.getSvgName(), false, e.getMessage()));
                 failureCount++;
             }
         }
 
         log.info("Batch save completed: {} successful, {} failed", successCount, failureCount);
 
-        return SvgIconBatchResponse.builder()
-                .totalRequested(requests.size())
-                .successCount(successCount)
-                .failureCount(failureCount)
-                .results(results)
-                .build();
+        return new SvgIconBatchResponse(requests.size(), successCount, failureCount, results);
     }
 
     public String getSvgIcon(String name) {

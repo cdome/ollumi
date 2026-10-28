@@ -101,10 +101,7 @@ public class CbxReaderService {
             for (int i = 0; i < imageEntries.size(); i++) {
                 String entryPath = imageEntries.get(i);
                 String displayName = extractDisplayName(entryPath);
-                pageInfoList.add(CbxPageInfo.builder()
-                        .pageNumber(i + 1)
-                        .displayName(displayName)
-                        .build());
+                pageInfoList.add(new CbxPageInfo(i + 1, displayName));
             }
             return pageInfoList;
         } catch (IOException e) {

@@ -120,10 +120,7 @@ class AuthorMetadataServiceTest {
         when(authorParser.getAuthorByAsin("B000APZGGS", "us")).thenReturn(result);
         when(jooqAuthorRepository.save(any(AuthorRow.class))).thenAnswer(i -> i.getArgument(0));
 
-        AuthorMatchRequest request = new AuthorMatchRequest();
-        request.setAsin("B000APZGGS");
-        request.setSource(AuthorMetadataSource.AUDNEXUS);
-        request.setRegion("us");
+        AuthorMatchRequest request = new AuthorMatchRequest(AuthorMetadataSource.AUDNEXUS, "B000APZGGS", "us");
 
         AuthorDetails details = service.matchAuthor(1L, request);
 
@@ -144,9 +141,7 @@ class AuthorMetadataServiceTest {
     void matchAuthor_throwsWhenAuthorNotFound() {
         when(jooqAuthorRepository.findById(99L)).thenReturn(Optional.empty());
 
-        AuthorMatchRequest request = new AuthorMatchRequest();
-        request.setAsin("B000APZGGS");
-        request.setSource(AuthorMetadataSource.AUDNEXUS);
+        AuthorMatchRequest request = new AuthorMatchRequest(AuthorMetadataSource.AUDNEXUS, "B000APZGGS", null);
 
         assertThatThrownBy(() -> service.matchAuthor(99L, request))
                 .isInstanceOf(APIException.class)
@@ -162,10 +157,7 @@ class AuthorMetadataServiceTest {
         when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
         when(authorParser.getAuthorByAsin("INVALID", "us")).thenReturn(null);
 
-        AuthorMatchRequest request = new AuthorMatchRequest();
-        request.setAsin("INVALID");
-        request.setSource(AuthorMetadataSource.AUDNEXUS);
-        request.setRegion("us");
+        AuthorMatchRequest request = new AuthorMatchRequest(AuthorMetadataSource.AUDNEXUS, "INVALID", "us");
 
         assertThatThrownBy(() -> service.matchAuthor(1L, request))
                 .isInstanceOf(APIException.class)
@@ -180,10 +172,7 @@ class AuthorMetadataServiceTest {
 
         when(jooqAuthorRepository.findById(1L)).thenReturn(Optional.of(author));
 
-        AuthorMatchRequest request = new AuthorMatchRequest();
-        request.setAsin("12345");
-        request.setSource(null);
-        request.setRegion("us");
+        AuthorMatchRequest request = new AuthorMatchRequest(null, "12345", "us");
 
         assertThatThrownBy(() -> service.matchAuthor(1L, request))
                 .isInstanceOf(APIException.class)
@@ -249,10 +238,7 @@ class AuthorMetadataServiceTest {
         when(authorParser.getAuthorByAsin("B000APZGGS", "us")).thenReturn(result);
         when(jooqAuthorRepository.save(any(AuthorRow.class))).thenAnswer(i -> i.getArgument(0));
 
-        AuthorMatchRequest request = new AuthorMatchRequest();
-        request.setAsin("B000APZGGS");
-        request.setSource(AuthorMetadataSource.AUDNEXUS);
-        request.setRegion("us");
+        AuthorMatchRequest request = new AuthorMatchRequest(AuthorMetadataSource.AUDNEXUS, "B000APZGGS", "us");
 
         service.matchAuthor(1L, request);
 

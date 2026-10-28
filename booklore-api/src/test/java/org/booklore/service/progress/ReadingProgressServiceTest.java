@@ -181,10 +181,8 @@ class ReadingProgressServiceTest {
 
         when(userBookFileProgressRepository.findByUserIdAndBookFileId(2L, 1L)).thenReturn(Optional.empty());
 
-        ReadProgressRequest req = new ReadProgressRequest();
-        req.setBookId(bookId);
         EpubProgress epubProgress = EpubProgress.builder().cfi("cfi").percentage(100f).build();
-        req.setEpubProgress(epubProgress);
+        ReadProgressRequest req = new ReadProgressRequest(bookId, null, epubProgress, null, null, null, null);
 
         readingProgressService.updateReadProgress(req);
 
@@ -219,10 +217,8 @@ class ReadingProgressServiceTest {
 
         when(userBookFileProgressRepository.findByUserIdAndBookFileId(2L, 1L)).thenReturn(Optional.empty());
 
-        ReadProgressRequest req = new ReadProgressRequest();
-        req.setBookId(bookId);
         PdfProgress pdfProgress = PdfProgress.builder().page(5).percentage(50f).build();
-        req.setPdfProgress(pdfProgress);
+        ReadProgressRequest req = new ReadProgressRequest(bookId, null, null, pdfProgress, null, null, null);
 
         readingProgressService.updateReadProgress(req);
 

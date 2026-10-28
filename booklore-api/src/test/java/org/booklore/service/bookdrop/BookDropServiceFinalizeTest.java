@@ -49,11 +49,7 @@ class BookDropServiceFinalizeTest {
 
     @Test
     void finalizeImport_selectAll_emptyExcludedIds_shouldCallFindAllIds() {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setExcludedIds(Collections.emptyList());
-        request.setDefaultLibraryId(1L);
-        request.setDefaultPathId(1L);
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, Collections.emptyList(), null, 1L, 1L);
 
         when(bookdropFileRepository.findAllIds()).thenReturn(List.of(1L, 2L));
         when(bookdropFileRepository.findAllById(anyList())).thenReturn(Collections.emptyList()); // Mock chunk processing
@@ -66,11 +62,7 @@ class BookDropServiceFinalizeTest {
 
     @Test
     void finalizeImport_selectAll_withExcludedIds_shouldCallFindAllExcludingIdsFlat() {
-        BookdropFinalizeRequest request = new BookdropFinalizeRequest();
-        request.setSelectAll(true);
-        request.setExcludedIds(List.of(3L));
-        request.setDefaultLibraryId(1L);
-        request.setDefaultPathId(1L);
+        BookdropFinalizeRequest request = new BookdropFinalizeRequest(true, List.of(3L), null, 1L, 1L);
 
         when(bookdropFileRepository.findAllExcludingIdsFlat(anyList())).thenReturn(List.of(1L, 2L));
         when(bookdropFileRepository.findAllById(anyList())).thenReturn(Collections.emptyList()); // Mock chunk processing

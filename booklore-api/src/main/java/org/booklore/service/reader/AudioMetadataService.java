@@ -47,63 +47,50 @@ public class AudioMetadataService {
 
   private AudiobookInfo buildSingleFileAudiobookInfo(BookFileEntity bookFile, Path audioPath)
       throws Exception {
-    AudiobookInfo.AudiobookInfoBuilder builder =
-        AudiobookInfo.builder()
-            .bookId(bookFile.getBook().getId())
-            .bookFileId(bookFile.getId())
-            .folderBased(false)
-                .totalSizeBytes(bookFile.getFileSizeKb() != null ? bookFile.getFileSizeKb() * 1024 : Files.size(audioPath));
+    Long bookId = bookFile.getBook().getId();
+    Long bookFileId = bookFile.getId();
+    Long totalSizeBytes = bookFile.getFileSizeKb() != null ? bookFile.getFileSizeKb() * 1024 : Files.size(audioPath);
 
     if (bookFile.getDurationSeconds() != null) {
       BookMetadataEntity metadata = bookFile.getBook().getMetadata();
       String narrator = metadata != null ? metadata.getNarrator() : null;
+      Long durationMs = bookFile.getDurationSeconds() * 1000;
+      Integer bitrate = bookFile.getBitrate();
+      Integer sampleRate = bookFile.getSampleRate();
+      Integer channels = bookFile.getChannels();
+      String codec = bookFile.getCodec();
 
-      builder
-          .narrator(narrator)
-          .durationMs(bookFile.getDurationSeconds() * 1000)
-          .bitrate(bookFile.getBitrate())
-          .sampleRate(bookFile.getSampleRate())
-          .channels(bookFile.getChannels())
-          .codec(bookFile.getCodec());
-
+      List<AudiobookChapter> chapters;
       if (bookFile.getChapters() != null && !bookFile.getChapters().isEmpty()) {
-        List<AudiobookChapter> chapters =
+        chapters =
             bookFile.getChapters().stream()
                 .map(
                     ch ->
-                        AudiobookChapter.builder()
-                            .index(ch.getIndex())
-                            .title(ch.getTitle())
-                            .startTimeMs(ch.getStartTimeMs())
-                            .endTimeMs(ch.getEndTimeMs())
-                            .durationMs(ch.getDurationMs())
-                            .build())
+                        new AudiobookChapter(ch.getIndex(), ch.getTitle(), ch.getStartTimeMs(), ch.getEndTimeMs(), ch.getDurationMs()))
                 .collect(Collectors.toList());
-        builder.chapters(chapters);
       } else {
-        backfillChapters(bookFile, audioPath, builder);
+        chapters = backfillChapters(bookFile, audioPath);
       }
 
+      String title = null;
+      String author = null;
       if (metadata != null) {
-        builder.title(metadata.getTitle());
-        bookMetadataRelationsRepository.findAuthorNamesByBookId(bookFile.getBook().getId())
-            .stream().findFirst().ifPresent(builder::author);
+        title = metadata.getTitle();
+        author = bookMetadataRelationsRepository.findAuthorNamesByBookId(bookFile.getBook().getId())
+            .stream().findFirst().orElse(null);
       }
 
-      return builder.build();
+      return new AudiobookInfo(bookId, bookFileId, title, author, narrator, durationMs, bitrate, codec, sampleRate, channels, totalSizeBytes, false, chapters, null);
     }
 
     log.debug("No DB metadata found for audiobook {}, extracting from file", bookFile.getId());
-    return extractSingleFileMetadata(builder, audioPath);
+    return extractSingleFileMetadata(bookId, bookFileId, totalSizeBytes, audioPath);
   }
 
   private AudiobookInfo buildFolderBasedAudiobookInfo(BookFileEntity bookFile, Path folderPath)
       throws Exception {
-    AudiobookInfo.AudiobookInfoBuilder builder =
-        AudiobookInfo.builder()
-            .bookId(bookFile.getBook().getId())
-            .bookFileId(bookFile.getId())
-            .folderBased(true);
+    Long bookId = bookFile.getBook().getId();
+    Long bookFileId = bookFile.getId();
 
     List<Path> audioFiles = audioFileUtility.listAudioFiles(folderPath);
     if (audioFiles.isEmpty()) {
@@ -140,14 +127,7 @@ public class AudioMetadataService {
         }
 
         tracks.add(
-            AudiobookTrack.builder()
-                .index(i)
-                .fileName(trackPath.getFileName().toString())
-                .title(trackTitle)
-                .durationMs(trackDurationMs)
-                .fileSizeBytes(fileSizeBytes)
-                .cumulativeStartMs(totalDurationMs)
-                .build());
+            new AudiobookTrack(i, trackPath.getFileName().toString(), trackTitle, trackDurationMs, fileSizeBytes, totalDurationMs));
 
         totalDurationMs += trackDurationMs;
 
@@ -165,47 +145,18 @@ public class AudioMetadataService {
       } catch (Exception e) {
         log.warn("Failed to read track metadata: {}", trackPath, e);
         tracks.add(
-            AudiobookTrack.builder()
-                .index(i)
-                .fileName(trackPath.getFileName().toString())
-                .title(
-                    audioFileUtility.getTrackTitleFromFilename(trackPath.getFileName().toString()))
-                .fileSizeBytes(Files.size(trackPath))
-                .cumulativeStartMs(totalDurationMs)
-                .build());
+            new AudiobookTrack(i, trackPath.getFileName().toString(), audioFileUtility.getTrackTitleFromFilename(trackPath.getFileName().toString()), null, Files.size(trackPath), totalDurationMs));
       }
     }
 
     BookMetadataEntity metadata = bookFile.getBook().getMetadata();
-    if (metadata != null && metadata.getNarrator() != null) {
-      builder.narrator(metadata.getNarrator());
-    } else {
-      builder.narrator(narrator);
-    }
-
-    if (bookFile.getBitrate() != null) {
-      builder.bitrate(bookFile.getBitrate());
-    } else {
-      builder.bitrate(bitrate);
-    }
-
-    if (bookFile.getCodec() != null) {
-      builder.codec(bookFile.getCodec());
-    } else {
-      builder.codec(codec);
-    }
-
-    if (bookFile.getSampleRate() != null) {
-      builder.sampleRate(bookFile.getSampleRate());
-    } else {
-      builder.sampleRate(sampleRate);
-    }
-
-    if (bookFile.getChannels() != null) {
-      builder.channels(bookFile.getChannels());
-    } else {
-      builder.channels(channels);
-    }
+    String finalNarrator = (metadata != null && metadata.getNarrator() != null)
+        ? metadata.getNarrator()
+        : narrator;
+    Integer finalBitrate = bookFile.getBitrate() != null ? bookFile.getBitrate() : bitrate;
+    String finalCodec = bookFile.getCodec() != null ? bookFile.getCodec() : codec;
+    Integer finalSampleRate = bookFile.getSampleRate() != null ? bookFile.getSampleRate() : sampleRate;
+    Integer finalChannels = bookFile.getChannels() != null ? bookFile.getChannels() : channels;
 
     if (metadata != null) {
       String bookTitle = metadata.getTitle();
@@ -218,44 +169,45 @@ public class AudioMetadataService {
 
     long totalSizeBytes = tracks.stream()
                 .mapToLong(t -> t.getFileSizeBytes() != null ? t.getFileSizeBytes() : 0)
-                .sum();return builder.title(title).author(author).durationMs(totalDurationMs).totalSizeBytes(totalSizeBytes > 0 ? totalSizeBytes : null).tracks(tracks).build();
+                .sum();
+    Long totalSizeBytesObj = totalSizeBytes > 0 ? totalSizeBytes : null;
+
+    return new AudiobookInfo(bookId, bookFileId, title, author, finalNarrator, totalDurationMs, finalBitrate, finalCodec, finalSampleRate, finalChannels, totalSizeBytesObj, true, null, tracks);
   }
 
   private AudiobookInfo extractSingleFileMetadata(
-      AudiobookInfo.AudiobookInfoBuilder builder, Path audioPath) throws Exception {
+      Long bookId, Long bookFileId, Long totalSizeBytes, Path audioPath) throws Exception {
     AudioFile audioFile = AudioFileIO.read(audioPath.toFile());
     AudioHeader header = audioFile.getAudioHeader();
     Tag tag = audioFile.getTag();
 
     long durationMs = safeDurationMs(header, audioPath);
-    builder
-        .durationMs(durationMs)
-        .bitrate(safeBitrate(header, audioPath))
-        .codec(safeEncodingType(header, audioPath))
-        .sampleRate(safeSampleRate(header, audioPath))
-        .channels(parseChannels(safeChannels(header, audioPath)));
+    Integer bitrate = safeBitrate(header, audioPath);
+    String codec = safeEncodingType(header, audioPath);
+    Integer sampleRate = safeSampleRate(header, audioPath);
+    Integer channels = parseChannels(safeChannels(header, audioPath));
 
+    String title = null;
+    String author = null;
+    String narrator = null;
     if (tag != null) {
-      builder
-          .title(getTagValue(tag, FieldKey.TITLE, FieldKey.ALBUM))
-          .author(getTagValue(tag, FieldKey.ARTIST, FieldKey.ALBUM_ARTIST))
-          .narrator(getTagValue(tag, FieldKey.COMPOSER));
+      title = getTagValue(tag, FieldKey.TITLE, FieldKey.ALBUM);
+      author = getTagValue(tag, FieldKey.ARTIST, FieldKey.ALBUM_ARTIST);
+      narrator = getTagValue(tag, FieldKey.COMPOSER);
     }
 
     List<AudiobookChapter> chapters = extractChaptersFromFile(audioPath.toFile(), durationMs);
-    builder.chapters(chapters);
 
-    return builder.build();
+    return new AudiobookInfo(bookId, bookFileId, title, author, narrator, durationMs, bitrate, codec, sampleRate, channels, totalSizeBytes, false, chapters, null);
   }
 
-  private void backfillChapters(
-      BookFileEntity bookFile, Path audioPath, AudiobookInfo.AudiobookInfoBuilder builder) {
+  private List<AudiobookChapter> backfillChapters(
+      BookFileEntity bookFile, Path audioPath) {
     try {
       List<AudiobookChapter> chapters =
           extractChaptersFromFile(
               audioPath.toFile(),
               bookFile.getDurationSeconds() != null ? bookFile.getDurationSeconds() * 1000 : 0);
-      builder.chapters(chapters);
 
       List<BookFileEntity.AudioFileChapter> entityChapters =
           chapters.stream()
@@ -276,11 +228,13 @@ public class AudioMetadataService {
           "Backfilled {} chapters for audiobook file id={}",
           entityChapters.size(),
           bookFile.getId());
+      return chapters;
     } catch (Exception e) {
       log.debug(
           "Failed to backfill chapters for audiobook file id={}: {}",
           bookFile.getId(),
           e.getMessage());
+      return new ArrayList<>();
     }
   }
 
@@ -291,25 +245,13 @@ public class AudioMetadataService {
       return extracted.stream()
           .map(
               ch ->
-                  AudiobookChapter.builder()
-                      .index(ch.getIndex())
-                      .title(ch.getTitle())
-                      .startTimeMs(ch.getStartTimeMs())
-                      .endTimeMs(ch.getEndTimeMs())
-                      .durationMs(ch.getDurationMs())
-                      .build())
+                  new AudiobookChapter(ch.getIndex(), ch.getTitle(), ch.getStartTimeMs(), ch.getEndTimeMs(), ch.getDurationMs()))
           .collect(Collectors.toList());
     }
 
     List<AudiobookChapter> fallback = new ArrayList<>();
     fallback.add(
-        AudiobookChapter.builder()
-            .index(0)
-            .title("Full Audiobook")
-            .startTimeMs(0L)
-            .endTimeMs(fallbackDurationMs)
-            .durationMs(fallbackDurationMs)
-            .build());
+        new AudiobookChapter(0, "Full Audiobook", 0L, fallbackDurationMs, fallbackDurationMs));
     return fallback;
   }
 

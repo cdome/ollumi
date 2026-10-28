@@ -66,9 +66,7 @@ class IconServiceTest {
 
     @Test
     void saveSvgIcon_validSvg_savesFileAndCaches() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(SVG_DATA);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, SVG_DATA);
         iconService.saveSvgIcon(req);
         Path filePath = iconsSvgPath.resolve(SVG_NAME + ".svg");
         assertTrue(Files.exists(filePath));
@@ -77,9 +75,7 @@ class IconServiceTest {
 
     @Test
     void saveSvgIcon_validXmlSvg_savesFileAndCaches() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(SVG_DATA_XML);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, SVG_DATA_XML);
         iconService.saveSvgIcon(req);
         Path filePath = iconsSvgPath.resolve(SVG_NAME + ".svg");
         assertTrue(Files.exists(filePath));
@@ -88,25 +84,19 @@ class IconServiceTest {
 
     @Test
     void saveSvgIcon_invalidSvg_throwsException() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(INVALID_SVG_DATA);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, INVALID_SVG_DATA);
         assertThrows(APIException.class, () -> iconService.saveSvgIcon(req));
     }
 
     @Test
     void saveSvgIcon_missingEndTag_throwsException() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(INVALID_SVG_DATA_NO_END);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, INVALID_SVG_DATA_NO_END);
         assertThrows(APIException.class, () -> iconService.saveSvgIcon(req));
     }
 
     @Test
     void getSvgIcon_existing_returnsContent() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(SVG_DATA);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, SVG_DATA);
         iconService.saveSvgIcon(req);
         String svg = iconService.getSvgIcon(SVG_NAME);
         assertEquals(SVG_DATA, svg);
@@ -119,9 +109,7 @@ class IconServiceTest {
 
     @Test
     void deleteSvgIcon_existing_deletesFileAndCache() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(SVG_DATA);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, SVG_DATA);
         iconService.saveSvgIcon(req);
         iconService.deleteSvgIcon(SVG_NAME);
         Path filePath = iconsSvgPath.resolve(SVG_NAME + ".svg");
@@ -137,9 +125,7 @@ class IconServiceTest {
     @Test
     void getIconNames_pagination_returnsCorrectPage() {
         for (int i = 0; i < 5; i++) {
-            SvgIconCreateRequest req = new SvgIconCreateRequest();
-            req.setSvgName("icon" + i);
-            req.setSvgData(SVG_DATA);
+            SvgIconCreateRequest req = new SvgIconCreateRequest("icon" + i, SVG_DATA);
             iconService.saveSvgIcon(req);
         }
         Page<String> page = iconService.getIconNames(0, 2);
@@ -168,9 +154,7 @@ class IconServiceTest {
         iconService.getSvgCache().clear();
 
         for (int i = 0; i < 1002; i++) {
-            SvgIconCreateRequest req = new SvgIconCreateRequest();
-            req.setSvgName("icon" + i);
-            req.setSvgData(SVG_DATA);
+            SvgIconCreateRequest req = new SvgIconCreateRequest("icon" + i, SVG_DATA);
             iconService.saveSvgIcon(req);
         }
         assertEquals(1002, iconService.getIconNames(0, 2000).getContent().size());
@@ -179,15 +163,13 @@ class IconServiceTest {
 
     @Test
     void updateExistingIcon_doesNotIncreaseCache() {
-        SvgIconCreateRequest req = new SvgIconCreateRequest();
-        req.setSvgName(SVG_NAME);
-        req.setSvgData(SVG_DATA);
+        SvgIconCreateRequest req = new SvgIconCreateRequest(SVG_NAME, SVG_DATA);
         iconService.saveSvgIcon(req);
 
         int initialSize = iconService.getSvgCache().size();
 
-        req.setSvgData("<svg><circle r=\"50\"/></svg>");
-        assertThrows(APIException.class, () -> iconService.saveSvgIcon(req));
+        SvgIconCreateRequest updatedReq = new SvgIconCreateRequest(SVG_NAME, "<svg><circle r=\"50\"/></svg>");
+        assertThrows(APIException.class, () -> iconService.saveSvgIcon(updatedReq));
 
         assertEquals(initialSize, iconService.getSvgCache().size());
     }

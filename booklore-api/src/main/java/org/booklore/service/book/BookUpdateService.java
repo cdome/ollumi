@@ -267,21 +267,13 @@ public class BookUpdateService {
 
     private List<BookStatusUpdateResponse> buildStatusUpdateResponses(List<Long> bookIds, ReadStatus status, Instant now, Instant dateFinished) {
         return bookIds.stream()
-                .map(bookId -> BookStatusUpdateResponse.builder()
-                        .bookId(bookId)
-                        .readStatus(status)
-                        .readStatusModifiedTime(now)
-                        .dateFinished(dateFinished)
-                        .build())
+                .map(bookId -> new BookStatusUpdateResponse(bookId, status, now, dateFinished))
                 .collect(Collectors.toList());
     }
 
     private List<PersonalRatingUpdateResponse> buildRatingUpdateResponses(List<Long> bookIds, Integer rating) {
         return bookIds.stream()
-                .map(bookId -> PersonalRatingUpdateResponse.builder()
-                        .bookId(bookId)
-                        .personalRating(rating)
-                        .build())
+                .map(bookId -> new PersonalRatingUpdateResponse(bookId, rating))
                 .collect(Collectors.toList());
     }
 

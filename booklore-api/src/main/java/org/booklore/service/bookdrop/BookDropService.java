@@ -146,12 +146,7 @@ public class BookDropService {
     }
 
     private BookdropFinalizeResult processFinalizationRequest(BookdropFinalizeRequest request) {
-        BookdropFinalizeResult results = BookdropFinalizeResult.builder()
-                .processedAt(Instant.now())
-                .totalFiles(0)
-                .successfullyImported(0)
-                .failed(0)
-                .build();
+        BookdropFinalizeResult results = new BookdropFinalizeResult(0, 0, 0, Instant.now(), new ArrayList<>());
 
         Long defaultLibraryId = request.getDefaultLibraryId();
         Long defaultPathId = request.getDefaultPathId();
@@ -168,8 +163,7 @@ public class BookDropService {
             processSelectedFiles(request, metadataById, defaultLibraryId, defaultPathId, results, failedCount, totalFilesProcessed);
         }
 
-        updateFinalResults(results, totalFilesProcessed, failedCount);
-        return results;
+        return updateFinalResults(results, totalFilesProcessed, failedCount);
     }
 
     private Map<Long, BookdropFinalizeRequest.BookdropFinalizeFile> getMetadataMap(BookdropFinalizeRequest request) {
@@ -304,15 +298,17 @@ public class BookDropService {
         log.info("Re-registered {} libraries for monitoring", libraryIds.size());
     }
 
-    private void updateFinalResults(BookdropFinalizeResult results, AtomicInteger totalFilesProcessed, AtomicInteger failedCount) {
-        results.setTotalFiles(totalFilesProcessed.get());
-        results.setFailed(failedCount.get());
-        results.setSuccessfullyImported(totalFilesProcessed.get() - failedCount.get());
+    private BookdropFinalizeResult updateFinalResults(BookdropFinalizeResult results, AtomicInteger totalFilesProcessed, AtomicInteger failedCount) {
+        int totalFiles = totalFilesProcessed.get();
+        int failed = failedCount.get();
+        int successfullyImported = totalFiles - failed;
+        BookdropFinalizeResult updated = new BookdropFinalizeResult(totalFiles, successfullyImported, failed, results.getProcessedAt(), results.getResults());
 
         log.info("Finalization complete. Success: {}, Failed: {}, Total processed: {}",
-                results.getSuccessfullyImported(),
-                results.getFailed(),
-                results.getTotalFiles());
+                updated.getSuccessfullyImported(),
+                updated.getFailed(),
+                updated.getTotalFiles());
+        return updated;
     }
 
     private void processFile(BookdropFileRow fileEntity,
@@ -496,11 +492,7 @@ public class BookDropService {
 
         log.info("File import completed: id={}, name={}, library={}, path={}", bookdropFile.getId(), targetFile.getName(), library.getName(), path.getPath());
 
-        return BookdropFileResult.builder()
-                .fileName(targetFile.getName())
-                .message("File successfully imported into the '" + library.getName() + "' library from the Bookdrop folder")
-                .success(true)
-                .build();
+        return new BookdropFileResult(targetFile.getName(), true, "File successfully imported into the '" + library.getName() + "' library from the Bookdrop folder");
     }
 
     private void cleanupBookdropData(BookdropFileRow bookdropFile) {
@@ -630,11 +622,7 @@ public class BookDropService {
     }
 
     private BookdropFileResult failureResult(String fileName, String message) {
-        return BookdropFileResult.builder()
-                .fileName(fileName)
-                .message(message)
-                .success(false)
-                .build();
+        return new BookdropFileResult(fileName, false, message);
     }
 
     private boolean isFormatAllowed(LibraryEntity library, BookFileType fileType) {
